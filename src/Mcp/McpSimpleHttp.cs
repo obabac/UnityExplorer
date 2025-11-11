@@ -125,13 +125,28 @@ namespace UnityExplorer.Mcp
                     if (methodName == "list_tools")
                     {
                         var tools = McpReflection.ListTools();
-                        var payload = JsonSerializer.Serialize(new
-                        {
-                            jsonrpc = "2.0",
-                            id = root.TryGetProperty("id", out var _id) ? _id.Deserialize<object>() : null,
-                            result = new { tools }
-                        });
-                        await BroadcastSseAsync(payload, ct).ConfigureAwait(false);
+                        await SendJsonRpcResultAsync(root, new { tools }, ct).ConfigureAwait(false);
+                        await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
+                        return;
+                    }
+
+                    if (methodName == "call_tool")
+                    {
+                        var pr = root.GetProperty("params");
+                        var name = pr.TryGetProperty("name", out var n) ? (n.GetString() ?? string.Empty) : string.Empty;
+                        var args = pr.TryGetProperty("arguments", out var a) ? a : default;
+                        var result = await McpReflection.InvokeToolAsync(name, args).ConfigureAwait(false);
+                        await SendJsonRpcResultAsync(root, new { content = new[] { new { type = "json", json = result } } }, ct).ConfigureAwait(false);
+                        await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
+                        return;
+                    }
+
+                    if (methodName == "read_resource")
+                    {
+                        var pr = root.GetProperty("params");
+                        var uri = pr.TryGetProperty("uri", out var u) ? (u.GetString() ?? string.Empty) : string.Empty;
+                        var rr = await McpReflection.ReadResourceAsync(uri).ConfigureAwait(false);
+                        await SendJsonRpcResultAsync(root, new { contents = new[] { new { uri, mimeType = "application/json", text = JsonSerializer.Serialize(rr) } } }, ct).ConfigureAwait(false);
                         await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
                         return;
                     }
@@ -167,6 +182,17 @@ namespace UnityExplorer.Mcp
             }
         }
 
+        private async Task SendJsonRpcResultAsync(JsonElement requestRoot, object result, CancellationToken ct)
+        {
+            object? idVal = null;
+            if (requestRoot.TryGetProperty("id", out var idEl))
+            {
+                try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
+            }
+            var payload = JsonSerializer.Serialize(new { jsonrpc = "2.0", id = idVal, result });
+            await BroadcastSseAsync(payload, ct).ConfigureAwait(false);
+        }
+
         public void Dispose()
         {
             try { _cts.Cancel(); } catch { }
@@ -192,7 +218,105 @@ namespace UnityExplorer.Mcp
             }
             return list.ToArray();
         }
+
+        public static async Task<object?> InvokeToolAsync(string name, JsonElement args)
+        {
+            if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("tool name required");
+            var type = typeof(UnityReadTools);
+            var mi = Array.Find(type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static),
+                m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase) &&
+                     Attribute.IsDefined(m, typeof(ModelContextProtocol.Server.McpServerToolAttribute)));
+            if (mi == null) throw new InvalidOperationException($"Tool not found: {name}");
+
+            var parameters = mi.GetParameters();
+            var values = new object?[parameters.Length];
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                var p = parameters[i];
+                if (p.ParameterType == typeof(System.Threading.CancellationToken)) { values[i] = default(System.Threading.CancellationToken); continue; }
+                object? val = null;
+                if (args.ValueKind == JsonValueKind.Object && args.TryGetProperty(p.Name!, out var v))
+                {
+                    val = v.Deserialize(p.ParameterType);
+                }
+                else if (p.HasDefaultValue)
+                {
+                    val = p.DefaultValue;
+                }
+                values[i] = val;
+            }
+            var ret = mi.Invoke(null, values);
+            if (ret is Task t)
+            {
+                await t.ConfigureAwait(false);
+                var prop = t.GetType().GetProperty("Result");
+                return prop != null ? prop.GetValue(t) : null;
+            }
+            return ret;
+        }
+
+        public static async Task<object?> ReadResourceAsync(string uri)
+        {
+            if (string.IsNullOrWhiteSpace(uri)) throw new ArgumentException("uri required");
+            // simple router based on path segment
+            Uri u;
+            if (!Uri.TryCreate(uri, UriKind.Absolute, out u)) throw new ArgumentException("invalid uri");
+            var path = u.AbsolutePath.Trim('/');
+            var query = ParseQuery(u.Query);
+
+            if (path.Equals("status", StringComparison.OrdinalIgnoreCase))
+                return await UnityReadTools.GetStatus(default);
+            if (path.Equals("scenes", StringComparison.OrdinalIgnoreCase))
+                return await UnityReadTools.ListScenes(TryInt(query, "limit"), TryInt(query, "offset"), default);
+            if (path.StartsWith("scene/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/objects", StringComparison.OrdinalIgnoreCase))
+            {
+                var sceneId = path.Substring(6, path.Length - 6 - "/objects".Length);
+                return await UnityReadTools.ListObjects(sceneId, query["name"], query["type"], TryBool(query, "activeOnly"), TryInt(query, "limit"), TryInt(query, "offset"), default);
+            }
+            if (path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) && !path.EndsWith("/components", StringComparison.OrdinalIgnoreCase))
+            {
+                var id = path.Substring("object/".Length);
+                return await UnityReadTools.GetObject(id, default);
+            }
+            if (path.EndsWith("/components", StringComparison.OrdinalIgnoreCase))
+            {
+                var id = path.Substring("object/".Length, path.Length - "object/".Length - "/components".Length);
+                return await UnityReadTools.GetComponents(id, TryInt(query, "limit"), TryInt(query, "offset"), default);
+            }
+            if (path.Equals("search", StringComparison.OrdinalIgnoreCase))
+            {
+                return await UnityReadTools.SearchObjects(query["query"], query["name"], query["type"], query["path"], TryBool(query, "activeOnly"), TryInt(query, "limit"), TryInt(query, "offset"), default);
+            }
+            if (path.Equals("camera/active", StringComparison.OrdinalIgnoreCase))
+                return await UnityReadTools.GetCameraInfo(default);
+            if (path.Equals("selection", StringComparison.OrdinalIgnoreCase))
+                return await UnityReadTools.GetSelection(default);
+            if (path.Equals("logs/tail", StringComparison.OrdinalIgnoreCase))
+                return UnityReadTools.TailLogs(TryInt(query, "count") ?? 200, default);
+
+            throw new NotSupportedException("resource not supported");
+        }
+
+        private static System.Collections.Generic.Dictionary<string, string> ParseQuery(string query)
+        {
+            var dict = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(query)) return dict;
+            if (query.StartsWith("?")) query = query.Substring(1);
+            var pairs = query.Split('&', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var p in pairs)
+            {
+                var kv = p.Split('=', 2);
+                var k = Uri.UnescapeDataString(kv[0]);
+                var v = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : string.Empty;
+                dict[k] = v;
+            }
+            return dict;
+        }
+
+        private static int? TryInt(System.Collections.Generic.IDictionary<string, string> q, string key)
+            => q.TryGetValue(key, out var s) && int.TryParse(s, out var v) ? v : (int?)null;
+        private static bool? TryBool(System.Collections.Generic.IDictionary<string, string> q, string key)
+            => q.TryGetValue(key, out var s) && bool.TryParse(s, out var v) ? v : (bool?)null;
     }
 #endif
 }
-
