@@ -15,6 +15,31 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 3. Discovery file is written to `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modeHints, startedAt }`.
 4. Connect a client via the MCP C# SDK using `HttpClientTransport` (AutoDetect mode).
 
+### Tiny CLI (local)
+
+Build once:
+
+```
+dotnet build tools/mcpcli/McpCli.csproj -c Debug
+```
+
+While a Unity title with Explorer is running (CoreCLR target), use:
+
+```
+dotnet run --project tools/mcpcli -- status
+dotnet run --project tools/mcpcli -- scenes
+dotnet run --project tools/mcpcli -- objects scn:0
+dotnet run --project tools/mcpcli -- search Player
+dotnet run --project tools/mcpcli -- camera
+dotnet run --project tools/mcpcli -- selection
+dotnet run --project tools/mcpcli -- logs 100
+dotnet run --project tools/mcpcli -- list-tools
+dotnet run --project tools/mcpcli -- call GetStatus
+
+# guarded write (requires sinai-dev-UnityExplorer/mcp.config.json: { "allowWrites": true })
+dotnet run --project tools/mcpcli -- set-active obj:12345 true --confirm
+```
+
 ## Configuration
 
 The config file is created at `{ExplorerFolder}/mcp.config.json` (Explorer folder is typically `sinai-dev-UnityExplorer/`). Example:
@@ -45,4 +70,3 @@ More endpoints will be added incrementally per the plan.
 
 - Non‑CoreCLR targets (Mono, Unhollower) do not host the MCP server.
 - All Unity API calls are marshalled to the main thread.
-
