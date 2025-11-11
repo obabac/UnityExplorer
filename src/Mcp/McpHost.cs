@@ -31,9 +31,18 @@ namespace UnityExplorer.Mcp
                 _started = true;
             }
 
-            ExplorerCore.LogWarning("MCP HTTP transport not available on net6. Using placeholder; SSE transport coming soon.");
-            // Placeholder discovery record so tests/tools can locate the instance for now
-            WriteDiscovery($"http://{cfg.BindAddress}:{(cfg.Port == 0 ? 0 : cfg.Port)}");
+            try
+            {
+                var http = new McpSimpleHttp(cfg.BindAddress, cfg.Port);
+                http.Start();
+                WriteDiscovery($"http://{cfg.BindAddress}:{http.Port}");
+                ExplorerCore.Log($"MCP (SSE) listening on http://{cfg.BindAddress}:{http.Port}");
+            }
+            catch (Exception ex)
+            {
+                ExplorerCore.LogWarning($"MCP simple HTTP failed: {ex.Message}");
+                WriteDiscovery($"http://{cfg.BindAddress}:{(cfg.Port == 0 ? 0 : cfg.Port)}");
+            }
         }
 
         public static void Stop()
