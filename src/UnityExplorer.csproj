@@ -15,6 +15,7 @@
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Optimize>true</Optimize>
     <Configurations>BIE_Cpp;BIE_Cpp_CoreCLR;BIE_Unity_Cpp_CoreCLR;BIE5_Mono;BIE6_Mono;BIE6_Unity_Mono;ML_Cpp_net6;ML_Cpp_CoreCLR;ML_Cpp_net472;ML_Mono;STANDALONE_Mono;STANDALONE_Cpp;STANDALONE_Cpp_CoreCLR</Configurations>
+    <IncludeMcpPackages>false</IncludeMcpPackages>
   </PropertyGroup>
 
 
@@ -58,6 +59,7 @@
     <OutputPath>..\Release\UnityExplorer.MelonLoader.IL2CPP.CoreCLR\</OutputPath>
     <DefineConstants>CPP,ML,INTEROP</DefineConstants>
     <AssemblyName>UnityExplorer.ML.IL2CPP.CoreCLR</AssemblyName>
+    <IncludeMcpPackages>true</IncludeMcpPackages>
   </PropertyGroup>
   <!-- ML MONO -->
   <PropertyGroup Condition="'$(Configuration)'=='ML_Mono'">
@@ -79,6 +81,7 @@
     <OutputPath>..\Release\UnityExplorer.BepInEx.IL2CPP.CoreCLR\</OutputPath>
     <DefineConstants>CPP,BIE,BIE6,INTEROP</DefineConstants>
     <AssemblyName>UnityExplorer.BIE.IL2CPP.CoreCLR</AssemblyName>
+    <IncludeMcpPackages>true</IncludeMcpPackages>
   </PropertyGroup>
   <!-- BEPINEX UNITY IL2CPP CoreCLR -->
   <PropertyGroup Condition="'$(Configuration)'=='BIE_Unity_Cpp_CoreCLR'">
@@ -86,6 +89,7 @@
     <OutputPath>..\Release\UnityExplorer.BepInEx.Unity.IL2CPP.CoreCLR\</OutputPath>
     <DefineConstants>CPP,BIE,BIE6,BIPUNITY,INTEROP</DefineConstants>
     <AssemblyName>UnityExplorer.BIE.Unity.IL2CPP.CoreCLR</AssemblyName>
+    <IncludeMcpPackages>true</IncludeMcpPackages>
   </PropertyGroup>
   <!-- BEPINEX 6 MONO -->
   <PropertyGroup Condition="'$(Configuration)'=='BIE6_Mono'">
@@ -128,6 +132,7 @@
     <OutputPath>..\Release\UnityExplorer.Standalone.IL2CPP.CoreCLR\</OutputPath>
     <DefineConstants>CPP,STANDALONE,INTEROP</DefineConstants>
     <AssemblyName>UnityExplorer.STANDALONE.IL2CPP.CoreCLR</AssemblyName>
+    <IncludeMcpPackages>true</IncludeMcpPackages>
   </PropertyGroup>
 
   <!-- ~~~~~ NUGET ~~~~~ -->
@@ -354,5 +359,16 @@
       <HintPath>..\lib\interop\UnityEngine.IMGUIModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+  </ItemGroup>
+
+  <!-- MCP server: only include for CoreCLR (INTEROP) net6 targets -->
+  <ItemGroup Condition="'$(IncludeMcpPackages)'=='true'">
+    <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3" />
+  </ItemGroup>
+
+  <!-- Mcp sources are included implicitly; avoid duplicate Compile items -->
+  <!-- Exclude MCP sources from legacy TFMs (net35/net472) to avoid missing APIs (Tasks/Json) -->
+  <ItemGroup Condition="'$(TargetFramework)'=='net35' or '$(TargetFramework)'=='net472'">
+    <Compile Remove="Mcp\**\*.cs" />
   </ItemGroup>
 </Project>

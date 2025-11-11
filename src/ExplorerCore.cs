@@ -73,6 +73,17 @@ public static class ExplorerCore
 
         Log($"{NAME} {VERSION} ({Universe.Context}) initialized.");
 
+        // Capture Unity main thread context and start MCP server (CoreCLR targets only)
+        try
+        {
+            Mcp.MainThread.Capture();
+            Mcp.McpHost.StartIfEnabled();
+        }
+        catch (Exception ex)
+        {
+            LogWarning($"MCP bootstrap failed: {ex.Message}");
+        }
+
         // InspectorManager.Inspect(typeof(Tests.TestClass));
     }
 
@@ -112,15 +123,24 @@ public static class ExplorerCore
             case LogType.Assert:
             case LogType.Log:
                 Loader.OnLogMessage(log);
+#if INTEROP
+                Mcp.LogBuffer.Add("info", log);
+#endif
                 break;
 
             case LogType.Warning:
                 Loader.OnLogWarning(log);
+#if INTEROP
+                Mcp.LogBuffer.Add("warn", log);
+#endif
                 break;
 
             case LogType.Error:
             case LogType.Exception:
                 Loader.OnLogError(log);
+#if INTEROP
+                Mcp.LogBuffer.Add("error", log);
+#endif
                 break;
         }
     }

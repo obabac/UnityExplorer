@@ -1,0 +1,29 @@
+using System;
+using System.Collections.Generic;
+
+namespace UnityExplorer.Mcp
+{
+#if INTEROP
+    public record Page<T>(int Total, IReadOnlyList<T> Items);
+
+    public record StatusDto(
+        string Version,
+        string UnityVersion,
+        string Platform,
+        string Runtime,
+        string ExplorerVersion,
+        bool Ready,
+        int ScenesLoaded,
+        IReadOnlyList<string> Selection);
+
+    public record SceneDto(string Id, string Name, int Index, bool IsLoaded, int RootCount);
+    public record ObjectCardDto(string Id, string Name, string Path, string Tag, int Layer, bool Active, int ComponentCount);
+    public record ComponentCardDto(string Type, string? Summary);
+
+    public record TransformDto(Vector3Dto Pos, Vector3Dto Rot, Vector3Dto Scale);
+    public record Vector3Dto(float X, float Y, float Z);
+    public record CameraInfoDto(bool IsFreecam, string Name, float Fov, Vector3Dto Pos, Vector3Dto Rot);
+    public record LogLine(DateTimeOffset T, string Level, string Message);
+    public record LogTailDto(IReadOnlyList<LogLine> Items);
+#endif
+}
