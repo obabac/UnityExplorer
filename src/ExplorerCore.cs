@@ -97,6 +97,32 @@ public static class ExplorerCore
                 }
                 catch { }
             };
+
+            // Stream scene events
+            ObjectExplorer.SceneHandler.OnLoadedScenesUpdated += (scenes) =>
+            {
+                try
+                {
+                    var payload = new
+                    {
+                        loaded = scenes.Select(s => new { name = s.name, handle = s.handle, isLoaded = s.isLoaded }),
+                        count = scenes.Count
+                    };
+                    var http = Mcp.McpSimpleHttp.Current;
+                    if (http != null) _ = http.BroadcastNotificationAsync("scenes", payload);
+                }
+                catch { }
+            };
+
+            ObjectExplorer.SceneHandler.OnInspectedSceneChanged += (scene) =>
+            {
+                try
+                {
+                    var http = Mcp.McpSimpleHttp.Current;
+                    if (http != null) _ = http.BroadcastNotificationAsync("inspected_scene", new { name = scene.name, handle = scene.handle, isLoaded = scene.isLoaded });
+                }
+                catch { }
+            };
         }
         catch (Exception ex)
         {

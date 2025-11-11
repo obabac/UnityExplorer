@@ -145,6 +145,7 @@ namespace UnityExplorer.Mcp
                         var args = pr.TryGetProperty("arguments", out var a) ? a : default;
                         var result = await McpReflection.InvokeToolAsync(name, args).ConfigureAwait(false);
                         await SendJsonRpcResultAsync(root, new { content = new[] { new { type = "json", json = result } } }, ct).ConfigureAwait(false);
+                        try { await BroadcastNotificationAsync("tool_result", new { name, result }, ct).ConfigureAwait(false); } catch { }
                         await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
                         return;
                     }

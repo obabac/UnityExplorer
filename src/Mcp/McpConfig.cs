@@ -44,5 +44,17 @@ namespace UnityExplorer.Mcp
                 return new McpConfig();
             }
         }
+
+        public static void Save(McpConfig cfg)
+        {
+            try
+            {
+                var folder = ExplorerCore.ExplorerFolder;
+                var path = Path.Combine(folder, "mcp.config.json");
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(path, JsonSerializer.Serialize(cfg, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch { }
+        }
     }
 }
