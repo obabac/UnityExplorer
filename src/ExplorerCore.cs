@@ -78,6 +78,25 @@ public static class ExplorerCore
         {
             Mcp.MainThread.Capture();
             Mcp.McpHost.StartIfEnabled();
+
+            // Stream selection changes to SSE clients
+            InspectorManager.OnInspectedTabsChanged += () =>
+            {
+                try
+                {
+                    var task = Mcp.UnityReadTools.GetSelection(default);
+                    task.ContinueWith(t =>
+                    {
+                        if (!t.IsCompletedSuccessfully || t.Result == null) return;
+                        var http = Mcp.McpSimpleHttp.Current;
+                        if (http != null)
+                        {
+                            _ = http.BroadcastNotificationAsync("selection", t.Result);
+                        }
+                    });
+                }
+                catch { }
+            };
         }
         catch (Exception ex)
         {

@@ -14,13 +14,15 @@ namespace UnityExplorer.Mcp
 #if INTEROP
     internal sealed class McpSimpleHttp : IDisposable
     {
+        public static McpSimpleHttp? Current { get; private set; }
         private readonly TcpListener _listener;
         private readonly CancellationTokenSource _cts = new();
         private readonly ConcurrentDictionary<int, NetworkStream> _sse = new();
         private int _nextClientId;
         public int Port { get; }
+        private readonly string? _authToken;
 
-        public McpSimpleHttp(string bindAddress, int port)
+        public McpSimpleHttp(string bindAddress, int port, string? authToken)
         {
             var ip = IPAddress.Parse(string.IsNullOrWhiteSpace(bindAddress) ? "127.0.0.1" : bindAddress);
             if (port == 0)
@@ -32,11 +34,13 @@ namespace UnityExplorer.Mcp
             }
             Port = port;
             _listener = new TcpListener(ip, Port);
+            _authToken = authToken;
         }
 
         public void Start()
         {
             _listener.Start();
+            Current = this;
             _ = AcceptLoopAsync(_cts.Token);
         }
 
@@ -73,6 +77,7 @@ namespace UnityExplorer.Mcp
                 long contentLength = 0;
                 string? acceptHeader = null;
                 string? contentType = null;
+                string? authorization = null;
                 string? line;
                 while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync().ConfigureAwait(false)))
                 {
@@ -83,7 +88,10 @@ namespace UnityExplorer.Mcp
                     if (name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)) long.TryParse(val, out contentLength);
                     if (name.Equals("Accept", StringComparison.OrdinalIgnoreCase)) acceptHeader = val;
                     if (name.Equals("Content-Type", StringComparison.OrdinalIgnoreCase)) contentType = val;
+                    if (name.Equals("Authorization", StringComparison.OrdinalIgnoreCase)) authorization = val;
                 }
+
+                if (!Authorize(authorization)) { await WriteResponseAsync(stream, 401, "unauthorized", ct).ConfigureAwait(false); return; }
 
                 if (method == "GET" && target.StartsWith("/sse"))
                 {
@@ -206,6 +214,25 @@ namespace UnityExplorer.Mcp
                 try { await s.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false); await s.FlushAsync(ct).ConfigureAwait(false); }
                 catch { _sse.TryRemove(kv.Key, out _); }
             }
+        }
+
+        public Task BroadcastNotificationAsync(string @event, object payload, CancellationToken ct = default)
+        {
+            var json = JsonSerializer.Serialize(new { jsonrpc = "2.0", method = "notification", @params = new { @event, payload } });
+            return BroadcastSseAsync(json, ct);
+        }
+
+        private bool Authorize(string? authHeader)
+        {
+            if (string.IsNullOrEmpty(_authToken)) return true;
+            if (string.IsNullOrEmpty(authHeader)) return false;
+            const string prefix = "Bearer ";
+            if (authHeader.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var token = authHeader.Substring(prefix.Length).Trim();
+                return string.Equals(token, _authToken, StringComparison.Ordinal);
+            }
+            return false;
         }
 
         private async Task SendJsonRpcResultAsync(JsonElement requestRoot, object result, CancellationToken ct)

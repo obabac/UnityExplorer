@@ -15,6 +15,8 @@ namespace UnityExplorer.Mcp
         public string? ReflectionAllowlistPath { get; set; }
         public string? ExportRoot { get; set; }
         public string LogLevel { get; set; } = "Information";
+        public string? AuthToken { get; set; }
+        public string[]? ComponentAllowlist { get; set; }
 
         public static McpConfig Load()
         {
@@ -44,4 +46,3 @@ namespace UnityExplorer.Mcp
         }
     }
 }
-

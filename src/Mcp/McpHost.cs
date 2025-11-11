@@ -33,9 +33,9 @@ namespace UnityExplorer.Mcp
 
             try
             {
-                var http = new McpSimpleHttp(cfg.BindAddress, cfg.Port);
+                var http = new McpSimpleHttp(cfg.BindAddress, cfg.Port, cfg.AuthToken);
                 http.Start();
-                WriteDiscovery($"http://{cfg.BindAddress}:{http.Port}");
+                WriteDiscovery($"http://{cfg.BindAddress}:{http.Port}", cfg.AuthToken);
                 ExplorerCore.Log($"MCP (SSE) listening on http://{cfg.BindAddress}:{http.Port}");
             }
             catch (Exception ex)
@@ -50,7 +50,7 @@ namespace UnityExplorer.Mcp
             // no-op for placeholder
         }
 
-        private static void WriteDiscovery(string baseUrl)
+        private static void WriteDiscovery(string baseUrl, string? authToken = null)
         {
             try
             {
@@ -62,7 +62,8 @@ namespace UnityExplorer.Mcp
                     port,
                     baseUrl = uri.ToString(),
                     modeHints = new[] { "streamable-http", "sse" },
-                    startedAt = DateTimeOffset.UtcNow.ToString("o")
+                    startedAt = DateTimeOffset.UtcNow.ToString("o"),
+                    authToken = authToken
                 };
                 var path = Path.Combine(Path.GetTempPath(), "unity-explorer-mcp.json");
                 File.WriteAllText(path, JsonSerializer.Serialize(discovery, new JsonSerializerOptions { WriteIndented = true }));
