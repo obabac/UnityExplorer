@@ -110,6 +110,7 @@ public static class ExplorerCore
                     };
                     var http = Mcp.McpSimpleHttp.Current;
                     if (http != null) _ = http.BroadcastNotificationAsync("scenes", payload);
+                    Mcp.McpSseState.UpdateScenes(scenes);
                 }
                 catch { }
             };

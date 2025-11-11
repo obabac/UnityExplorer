@@ -98,6 +98,33 @@ namespace UnityExplorer.UI.Panels
             UIFactory.SetLayoutElement(restartBtn.Component.gameObject, minHeight: 25, minWidth: 120);
             restartBtn.OnClick += () => { try { Mcp.McpHost.Stop(); Mcp.McpHost.StartIfEnabled(); } catch { } };
 
+            // Component Allowlist editor (semicolon-separated)
+            UIFactory.CreateLabel(this.ContentRoot, "CompAllowHeader", "Component Allowlist (; separated FullTypeNames)", TextAnchor.MiddleLeft, Color.white, false, 12);
+            var allowRow = UIFactory.CreateUIObject("CompAllowRow", this.ContentRoot);
+            UIFactory.SetLayoutGroup<HorizontalLayoutGroup>(allowRow, false, false, true, true, 5, 2, 2, 2, 2);
+            var input = UIFactory.CreateInputField(allowRow, "CompAllowInput", string.Join(';', cfg.ComponentAllowlist ?? Array.Empty<string>()));
+            UIFactory.SetLayoutElement(input.UIRoot, minHeight: 25, flexibleWidth: 9999);
+            var saveAllow = UIFactory.CreateButton(allowRow, "SaveAllow", "Save", new Color(0.2f, 0.3f, 0.2f));
+            UIFactory.SetLayoutElement(saveAllow.Component.gameObject, minHeight: 25, minWidth: 80);
+            saveAllow.OnClick += () =>
+            {
+                try
+                {
+                    var c = McpConfig.Load();
+                    var parts = (input.Text ?? "").Split(';');
+                    var list = new List<string>();
+                    foreach (var p in parts)
+                    {
+                        var s = p.Trim();
+                        if (!string.IsNullOrEmpty(s)) list.Add(s);
+                    }
+                    c.ComponentAllowlist = list.ToArray();
+                    McpConfig.Save(c);
+                    ExplorerCore.Log("Saved MCP component allowlist.");
+                }
+                catch (Exception ex) { ExplorerCore.LogWarning($"Failed to save allowlist: {ex.Message}"); }
+            };
+
             // Endpoint label
             var info = McpDiscovery.TryLoad();
             string endpoint = info?.BaseUrl ?? "(not running)";
