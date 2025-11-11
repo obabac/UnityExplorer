@@ -25,5 +25,8 @@ namespace UnityExplorer.Mcp
     public record CameraInfoDto(bool IsFreecam, string Name, float Fov, Vector3Dto Pos, Vector3Dto Rot);
     public record LogLine(DateTimeOffset T, string Level, string Message);
     public record LogTailDto(IReadOnlyList<LogLine> Items);
+
+    public record SelectionDto(string? ActiveId, IReadOnlyList<string> Items);
+    public record PickResultDto(string? Id, string Mode, bool Hit);
 #endif
 }

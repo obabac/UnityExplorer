@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UniverseLib.Input;
 
 #if INTEROP
 using ModelContextProtocol.Server;
@@ -103,7 +104,7 @@ namespace UnityExplorer.Mcp
                         if (total >= off && results.Count < lim)
                         {
                             int compCount = 0;
-                            try { compCount = go.GetComponents<Component>()?.Length ?? 0; } catch { }
+                            try { var comps = go.GetComponents<UnityEngine.Component>(); compCount = comps != null ? comps.Length : 0; } catch { }
                             results.Add(new ObjectCardDto(
                                 Id: $"obj:{go.GetInstanceID()}",
                                 Name: go.name,
@@ -140,10 +141,11 @@ namespace UnityExplorer.Mcp
 
             return await MainThread.Run(() =>
             {
-                var go = UnityQuery.FindByInstanceId(iid) ?? throw new InvalidOperationException("NotFound");
+                var go = UnityQuery.FindByInstanceId(iid);
+                if (go == null) throw new InvalidOperationException("NotFound");
                 var path = BuildPath(go.transform);
                 int compCount = 0;
-                try { compCount = go.GetComponents<Component>()?.Length ?? 0; } catch { }
+                try { var comps2 = go.GetComponents<UnityEngine.Component>(); compCount = comps2 != null ? comps2.Length : 0; } catch { }
                 return new ObjectCardDto(
                     Id: $"obj:{go.GetInstanceID()}",
                     Name: go.name,
@@ -170,14 +172,21 @@ namespace UnityExplorer.Mcp
 
             return await MainThread.Run(() =>
             {
-                var go = UnityQuery.FindByInstanceId(iid) ?? throw new InvalidOperationException("NotFound");
-                Component[] comps;
-                try { comps = go.GetComponents<Component>(); }
-                catch { comps = Array.Empty<Component>(); }
+                var go = UnityQuery.FindByInstanceId(iid);
+                if (go == null) throw new InvalidOperationException("NotFound");
+                UnityEngine.Component[] comps;
+                try { comps = go.GetComponents<UnityEngine.Component>(); }
+                catch { comps = Array.Empty<UnityEngine.Component>(); }
                 var total = comps.Length;
-                var items = comps.Skip(off).Take(lim)
-                    .Select(c => new ComponentCardDto(c?.GetType().FullName ?? "<null>", c?.ToString()))
-                    .ToArray();
+                var slice = comps.Skip(off).Take(lim);
+                var list = new List<ComponentCardDto>();
+                foreach (var c in slice)
+                {
+                    string typeName = c != null ? c.GetType().FullName : "<null>";
+                    string summary = c != null ? c.ToString() : "<null>";
+                    list.Add(new ComponentCardDto(typeName, summary));
+                }
+                var items = list.ToArray();
                 return new Page<ComponentCardDto>(total, items);
             });
         }
@@ -225,7 +234,7 @@ namespace UnityExplorer.Mcp
                         if (total >= off && results.Count < lim)
                         {
                             int compCount = 0;
-                            try { compCount = go.GetComponents<Component>()?.Length ?? 0; } catch { }
+                            try { var comps3 = go.GetComponents<UnityEngine.Component>(); compCount = comps3 != null ? comps3.Length : 0; } catch { }
                             results.Add(new ObjectCardDto(
                                 Id: $"obj:{go.GetInstanceID()}",
                                 Name: nm,
@@ -243,6 +252,72 @@ namespace UnityExplorer.Mcp
                 }
 
                 return new Page<ObjectCardDto>(total, results);
+            });
+        }
+
+        [McpServerTool, Description("Get active camera information (name, FOV, position, rotation).")]
+        public static async Task<CameraInfoDto> GetCameraInfo(CancellationToken ct)
+        {
+            return await MainThread.Run(() =>
+            {
+                Camera cam = Camera.main;
+                if (cam == null && Camera.allCamerasCount > 0) cam = Camera.allCameras[0];
+                if (cam == null)
+                    return new CameraInfoDto(false, "<none>", 0f, new Vector3Dto(0, 0, 0), new Vector3Dto(0, 0, 0));
+                var pos = cam.transform.position; var rot = cam.transform.eulerAngles;
+                return new CameraInfoDto(false, cam.name, cam.fieldOfView,
+                    new Vector3Dto(pos.x, pos.y, pos.z),
+                    new Vector3Dto(rot.x, rot.y, rot.z));
+            });
+        }
+
+        [McpServerTool, Description("Raycast at current mouse position to pick a world object.")]
+        public static async Task<PickResultDto> MousePick(string mode = "world", CancellationToken ct = default)
+        {
+            return await MainThread.Run(() =>
+            {
+                if (!string.Equals(mode, "world", StringComparison.OrdinalIgnoreCase))
+                    return new PickResultDto(null, mode, false);
+
+                Camera cam = Camera.main;
+                if (cam == null && Camera.allCamerasCount > 0) cam = Camera.allCameras[0];
+                if (cam == null) return new PickResultDto(null, mode, false);
+                Vector3 mousePos = InputManager.MousePosition;
+                var ray = cam.ScreenPointToRay(mousePos);
+                if (Physics.Raycast(ray, out var hit))
+                {
+                    var col = hit.collider;
+                    if (col == null) return new PickResultDto(null, mode, false);
+                    var go = col.gameObject;
+                    return new PickResultDto(go != null ? $"obj:{go.GetInstanceID()}" : null, mode, go != null);
+                }
+                return new PickResultDto(null, mode, false);
+            });
+        }
+
+        [McpServerTool, Description("Tail recent logs from the in-process buffer.")]
+        public static Task<LogTailDto> TailLogs(int count = 200, CancellationToken ct = default)
+            => Task.FromResult(LogBuffer.Tail(count));
+
+        [McpServerTool, Description("Return current selection/inspected tabs (best effort).")]
+        public static async Task<SelectionDto> GetSelection(CancellationToken ct)
+        {
+            return await MainThread.Run(() =>
+            {
+                string? active = null;
+                var items = new List<string>();
+                try
+                {
+                    if (InspectorManager.ActiveInspector?.Target is GameObject ago)
+                        active = $"obj:{ago.GetInstanceID()}";
+                    foreach (var ins in InspectorManager.Inspectors)
+                    {
+                        if (ins.Target is GameObject go)
+                            items.Add($"obj:{go.GetInstanceID()}");
+                    }
+                }
+                catch { }
+                return new SelectionDto(active, items);
             });
         }
     }
