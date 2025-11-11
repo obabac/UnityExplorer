@@ -155,6 +155,32 @@ namespace UnityExplorer.Mcp
                     return;
                 }
 
+                if (method == "GET" && target.StartsWith("/read"))
+                {
+                    // convenient testing endpoint: GET /read?uri=...
+                    var q = McpReflection.ParseQuery(new Uri("http://localhost" + target).Query);
+                    if (!q.TryGetValue("uri", out var uriParam))
+                    {
+                        await WriteResponseAsync(stream, 400, "missing uri", ct).ConfigureAwait(false);
+                        return;
+                    }
+                    try
+                    {
+                        var obj = await McpReflection.ReadResourceAsync(uriParam).ConfigureAwait(false);
+                        var json = JsonSerializer.Serialize(obj);
+                        var header = $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {Encoding.UTF8.GetByteCount(json)}\r\nConnection: close\r\n\r\n";
+                        var headerBytes = Encoding.UTF8.GetBytes(header);
+                        await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
+                        await stream.WriteAsync(Encoding.UTF8.GetBytes(json), 0, Encoding.UTF8.GetByteCount(json), ct).ConfigureAwait(false);
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        await WriteResponseAsync(stream, 400, ex.Message, ct).ConfigureAwait(false);
+                        return;
+                    }
+                }
+
                 // default: health
                 await WriteResponseAsync(stream, 200, "ok", ct).ConfigureAwait(false);
             }
@@ -202,6 +228,22 @@ namespace UnityExplorer.Mcp
 
     internal static class McpReflection
     {
+        public static System.Collections.Generic.Dictionary<string, string> ParseQuery(string query)
+        {
+            var dict = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(query)) return dict;
+            if (query.StartsWith("?")) query = query.Substring(1);
+            var pairs = query.Split('&', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var p in pairs)
+            {
+                var kv = p.Split('=', 2);
+                var k = Uri.UnescapeDataString(kv[0]);
+                var v = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : string.Empty;
+                dict[k] = v;
+            }
+            return dict;
+        }
+
         public static object[] ListTools()
         {
             var list = new System.Collections.Generic.List<object>();
@@ -295,22 +337,6 @@ namespace UnityExplorer.Mcp
                 return UnityReadTools.TailLogs(TryInt(query, "count") ?? 200, default);
 
             throw new NotSupportedException("resource not supported");
-        }
-
-        private static System.Collections.Generic.Dictionary<string, string> ParseQuery(string query)
-        {
-            var dict = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            if (string.IsNullOrEmpty(query)) return dict;
-            if (query.StartsWith("?")) query = query.Substring(1);
-            var pairs = query.Split('&', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var p in pairs)
-            {
-                var kv = p.Split('=', 2);
-                var k = Uri.UnescapeDataString(kv[0]);
-                var v = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : string.Empty;
-                dict[k] = v;
-            }
-            return dict;
         }
 
         private static int? TryInt(System.Collections.Generic.IDictionary<string, string> q, string key)
