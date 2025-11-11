@@ -13,6 +13,7 @@ namespace UnityExplorer.Mcp
         public bool AllowWrites { get; set; } = false;
         public bool RequireConfirm { get; set; } = true;
         public string? ReflectionAllowlistPath { get; set; }
+        public string[]? ReflectionAllowlistMembers { get; set; }
         public string? ExportRoot { get; set; }
         public string LogLevel { get; set; } = "Information";
         public string? AuthToken { get; set; }

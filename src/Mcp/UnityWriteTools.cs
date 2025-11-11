@@ -14,6 +14,25 @@ namespace UnityExplorer.Mcp
     [McpServerToolType]
     public static class UnityWriteTools
     {
+        [McpServerTool, Description("Update MCP config settings and optionally restart the server.")]
+        public static object SetConfig(bool? allowWrites = null, bool? requireConfirm = null, string? authToken = null, bool restart = false)
+        {
+            try
+            {
+                var cfg = McpConfig.Load();
+                if (allowWrites.HasValue) cfg.AllowWrites = allowWrites.Value;
+                if (requireConfirm.HasValue) cfg.RequireConfirm = requireConfirm.Value;
+                if (authToken != null) cfg.AuthToken = authToken;
+                McpConfig.Save(cfg);
+                if (restart)
+                {
+                    Mcp.McpHost.Stop();
+                    Mcp.McpHost.StartIfEnabled();
+                }
+                return new { ok = true };
+            }
+            catch (Exception ex) { return new { ok = false, error = ex.Message }; }
+        }
         [McpServerTool, Description("Set a GameObject's active state (guarded by config). Pass confirm=true to bypass confirmation when required.")]
         public static async Task<object> SetActive(string objectId, bool active, bool confirm = false, CancellationToken ct = default)
         {

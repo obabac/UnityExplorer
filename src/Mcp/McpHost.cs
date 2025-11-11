@@ -14,6 +14,7 @@ namespace UnityExplorer.Mcp
     {
         private static readonly object _gate = new();
         private static bool _started;
+        private static McpSimpleHttp? _http;
 
 
         public static void StartIfEnabled()
@@ -33,10 +34,10 @@ namespace UnityExplorer.Mcp
 
             try
             {
-                var http = new McpSimpleHttp(cfg.BindAddress, cfg.Port, cfg.AuthToken);
-                http.Start();
-                WriteDiscovery($"http://{cfg.BindAddress}:{http.Port}", cfg.AuthToken);
-                ExplorerCore.Log($"MCP (SSE) listening on http://{cfg.BindAddress}:{http.Port}");
+                _http = new McpSimpleHttp(cfg.BindAddress, cfg.Port, cfg.AuthToken);
+                _http.Start();
+                WriteDiscovery($"http://{cfg.BindAddress}:{_http.Port}", cfg.AuthToken);
+                ExplorerCore.Log($"MCP (SSE) listening on http://{cfg.BindAddress}:{_http.Port}");
             }
             catch (Exception ex)
             {
@@ -47,7 +48,8 @@ namespace UnityExplorer.Mcp
 
         public static void Stop()
         {
-            // no-op for placeholder
+            try { _http?.Dispose(); } catch { }
+            _http = null;
         }
 
         private static void WriteDiscovery(string baseUrl, string? authToken = null)

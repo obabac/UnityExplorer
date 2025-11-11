@@ -125,6 +125,33 @@ namespace UnityExplorer.UI.Panels
                 catch (Exception ex) { ExplorerCore.LogWarning($"Failed to save allowlist: {ex.Message}"); }
             };
 
+            // Reflection allowlist editor
+            UIFactory.CreateLabel(this.ContentRoot, "ReflAllowHeader", "Reflection Allowlist (; separated Type.Member)", TextAnchor.MiddleLeft, Color.white, false, 12);
+            var reflRow = UIFactory.CreateUIObject("ReflAllowRow", this.ContentRoot);
+            UIFactory.SetLayoutGroup<HorizontalLayoutGroup>(reflRow, false, false, true, true, 5, 2, 2, 2, 2);
+            var reflInput = UIFactory.CreateInputField(reflRow, "ReflAllowInput", string.Join(';', cfg.ReflectionAllowlistMembers ?? Array.Empty<string>()));
+            UIFactory.SetLayoutElement(reflInput.UIRoot, minHeight: 25, flexibleWidth: 9999);
+            var saveRefl = UIFactory.CreateButton(reflRow, "SaveReflAllow", "Save", new Color(0.2f, 0.3f, 0.2f));
+            UIFactory.SetLayoutElement(saveRefl.Component.gameObject, minHeight: 25, minWidth: 80);
+            saveRefl.OnClick += () =>
+            {
+                try
+                {
+                    var c = McpConfig.Load();
+                    var parts = (reflInput.Text ?? "").Split(';');
+                    var list = new List<string>();
+                    foreach (var p in parts)
+                    {
+                        var s = p.Trim();
+                        if (!string.IsNullOrEmpty(s)) list.Add(s);
+                    }
+                    c.ReflectionAllowlistMembers = list.ToArray();
+                    McpConfig.Save(c);
+                    ExplorerCore.Log("Saved MCP reflection allowlist.");
+                }
+                catch (Exception ex) { ExplorerCore.LogWarning($"Failed to save reflection allowlist: {ex.Message}"); }
+            };
+
             // Endpoint label
             var info = McpDiscovery.TryLoad();
             string endpoint = info?.BaseUrl ?? "(not running)";
