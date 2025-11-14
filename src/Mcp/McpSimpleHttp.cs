@@ -125,43 +125,138 @@ namespace UnityExplorer.Mcp
 
                 if (method == "POST" && target.StartsWith("/message"))
                 {
-                    // minimal JSON-RPC: support list_tools only
-                    using var doc = JsonDocument.Parse(string.IsNullOrEmpty(body) ? "{}" : body);
-                    var root = doc.RootElement;
-                    string methodName = root.TryGetProperty("method", out var m) ? m.GetString() ?? "" : "";
-                    string id = root.TryGetProperty("id", out var rid) ? rid.GetRawText() : "null";
-                    if (methodName == "list_tools")
+                    // Minimal JSON-RPC over HTTP. Results and errors are emitted on the SSE stream.
+                    JsonDocument doc;
+                    try
                     {
-                        var tools = McpReflection.ListTools();
-                        await SendJsonRpcResultAsync(root, new { tools }, ct).ConfigureAwait(false);
-                        await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
+                        doc = JsonDocument.Parse(string.IsNullOrEmpty(body) ? "{}" : body);
+                    }
+                    catch (JsonException ex)
+                    {
+                        await SendJsonRpcErrorAsync(-32700, "Parse error", new { detail = ex.Message }, ct).ConfigureAwait(false);
+                        await WriteResponseAsync(stream, 400, "invalid json", ct).ConfigureAwait(false);
                         return;
                     }
 
-                    if (methodName == "call_tool")
+                    using (doc)
                     {
-                        var pr = root.GetProperty("params");
-                        var name = pr.TryGetProperty("name", out var n) ? (n.GetString() ?? string.Empty) : string.Empty;
-                        var args = pr.TryGetProperty("arguments", out var a) ? a : default;
-                        var result = await McpReflection.InvokeToolAsync(name, args).ConfigureAwait(false);
-                        await SendJsonRpcResultAsync(root, new { content = new[] { new { type = "json", json = result } } }, ct).ConfigureAwait(false);
-                        try { await BroadcastNotificationAsync("tool_result", new { name, result }, ct).ConfigureAwait(false); } catch { }
-                        await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
+                        var root = doc.RootElement;
+                        string methodName = root.TryGetProperty("method", out var m) ? m.GetString() ?? string.Empty : string.Empty;
+                        if (string.IsNullOrWhiteSpace(methodName))
+                        {
+                            await SendJsonRpcErrorAsync(root, -32600, "Invalid request: 'method' is required.", null, ct).ConfigureAwait(false);
+                            await WriteResponseAsync(stream, 400, "invalid request", ct).ConfigureAwait(false);
+                            return;
+                        }
+
+                        if (string.Equals(methodName, "list_tools", StringComparison.OrdinalIgnoreCase))
+                        {
+                            try
+                            {
+                                var tools = McpReflection.ListTools();
+                                await SendJsonRpcResultAsync(root, new { tools }, ct).ConfigureAwait(false);
+                                await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                await SendJsonRpcErrorAsync(root, -32603, "Internal error", new { detail = ex.Message }, ct).ConfigureAwait(false);
+                                await WriteResponseAsync(stream, 500, "internal error", ct).ConfigureAwait(false);
+                            }
+                            return;
+                        }
+
+                        if (string.Equals(methodName, "call_tool", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (!root.TryGetProperty("params", out var pr))
+                            {
+                                await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'params' object is required.", null, ct).ConfigureAwait(false);
+                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                                return;
+                            }
+
+                            var name = pr.TryGetProperty("name", out var n) ? (n.GetString() ?? string.Empty) : string.Empty;
+                            var args = pr.TryGetProperty("arguments", out var a) ? a : default;
+                            if (string.IsNullOrWhiteSpace(name))
+                            {
+                                await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'name' is required.", null, ct).ConfigureAwait(false);
+                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                                return;
+                            }
+
+                            try
+                            {
+                                var result = await McpReflection.InvokeToolAsync(name, args).ConfigureAwait(false);
+                                var wrapped = new { content = new[] { new { type = "json", json = result } } };
+                                await SendJsonRpcResultAsync(root, wrapped, ct).ConfigureAwait(false);
+                                try { await BroadcastNotificationAsync("tool_result", new { name, ok = true, result }, ct).ConfigureAwait(false); } catch { }
+                                await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
+                            }
+                            catch (ArgumentException ex)
+                            {
+                                await SendJsonRpcErrorAsync(root, -32602, ex.Message, null, ct).ConfigureAwait(false);
+                                try { await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32602, message = ex.Message } }, ct).ConfigureAwait(false); } catch { }
+                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                            }
+                            catch (InvalidOperationException ex)
+                            {
+                                await SendJsonRpcErrorAsync(root, -32601, ex.Message, null, ct).ConfigureAwait(false);
+                                try { await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32601, message = ex.Message } }, ct).ConfigureAwait(false); } catch { }
+                                await WriteResponseAsync(stream, 404, "tool not found", ct).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                await SendJsonRpcErrorAsync(root, -32603, "Internal error", new { detail = ex.Message }, ct).ConfigureAwait(false);
+                                try { await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32603, message = "Internal error" } }, ct).ConfigureAwait(false); } catch { }
+                                await WriteResponseAsync(stream, 500, "internal error", ct).ConfigureAwait(false);
+                            }
+                            return;
+                        }
+
+                        if (string.Equals(methodName, "read_resource", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (!root.TryGetProperty("params", out var pr))
+                            {
+                                await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'params' object is required.", null, ct).ConfigureAwait(false);
+                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                                return;
+                            }
+
+                            var uri = pr.TryGetProperty("uri", out var u) ? (u.GetString() ?? string.Empty) : string.Empty;
+                            if (string.IsNullOrWhiteSpace(uri))
+                            {
+                                await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'uri' is required.", null, ct).ConfigureAwait(false);
+                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                                return;
+                            }
+
+                            try
+                            {
+                                var rr = await McpReflection.ReadResourceAsync(uri).ConfigureAwait(false);
+                                await SendJsonRpcResultAsync(root, new { contents = new[] { new { uri, mimeType = "application/json", text = JsonSerializer.Serialize(rr) } } }, ct).ConfigureAwait(false);
+                                await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
+                            }
+                            catch (ArgumentException ex)
+                            {
+                                await SendJsonRpcErrorAsync(root, -32602, ex.Message, null, ct).ConfigureAwait(false);
+                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                            }
+                            catch (NotSupportedException ex)
+                            {
+                                await SendJsonRpcErrorAsync(root, -32601, ex.Message, null, ct).ConfigureAwait(false);
+                                await WriteResponseAsync(stream, 404, "resource not supported", ct).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                await SendJsonRpcErrorAsync(root, -32603, "Internal error", new { detail = ex.Message }, ct).ConfigureAwait(false);
+                                await WriteResponseAsync(stream, 500, "internal error", ct).ConfigureAwait(false);
+                            }
+                            return;
+                        }
+
+                        await SendJsonRpcErrorAsync(root, -32601, $"Method not found: {methodName}", null, ct).ConfigureAwait(false);
+                        await WriteResponseAsync(stream, 400, "unsupported method", ct).ConfigureAwait(false);
                         return;
                     }
-
-                    if (methodName == "read_resource")
-                    {
-                        var pr = root.GetProperty("params");
-                        var uri = pr.TryGetProperty("uri", out var u) ? (u.GetString() ?? string.Empty) : string.Empty;
-                        var rr = await McpReflection.ReadResourceAsync(uri).ConfigureAwait(false);
-                        await SendJsonRpcResultAsync(root, new { contents = new[] { new { uri, mimeType = "application/json", text = JsonSerializer.Serialize(rr) } } }, ct).ConfigureAwait(false);
-                        await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
-                        return;
-                    }
-
-                    await WriteResponseAsync(stream, 400, "unsupported", ct).ConfigureAwait(false);
-                    return;
                 }
 
                 if (method == "GET" && target.StartsWith("/read"))
@@ -239,11 +334,38 @@ namespace UnityExplorer.Mcp
         private async Task SendJsonRpcResultAsync(JsonElement requestRoot, object result, CancellationToken ct)
         {
             object? idVal = null;
-            if (requestRoot.TryGetProperty("id", out var idEl))
+            if (requestRoot.ValueKind == JsonValueKind.Object && requestRoot.TryGetProperty("id", out var idEl))
             {
                 try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
             }
             var payload = JsonSerializer.Serialize(new { jsonrpc = "2.0", id = idVal, result });
+            await BroadcastSseAsync(payload, ct).ConfigureAwait(false);
+        }
+
+        private async Task SendJsonRpcErrorAsync(JsonElement requestRoot, int code, string message, object? data, CancellationToken ct)
+        {
+            object? idVal = null;
+            if (requestRoot.ValueKind == JsonValueKind.Object && requestRoot.TryGetProperty("id", out var idEl))
+            {
+                try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
+            }
+            var payload = JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = idVal,
+                error = new { code, message, data }
+            });
+            await BroadcastSseAsync(payload, ct).ConfigureAwait(false);
+        }
+
+        private async Task SendJsonRpcErrorAsync(int code, string message, object? data, CancellationToken ct)
+        {
+            var payload = JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = (object?)null,
+                error = new { code, message, data }
+            });
             await BroadcastSseAsync(payload, ct).ConfigureAwait(false);
         }
 

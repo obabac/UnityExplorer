@@ -75,28 +75,81 @@ namespace UnityExplorer.UI.Panels
 
             // MCP section
             UIFactory.CreateLabel(this.ContentRoot, "McpHeader", "MCP Server", TextAnchor.MiddleLeft, Color.white, true);
+
+            var cfg = McpConfig.Load();
+            var info = McpDiscovery.TryLoad();
+
+            // Row: Enabled toggle + Restart + Copy buttons
             var row = UIFactory.CreateUIObject("McpRow", this.ContentRoot);
             UIFactory.SetLayoutGroup<HorizontalLayoutGroup>(row, false, false, true, true, 5, 2, 2, 2, 2);
 
-            var cfg = McpConfig.Load();
-            // AllowWrites toggle
-            var allowObj = UIFactory.CreateToggle(row, "AllowWritesToggle", out Toggle allowToggle, out Text allowText);
-            allowText.text = "Allow Writes";
-            allowToggle.isOn = cfg.AllowWrites;
-            allowToggle.onValueChanged.AddListener((bool v) => { var c = McpConfig.Load(); c.AllowWrites = v; McpConfig.Save(c); });
-            UIFactory.SetLayoutElement(allowObj, minHeight: 25, minWidth: 140);
-
-            // RequireConfirm toggle
-            var confirmObj = UIFactory.CreateToggle(row, "RequireConfirmToggle", out Toggle confirmToggle, out Text confirmText);
-            confirmText.text = "Require Confirm";
-            confirmToggle.isOn = cfg.RequireConfirm;
-            confirmToggle.onValueChanged.AddListener((bool v) => { var c = McpConfig.Load(); c.RequireConfirm = v; McpConfig.Save(c); });
-            UIFactory.SetLayoutElement(confirmObj, minHeight: 25, minWidth: 160);
+            // Enabled toggle
+            var enabledObj = UIFactory.CreateToggle(row, "McpEnabledToggle", out Toggle enabledToggle, out Text enabledText);
+            enabledText.text = "Enabled";
+            enabledToggle.isOn = cfg.Enabled;
+            UIFactory.SetLayoutElement(enabledObj, minHeight: 25, minWidth: 110);
 
             // Restart button
             var restartBtn = UIFactory.CreateButton(row, "RestartMcp", "Restart MCP", new Color(0.2f, 0.2f, 0.3f));
             UIFactory.SetLayoutElement(restartBtn.Component.gameObject, minHeight: 25, minWidth: 120);
-            restartBtn.OnClick += () => { try { Mcp.McpHost.Stop(); Mcp.McpHost.StartIfEnabled(); } catch { } };
+            restartBtn.OnClick += () =>
+            {
+                try
+                {
+                    Mcp.McpHost.Stop();
+                    Mcp.McpHost.StartIfEnabled();
+                    Notification.ShowMessage("MCP restarted.");
+                }
+                catch { }
+            };
+
+            // Copy endpoint/token buttons (to UnityExplorer clipboard)
+            var copyEndpointBtn = UIFactory.CreateButton(row, "CopyMcpEndpoint", "Copy Endpoint", new Color(0.2f, 0.3f, 0.2f));
+            UIFactory.SetLayoutElement(copyEndpointBtn.Component.gameObject, minHeight: 25, minWidth: 120);
+            copyEndpointBtn.OnClick += () =>
+            {
+                var latest = McpDiscovery.TryLoad();
+                var endpointValue = latest?.BaseUrl ?? "(not running)";
+                ClipboardPanel.Copy(endpointValue);
+            };
+
+            var copyTokenBtn = UIFactory.CreateButton(row, "CopyMcpToken", "Copy Token", new Color(0.3f, 0.2f, 0.2f));
+            UIFactory.SetLayoutElement(copyTokenBtn.Component.gameObject, minHeight: 25, minWidth: 110);
+            copyTokenBtn.OnClick += () =>
+            {
+                var latestCfg = McpConfig.Load();
+                var latestInfo = McpDiscovery.TryLoad();
+                var tokenValue = latestInfo?.AuthToken ?? latestCfg.AuthToken ?? string.Empty;
+                ClipboardPanel.Copy(tokenValue);
+            };
+
+            // Second row for write-safety toggles
+            var safetyRow = UIFactory.CreateUIObject("McpSafetyRow", this.ContentRoot);
+            UIFactory.SetLayoutGroup<HorizontalLayoutGroup>(safetyRow, false, false, true, true, 5, 2, 2, 2, 2);
+
+            // AllowWrites toggle
+            var allowObj = UIFactory.CreateToggle(safetyRow, "AllowWritesToggle", out Toggle allowToggle, out Text allowText);
+            allowText.text = "Allow Writes";
+            allowToggle.isOn = cfg.AllowWrites;
+            allowToggle.onValueChanged.AddListener((bool v) =>
+            {
+                var c = McpConfig.Load();
+                c.AllowWrites = v;
+                McpConfig.Save(c);
+            });
+            UIFactory.SetLayoutElement(allowObj, minHeight: 25, minWidth: 140);
+
+            // RequireConfirm toggle
+            var confirmObj = UIFactory.CreateToggle(safetyRow, "RequireConfirmToggle", out Toggle confirmToggle, out Text confirmText);
+            confirmText.text = "Require Confirm";
+            confirmToggle.isOn = cfg.RequireConfirm;
+            confirmToggle.onValueChanged.AddListener((bool v) =>
+            {
+                var c = McpConfig.Load();
+                c.RequireConfirm = v;
+                McpConfig.Save(c);
+            });
+            UIFactory.SetLayoutElement(confirmObj, minHeight: 25, minWidth: 160);
 
             // Component Allowlist editor (semicolon-separated)
             UIFactory.CreateLabel(this.ContentRoot, "CompAllowHeader", "Component Allowlist (; separated FullTypeNames)", TextAnchor.MiddleLeft, Color.white, false, 12);
@@ -152,10 +205,71 @@ namespace UnityExplorer.UI.Panels
                 catch (Exception ex) { ExplorerCore.LogWarning($"Failed to save reflection allowlist: {ex.Message}"); }
             };
 
-            // Endpoint label
-            var info = McpDiscovery.TryLoad();
+            // Endpoint label + status
             string endpoint = info?.BaseUrl ?? "(not running)";
-            UIFactory.CreateLabel(this.ContentRoot, "McpEndpoint", $"Endpoint: {endpoint}", TextAnchor.MiddleLeft, Color.gray, false, 12);
+            Text endpointLabel = UIFactory.CreateLabel(this.ContentRoot, "McpEndpoint", $"Endpoint: {endpoint}", TextAnchor.MiddleLeft, Color.gray, false, 12);
+
+            string statusText;
+            Color statusColor;
+            if (!cfg.Enabled)
+            {
+                statusText = "MCP Status: Disabled";
+                statusColor = Color.gray;
+            }
+            else if (info == null)
+            {
+                statusText = "MCP Status: Enabled (not running)";
+                statusColor = Color.yellow;
+            }
+            else
+            {
+                statusText = "MCP Status: Enabled & Running";
+                statusColor = Color.green;
+            }
+
+            Text statusLabel = UIFactory.CreateLabel(this.ContentRoot, "McpStatus", statusText, TextAnchor.MiddleLeft, statusColor, false, 12);
+
+            // Enabled toggle behavior (updates config, status and endpoint)
+            enabledToggle.onValueChanged.AddListener((bool v) =>
+            {
+                var c = McpConfig.Load();
+                c.Enabled = v;
+                McpConfig.Save(c);
+
+                try
+                {
+                    if (v)
+                    {
+                        Mcp.McpHost.StartIfEnabled();
+                        Notification.ShowMessage("MCP enabled.");
+                    }
+                    else
+                    {
+                        Mcp.McpHost.Stop();
+                        Notification.ShowMessage("MCP disabled.");
+                    }
+                }
+                catch { }
+
+                var latest = McpDiscovery.TryLoad();
+                endpointLabel.text = $"Endpoint: {latest?.BaseUrl ?? "(not running)"}";
+
+                if (!v)
+                {
+                    statusLabel.text = "MCP Status: Disabled";
+                    statusLabel.color = Color.gray;
+                }
+                else if (latest == null)
+                {
+                    statusLabel.text = "MCP Status: Enabled (not running)";
+                    statusLabel.color = Color.yellow;
+                }
+                else
+                {
+                    statusLabel.text = "MCP Status: Enabled & Running";
+                    statusLabel.color = Color.green;
+                }
+            });
 
             // Config entries
 
