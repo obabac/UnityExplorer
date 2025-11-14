@@ -365,10 +365,4 @@
   <ItemGroup Condition="'$(IncludeMcpPackages)'=='true'">
     <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3" />
   </ItemGroup>
-
-  <!-- Mcp sources are included implicitly; avoid duplicate Compile items -->
-  <!-- Exclude MCP sources from legacy TFMs (net35/net472) to avoid missing APIs (Tasks/Json) -->
-  <ItemGroup Condition="'$(TargetFramework)'=='net35' or '$(TargetFramework)'=='net472'">
-    <Compile Remove="Mcp\**\*.cs" />
-  </ItemGroup>
 </Project>

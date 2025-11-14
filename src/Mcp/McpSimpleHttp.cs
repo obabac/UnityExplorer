@@ -372,5 +372,29 @@ namespace UnityExplorer.Mcp
         private static bool? TryBool(System.Collections.Generic.IDictionary<string, string> q, string key)
             => q.TryGetValue(key, out var s) && bool.TryParse(s, out var v) ? v : (bool?)null;
     }
+#else
+    // Stub implementation for non-INTEROP targets (e.g., net35/net472) so that
+    // builds that reference UnityExplorer.Mcp.McpSimpleHttp still compile even
+    // though the full HTTP/SSE server is only available for INTEROP targets.
+    internal sealed class McpSimpleHttp : IDisposable
+    {
+        public static McpSimpleHttp? Current { get; private set; }
+        public int Port { get; }
+
+        public McpSimpleHttp(string bindAddress, int port, string? authToken)
+        {
+            Port = port;
+        }
+
+        public void Start()
+        {
+            Current = this;
+        }
+
+        public void Dispose()
+        {
+            Current = null;
+        }
+    }
 #endif
 }
