@@ -137,11 +137,6 @@ internal static class Program
 
     private static async Task ListToolsAsync(HttpClient client, CancellationToken ct)
     {
-        using var sseCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        sseCts.CancelAfter(TimeSpan.FromSeconds(10));
-
-        var sseTask = Task.Run(() => ReadSseForToolsAsync(client, sseCts.Token), sseCts.Token);
-
         var payload = new
         {
             jsonrpc = "2.0",
@@ -155,64 +150,36 @@ internal static class Program
         if (!response.IsSuccessStatusCode)
         {
             Console.Error.WriteLine($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
-            sseCts.Cancel();
             return;
         }
 
-        await sseTask.ConfigureAwait(false);
-    }
-
-    private static async Task ReadSseForToolsAsync(HttpClient client, CancellationToken ct)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "sse");
-        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-
-        var dataBuilder = new StringBuilder();
-        while (!reader.EndOfStream && !ct.IsCancellationRequested)
+        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(body))
         {
-            var line = await reader.ReadLineAsync().ConfigureAwait(false);
-            if (line == null)
+            Console.WriteLine("<empty>");
+            return;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("result", out var resultElement) &&
+                resultElement.TryGetProperty("tools", out var toolsElement) &&
+                toolsElement.ValueKind == JsonValueKind.Array)
             {
-                break;
+                var pretty = JsonSerializer.Serialize(toolsElement, JsonOptions);
+                Console.WriteLine(pretty);
+                return;
             }
 
-            if (line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-            {
-                var payload = line.Substring("data:".Length).TrimStart();
-                dataBuilder.Append(payload);
-            }
-            else if (string.IsNullOrEmpty(line))
-            {
-                if (dataBuilder.Length == 0)
-                {
-                    continue;
-                }
-
-                var json = dataBuilder.ToString();
-                dataBuilder.Clear();
-
-                try
-                {
-                    using var doc = JsonDocument.Parse(json);
-                    var root = doc.RootElement;
-                    if (root.TryGetProperty("result", out var resultElement) &&
-                        resultElement.TryGetProperty("tools", out var toolsElement) &&
-                        toolsElement.ValueKind == JsonValueKind.Array)
-                    {
-                        var pretty = JsonSerializer.Serialize(toolsElement, JsonOptions);
-                        Console.WriteLine(pretty);
-                        return;
-                    }
-                }
-                catch
-                {
-                    // Ignore malformed SSE messages and continue.
-                }
-            }
+            // Fallback: pretty-print whole JSON-RPC envelope.
+            var prettyEnvelope = JsonSerializer.Serialize(root, JsonOptions);
+            Console.WriteLine(prettyEnvelope);
+        }
+        catch
+        {
+            Console.WriteLine(body);
         }
     }
 
@@ -324,4 +291,3 @@ internal static class Program
         Console.WriteLine("at %TEMP%/unity-explorer-mcp.json are used when available.");
     }
 }
-

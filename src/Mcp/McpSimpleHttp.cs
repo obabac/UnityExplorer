@@ -17,7 +17,7 @@ namespace UnityExplorer.Mcp
         public static McpSimpleHttp? Current { get; private set; }
         private readonly TcpListener _listener;
         private readonly CancellationTokenSource _cts = new();
-        private readonly ConcurrentDictionary<int, NetworkStream> _sse = new();
+        private readonly ConcurrentDictionary<int, Stream> _httpStreams = new();
         private int _nextClientId;
         public int Port { get; }
         private readonly string? _authToken;
@@ -93,24 +93,6 @@ namespace UnityExplorer.Mcp
 
                 if (!Authorize(authorization)) { await WriteResponseAsync(stream, 401, "unauthorized", ct).ConfigureAwait(false); return; }
 
-                if (method == "GET" && target.StartsWith("/sse"))
-                {
-                    var header = "HTTP/1.1 200 OK\r\n" +
-                                 "Content-Type: text/event-stream\r\n" +
-                                 "Cache-Control: no-cache\r\n" +
-                                 "Connection: keep-alive\r\n\r\n";
-                    var headerBytes = Encoding.UTF8.GetBytes(header);
-                    await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
-                    await stream.FlushAsync(ct).ConfigureAwait(false);
-                    int id = Interlocked.Increment(ref _nextClientId);
-                    _sse[id] = stream;
-                    // keep open until disconnected
-                    try { await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false); }
-                    catch { }
-                    _sse.TryRemove(id, out _);
-                    return;
-                }
-
                 string body = string.Empty;
                 if (method == "POST" && contentLength > 0)
                 {
@@ -123,9 +105,10 @@ namespace UnityExplorer.Mcp
                     finally { ArrayPool<char>.Shared.Return(buf); }
                 }
 
-                if (method == "POST" && target.StartsWith("/message"))
+                if (method == "POST" && (target.StartsWith("/message") || target == "/" || target.StartsWith("/?")))
                 {
-                    // Minimal JSON-RPC over HTTP. Results and errors are emitted on the SSE stream.
+                    // Minimal JSON-RPC over HTTP. Results and errors are returned in the HTTP body
+                    // and also broadcast on any open streaming connections.
                     JsonDocument doc;
                     try
                     {
@@ -134,7 +117,8 @@ namespace UnityExplorer.Mcp
                     catch (JsonException ex)
                     {
                         await SendJsonRpcErrorAsync(-32700, "Parse error", new { detail = ex.Message }, ct).ConfigureAwait(false);
-                        await WriteResponseAsync(stream, 400, "invalid json", ct).ConfigureAwait(false);
+                        var errorPayload = BuildJsonRpcErrorPayload(-32700, "Parse error", new { detail = ex.Message });
+                        await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                         return;
                     }
 
@@ -145,7 +129,75 @@ namespace UnityExplorer.Mcp
                         if (string.IsNullOrWhiteSpace(methodName))
                         {
                             await SendJsonRpcErrorAsync(root, -32600, "Invalid request: 'method' is required.", null, ct).ConfigureAwait(false);
-                            await WriteResponseAsync(stream, 400, "invalid request", ct).ConfigureAwait(false);
+                            var errorPayload = BuildJsonRpcErrorPayload(root, -32600, "Invalid request: 'method' is required.", null);
+                            await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
+                            return;
+                        }
+
+                        // Support both UnityExplorer-specific and MCP-standard method names.
+                        if (string.Equals(methodName, "tools/list", StringComparison.OrdinalIgnoreCase))
+                            methodName = "list_tools";
+                        else if (string.Equals(methodName, "tools/call", StringComparison.OrdinalIgnoreCase))
+                            methodName = "call_tool";
+                        else if (string.Equals(methodName, "resources/read", StringComparison.OrdinalIgnoreCase))
+                            methodName = "read_resource";
+
+                        // MCP initialize handshake support for inspector and generic clients.
+                        if (string.Equals(methodName, "initialize", StringComparison.OrdinalIgnoreCase))
+                        {
+                            try
+                            {
+                                const string protocolVersion = "2024-11-05";
+                                var serverInfo = new
+                                {
+                                    name = "UnityExplorer.Mcp",
+                                    version = typeof(McpSimpleHttp).Assembly.GetName().Version?.ToString() ?? "0.0.0"
+                                };
+                                var capabilities = new
+                                {
+                                    tools = new { listChanged = true },
+                                    resources = new { listChanged = true },
+                                    experimental = new { streamEvents = true }
+                                };
+
+                                var instructions =
+                                    "Unity Explorer MCP exposes Unity scenes, objects, and logs as tools " +
+                                    "and resources. Use list_tools + call_tool for inspection, and " +
+                                    "read_resource with unity:// URIs for structured state.";
+
+                                var resultObj = new { protocolVersion, capabilities, serverInfo, instructions };
+                                await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
+                                var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
+                                await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                await SendJsonRpcErrorAsync(root, -32603, "Internal error", new { detail = ex.Message }, ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32603, "Internal error", new { detail = ex.Message });
+                                await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
+                            }
+                            return;
+                        }
+
+                        // Client-side notification after initialize; accept and ignore.
+                        if (string.Equals(methodName, "notifications/initialized", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var payload = new
+                            {
+                                jsonrpc = "2.0",
+                                id = (object?)null,
+                                result = new { ok = true }
+                            };
+                            await WriteJsonResponseAsync(stream, 200, payload, ct).ConfigureAwait(false);
+                            return;
+                        }
+
+                        if (string.Equals(methodName, "ping", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var resultObj = new { };
+                            await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
+                            var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
+                            await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
                             return;
                         }
 
@@ -154,13 +206,16 @@ namespace UnityExplorer.Mcp
                             try
                             {
                                 var tools = McpReflection.ListTools();
-                                await SendJsonRpcResultAsync(root, new { tools }, ct).ConfigureAwait(false);
-                                await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
+                                var resultObj = new { tools };
+                                await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
+                                var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
+                                await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
                             }
                             catch (Exception ex)
                             {
                                 await SendJsonRpcErrorAsync(root, -32603, "Internal error", new { detail = ex.Message }, ct).ConfigureAwait(false);
-                                await WriteResponseAsync(stream, 500, "internal error", ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32603, "Internal error", new { detail = ex.Message });
+                                await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
                             }
                             return;
                         }
@@ -170,7 +225,8 @@ namespace UnityExplorer.Mcp
                             if (!root.TryGetProperty("params", out var pr))
                             {
                                 await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'params' object is required.", null, ct).ConfigureAwait(false);
-                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, "Invalid params: 'params' object is required.", null);
+                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                                 return;
                             }
 
@@ -179,7 +235,8 @@ namespace UnityExplorer.Mcp
                             if (string.IsNullOrWhiteSpace(name))
                             {
                                 await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'name' is required.", null, ct).ConfigureAwait(false);
-                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, "Invalid params: 'name' is required.", null);
+                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                                 return;
                             }
 
@@ -189,25 +246,29 @@ namespace UnityExplorer.Mcp
                                 var wrapped = new { content = new[] { new { type = "json", json = result } } };
                                 await SendJsonRpcResultAsync(root, wrapped, ct).ConfigureAwait(false);
                                 try { await BroadcastNotificationAsync("tool_result", new { name, ok = true, result }, ct).ConfigureAwait(false); } catch { }
-                                await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
+                                var responsePayload = BuildJsonRpcResultPayload(root, wrapped);
+                                await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
                             }
                             catch (ArgumentException ex)
                             {
                                 await SendJsonRpcErrorAsync(root, -32602, ex.Message, null, ct).ConfigureAwait(false);
                                 try { await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32602, message = ex.Message } }, ct).ConfigureAwait(false); } catch { }
-                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, ex.Message, null);
+                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                             }
                             catch (InvalidOperationException ex)
                             {
                                 await SendJsonRpcErrorAsync(root, -32601, ex.Message, null, ct).ConfigureAwait(false);
                                 try { await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32601, message = ex.Message } }, ct).ConfigureAwait(false); } catch { }
-                                await WriteResponseAsync(stream, 404, "tool not found", ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32601, ex.Message, null);
+                                await WriteJsonResponseAsync(stream, 404, errorPayload, ct).ConfigureAwait(false);
                             }
                             catch (Exception ex)
                             {
                                 await SendJsonRpcErrorAsync(root, -32603, "Internal error", new { detail = ex.Message }, ct).ConfigureAwait(false);
                                 try { await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32603, message = "Internal error" } }, ct).ConfigureAwait(false); } catch { }
-                                await WriteResponseAsync(stream, 500, "internal error", ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32603, "Internal error", new { detail = ex.Message });
+                                await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
                             }
                             return;
                         }
@@ -217,7 +278,8 @@ namespace UnityExplorer.Mcp
                             if (!root.TryGetProperty("params", out var pr))
                             {
                                 await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'params' object is required.", null, ct).ConfigureAwait(false);
-                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, "Invalid params: 'params' object is required.", null);
+                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                                 return;
                             }
 
@@ -225,36 +287,67 @@ namespace UnityExplorer.Mcp
                             if (string.IsNullOrWhiteSpace(uri))
                             {
                                 await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'uri' is required.", null, ct).ConfigureAwait(false);
-                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, "Invalid params: 'uri' is required.", null);
+                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                                 return;
                             }
 
                             try
                             {
                                 var rr = await McpReflection.ReadResourceAsync(uri).ConfigureAwait(false);
-                                await SendJsonRpcResultAsync(root, new { contents = new[] { new { uri, mimeType = "application/json", text = JsonSerializer.Serialize(rr) } } }, ct).ConfigureAwait(false);
-                                await WriteResponseAsync(stream, 202, "accepted", ct).ConfigureAwait(false);
+                                var resultObj = new { contents = new[] { new { uri, mimeType = "application/json", text = JsonSerializer.Serialize(rr) } } };
+                                await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
+                                var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
+                                await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
                             }
                             catch (ArgumentException ex)
                             {
                                 await SendJsonRpcErrorAsync(root, -32602, ex.Message, null, ct).ConfigureAwait(false);
-                                await WriteResponseAsync(stream, 400, "invalid params", ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, ex.Message, null);
+                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                             }
                             catch (NotSupportedException ex)
                             {
                                 await SendJsonRpcErrorAsync(root, -32601, ex.Message, null, ct).ConfigureAwait(false);
-                                await WriteResponseAsync(stream, 404, "resource not supported", ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32601, ex.Message, null);
+                                await WriteJsonResponseAsync(stream, 404, errorPayload, ct).ConfigureAwait(false);
                             }
                             catch (Exception ex)
                             {
                                 await SendJsonRpcErrorAsync(root, -32603, "Internal error", new { detail = ex.Message }, ct).ConfigureAwait(false);
-                                await WriteResponseAsync(stream, 500, "internal error", ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, -32603, "Internal error", new { detail = ex.Message });
+                                await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
                             }
                             return;
                         }
 
+                        if (string.Equals(methodName, "stream_events", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Stream notifications over HTTP using chunked transfer encoding.
+                            var header = "HTTP/1.1 200 OK\r\n" +
+                                         "Content-Type: application/json\r\n" +
+                                         "Transfer-Encoding: chunked\r\n" +
+                                         "Connection: keep-alive\r\n\r\n";
+                            var headerBytes = Encoding.UTF8.GetBytes(header);
+                            await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
+                            await stream.FlushAsync(ct).ConfigureAwait(false);
+
+                            int id = Interlocked.Increment(ref _nextClientId);
+                            _httpStreams[id] = stream;
+                            try
+                            {
+                                await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+                            }
+                            catch
+                            {
+                            }
+                            _httpStreams.TryRemove(id, out _);
+                            return;
+                        }
+
                         await SendJsonRpcErrorAsync(root, -32601, $"Method not found: {methodName}", null, ct).ConfigureAwait(false);
-                        await WriteResponseAsync(stream, 400, "unsupported method", ct).ConfigureAwait(false);
+                        var notFoundPayload = BuildJsonRpcErrorPayload(root, -32601, $"Method not found: {methodName}", null);
+                        await WriteJsonResponseAsync(stream, 400, notFoundPayload, ct).ConfigureAwait(false);
                         return;
                     }
                 }
@@ -299,23 +392,44 @@ namespace UnityExplorer.Mcp
             await stream.WriteAsync(body, 0, body.Length, ct).ConfigureAwait(false);
         }
 
-        private async Task BroadcastSseAsync(string json, CancellationToken ct)
+        private static async Task WriteJsonResponseAsync(Stream stream, int code, object payload, CancellationToken ct)
         {
-            var data = $"event: message\n" +
-                       $"data: {json}\n\n";
-            var bytes = Encoding.UTF8.GetBytes(data);
-            foreach (var kv in _sse)
+            var json = JsonSerializer.Serialize(payload);
+            var body = Encoding.UTF8.GetBytes(json);
+            var header = $"HTTP/1.1 {code} OK\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n";
+            var headerBytes = Encoding.UTF8.GetBytes(header);
+            await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
+            await stream.WriteAsync(body, 0, body.Length, ct).ConfigureAwait(false);
+        }
+
+        private async Task BroadcastHttpStreamAsync(string json, CancellationToken ct)
+        {
+            if (_httpStreams.IsEmpty) return;
+            var data = json + "\n";
+            var payload = Encoding.UTF8.GetBytes(data);
+            var prefix = Encoding.ASCII.GetBytes(payload.Length.ToString("X") + "\r\n");
+            var suffix = Encoding.ASCII.GetBytes("\r\n");
+            foreach (var kv in _httpStreams)
             {
                 var s = kv.Value;
-                try { await s.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false); await s.FlushAsync(ct).ConfigureAwait(false); }
-                catch { _sse.TryRemove(kv.Key, out _); }
+                try
+                {
+                    await s.WriteAsync(prefix, 0, prefix.Length, ct).ConfigureAwait(false);
+                    await s.WriteAsync(payload, 0, payload.Length, ct).ConfigureAwait(false);
+                    await s.WriteAsync(suffix, 0, suffix.Length, ct).ConfigureAwait(false);
+                    await s.FlushAsync(ct).ConfigureAwait(false);
+                }
+                catch
+                {
+                    _httpStreams.TryRemove(kv.Key, out _);
+                }
             }
         }
 
         public Task BroadcastNotificationAsync(string @event, object payload, CancellationToken ct = default)
         {
             var json = JsonSerializer.Serialize(new { jsonrpc = "2.0", method = "notification", @params = new { @event, payload } });
-            return BroadcastSseAsync(json, ct);
+            return BroadcastHttpStreamAsync(json, ct);
         }
 
         private bool Authorize(string? authHeader)
@@ -339,7 +453,7 @@ namespace UnityExplorer.Mcp
                 try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
             }
             var payload = JsonSerializer.Serialize(new { jsonrpc = "2.0", id = idVal, result });
-            await BroadcastSseAsync(payload, ct).ConfigureAwait(false);
+            await BroadcastHttpStreamAsync(payload, ct).ConfigureAwait(false);
         }
 
         private async Task SendJsonRpcErrorAsync(JsonElement requestRoot, int code, string message, object? data, CancellationToken ct)
@@ -349,24 +463,61 @@ namespace UnityExplorer.Mcp
             {
                 try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
             }
+            try { ExplorerCore.LogWarning($"[MCP] error {code}: {message}"); } catch { }
             var payload = JsonSerializer.Serialize(new
             {
                 jsonrpc = "2.0",
                 id = idVal,
                 error = new { code, message, data }
             });
-            await BroadcastSseAsync(payload, ct).ConfigureAwait(false);
+            await BroadcastHttpStreamAsync(payload, ct).ConfigureAwait(false);
         }
 
         private async Task SendJsonRpcErrorAsync(int code, string message, object? data, CancellationToken ct)
         {
+            try { ExplorerCore.LogWarning($"[MCP] error {code}: {message}"); } catch { }
             var payload = JsonSerializer.Serialize(new
             {
                 jsonrpc = "2.0",
                 id = (object?)null,
                 error = new { code, message, data }
             });
-            await BroadcastSseAsync(payload, ct).ConfigureAwait(false);
+            await BroadcastHttpStreamAsync(payload, ct).ConfigureAwait(false);
+        }
+
+        private static object BuildJsonRpcResultPayload(JsonElement requestRoot, object result)
+        {
+            object? idVal = null;
+            if (requestRoot.ValueKind == JsonValueKind.Object && requestRoot.TryGetProperty("id", out var idEl))
+            {
+                try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
+            }
+            return new { jsonrpc = "2.0", id = idVal, result };
+        }
+
+        private static object BuildJsonRpcErrorPayload(JsonElement requestRoot, int code, string message, object? data)
+        {
+            object? idVal = null;
+            if (requestRoot.ValueKind == JsonValueKind.Object && requestRoot.TryGetProperty("id", out var idEl))
+            {
+                try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
+            }
+            return new
+            {
+                jsonrpc = "2.0",
+                id = idVal,
+                error = new { code, message, data }
+            };
+        }
+
+        private static object BuildJsonRpcErrorPayload(int code, string message, object? data)
+        {
+            return new
+            {
+                jsonrpc = "2.0",
+                id = (object?)null,
+                error = new { code, message, data }
+            };
         }
 
         public void Dispose()
@@ -400,12 +551,20 @@ namespace UnityExplorer.Mcp
             var type = typeof(UnityReadTools);
             foreach (var mi in type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
             {
-                if (Attribute.IsDefined(mi, typeof(ModelContextProtocol.Server.McpServerToolAttribute)))
+                if (Attribute.IsDefined(mi, typeof(McpServerToolAttribute)))
                 {
                     var name = mi.Name;
                     var desc = mi.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false);
                     string? d = (desc.Length > 0) ? ((System.ComponentModel.DescriptionAttribute)desc[0]).Description : null;
-                    list.Add(new { name, description = d });
+                    // MCP inspector expects an inputSchema object; use a minimal JSON
+                    // schema describing an object with arbitrary properties.
+                    var inputSchema = new
+                    {
+                        type = "object",
+                        properties = new { },
+                        additionalProperties = true
+                    };
+                    list.Add(new { name, description = d, inputSchema });
                 }
             }
             return list.ToArray();
@@ -417,7 +576,7 @@ namespace UnityExplorer.Mcp
             var type = typeof(UnityReadTools);
             var mi = Array.Find(type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static),
                 m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase) &&
-                     Attribute.IsDefined(m, typeof(ModelContextProtocol.Server.McpServerToolAttribute)));
+                     Attribute.IsDefined(m, typeof(McpServerToolAttribute)));
             if (mi == null) throw new InvalidOperationException($"Tool not found: {name}");
 
             var parameters = mi.GetParameters();
@@ -451,9 +610,16 @@ namespace UnityExplorer.Mcp
         {
             if (string.IsNullOrWhiteSpace(uri)) throw new ArgumentException("uri required");
             // simple router based on path segment
-            Uri u;
-            if (!Uri.TryCreate(uri, UriKind.Absolute, out u)) throw new ArgumentException("invalid uri");
+            if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) throw new ArgumentException("invalid uri");
+
+            // Treat the host as the first path segment so that
+            // both `unity://status` and `unity://scene/0/objects` map
+            // to logical paths like `status` or `scene/0/objects`.
             var path = u.AbsolutePath.Trim('/');
+            if (!string.IsNullOrEmpty(u.Host))
+            {
+                path = string.IsNullOrEmpty(path) ? u.Host : $"{u.Host}/{path}";
+            }
             var query = ParseQuery(u.Query);
 
             if (path.Equals("status", StringComparison.OrdinalIgnoreCase))
@@ -463,7 +629,14 @@ namespace UnityExplorer.Mcp
             if (path.StartsWith("scene/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/objects", StringComparison.OrdinalIgnoreCase))
             {
                 var sceneId = path.Substring(6, path.Length - 6 - "/objects".Length);
-                return await UnityReadTools.ListObjects(sceneId, query["name"], query["type"], TryBool(query, "activeOnly"), TryInt(query, "limit"), TryInt(query, "offset"), default);
+                return await UnityReadTools.ListObjects(
+                    sceneId,
+                    TryString(query, "name"),
+                    TryString(query, "type"),
+                    TryBool(query, "activeOnly"),
+                    TryInt(query, "limit"),
+                    TryInt(query, "offset"),
+                    default);
             }
             if (path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) && !path.EndsWith("/components", StringComparison.OrdinalIgnoreCase))
             {
@@ -477,14 +650,26 @@ namespace UnityExplorer.Mcp
             }
             if (path.Equals("search", StringComparison.OrdinalIgnoreCase))
             {
-                return await UnityReadTools.SearchObjects(query["query"], query["name"], query["type"], query["path"], TryBool(query, "activeOnly"), TryInt(query, "limit"), TryInt(query, "offset"), default);
+                return await UnityReadTools.SearchObjects(
+                    TryString(query, "query"),
+                    TryString(query, "name"),
+                    TryString(query, "type"),
+                    TryString(query, "path"),
+                    TryBool(query, "activeOnly"),
+                    TryInt(query, "limit"),
+                    TryInt(query, "offset"),
+                    default);
             }
             if (path.Equals("camera/active", StringComparison.OrdinalIgnoreCase))
                 return await UnityReadTools.GetCameraInfo(default);
             if (path.Equals("selection", StringComparison.OrdinalIgnoreCase))
                 return await UnityReadTools.GetSelection(default);
             if (path.Equals("logs/tail", StringComparison.OrdinalIgnoreCase))
-                return UnityReadTools.TailLogs(TryInt(query, "count") ?? 200, default);
+                return await UnityReadTools.TailLogs(TryInt(query, "count") ?? 200, default);
+            if (path.Equals("console/scripts", StringComparison.OrdinalIgnoreCase))
+                return await UnityResources.ConsoleScripts(TryInt(query, "limit"), TryInt(query, "offset"), default);
+            if (path.Equals("hooks", StringComparison.OrdinalIgnoreCase))
+                return await UnityResources.Hooks(TryInt(query, "limit"), TryInt(query, "offset"), default);
 
             throw new NotSupportedException("resource not supported");
         }
@@ -493,11 +678,13 @@ namespace UnityExplorer.Mcp
             => q.TryGetValue(key, out var s) && int.TryParse(s, out var v) ? v : (int?)null;
         private static bool? TryBool(System.Collections.Generic.IDictionary<string, string> q, string key)
             => q.TryGetValue(key, out var s) && bool.TryParse(s, out var v) ? v : (bool?)null;
+        private static string? TryString(System.Collections.Generic.IDictionary<string, string> q, string key)
+            => q.TryGetValue(key, out var s) && !string.IsNullOrWhiteSpace(s) ? s : null;
     }
 #else
     // Stub implementation for non-INTEROP targets (e.g., net35/net472) so that
     // builds that reference UnityExplorer.Mcp.McpSimpleHttp still compile even
-    // though the full HTTP/SSE server is only available for INTEROP targets.
+    // though the full streaming HTTP server is only available for INTEROP targets.
     internal sealed class McpSimpleHttp : IDisposable
     {
         public static McpSimpleHttp? Current { get; private set; }

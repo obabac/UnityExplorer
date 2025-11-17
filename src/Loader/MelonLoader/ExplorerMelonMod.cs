@@ -14,7 +14,9 @@ using UnityExplorer.Loader.ML;
 
 [assembly: MelonInfo(typeof(ExplorerMelonMod), ExplorerCore.NAME, ExplorerCore.VERSION, ExplorerCore.AUTHOR)]
 [assembly: MelonGame(null, null)]
+#if !INTEROP
 [assembly: MelonColor(ConsoleColor.DarkCyan)]
+#endif
 
 namespace UnityExplorer
 {

@@ -7,9 +7,15 @@ namespace UnityExplorer.Mcp
     internal sealed class McpConfig
     {
         public bool Enabled { get; set; } = true;
-        public string BindAddress { get; set; } = "127.0.0.1";
-        public int Port { get; set; } = 0; // 0 = ephemeral
-        public string TransportPreference { get; set; } = "auto"; // auto|streamable-http|sse
+        // BindAddress is where the MCP HTTP listener binds. Default to 0.0.0.0 so
+        // remote tools on the LAN (e.g. dev VM) can connect directly to the
+        // Test-VM.
+        public string BindAddress { get; set; } = "0.0.0.0";
+        // Use a fixed default port to make testing simpler. Port 51477 is used
+        // by convention; set to 0 explicitly in config if you really want an
+        // ephemeral port.
+        public int Port { get; set; } = 51477;
+        public string TransportPreference { get; set; } = "auto"; // auto|streamable-http
         public bool AllowWrites { get; set; } = false;
         public bool RequireConfirm { get; set; } = true;
         public string? ReflectionAllowlistPath { get; set; }
@@ -18,6 +24,9 @@ namespace UnityExplorer.Mcp
         public string LogLevel { get; set; } = "Information";
         public string? AuthToken { get; set; }
         public string[]? ComponentAllowlist { get; set; }
+        // Phase-2 / advanced features (disabled by default).
+        public bool EnableConsoleEval { get; set; } = false;
+        public string[]? HookAllowlistSignatures { get; set; }
 
         public static McpConfig Load()
         {
@@ -37,8 +46,18 @@ namespace UnityExplorer.Mcp
                     return cfg;
                 }
                 var json = File.ReadAllText(path);
-                var loaded = JsonSerializer.Deserialize<McpConfig>(json);
-                return loaded ?? new McpConfig();
+                var loaded = JsonSerializer.Deserialize<McpConfig>(json) ?? new McpConfig();
+
+                // Migration: older configs used 127.0.0.1 and port 0 (ephemeral).
+                // For remote tooling (e.g. dev VM connecting to Test-VM), binding to
+                // 0.0.0.0 on a fixed port is more convenient. If a different bind
+                // address/port is explicitly set, respect it.
+                if (string.Equals(loaded.BindAddress, "127.0.0.1", StringComparison.OrdinalIgnoreCase))
+                    loaded.BindAddress = "0.0.0.0";
+                if (loaded.Port == 0)
+                    loaded.Port = 51477;
+
+                return loaded;
             }
             catch (Exception)
             {

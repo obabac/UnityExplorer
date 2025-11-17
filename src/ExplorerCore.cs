@@ -79,7 +79,7 @@ public static class ExplorerCore
             Mcp.MainThread.Capture();
             Mcp.McpHost.StartIfEnabled();
 
-            // Stream selection changes to SSE clients
+            // Stream selection changes to connected MCP streaming clients
             InspectorManager.OnInspectedTabsChanged += () =>
             {
                 try
@@ -110,7 +110,7 @@ public static class ExplorerCore
                     };
                     var http = Mcp.McpSimpleHttp.Current;
                     if (http != null) _ = http.BroadcastNotificationAsync("scenes", payload);
-                    Mcp.McpSseState.UpdateScenes(scenes);
+                    Mcp.McpSceneDiffState.UpdateScenes(scenes);
                 }
                 catch { }
             };

@@ -5,7 +5,8 @@ using UnityEngine.SceneManagement;
 namespace UnityExplorer.Mcp
 {
 #if INTEROP
-    internal static class McpSseState
+    // Tracks scene add/remove diffs for MCP notifications.
+    internal static class McpSceneDiffState
     {
         private static readonly HashSet<int> _lastSceneHandles = new();
 
@@ -43,4 +44,3 @@ namespace UnityExplorer.Mcp
     }
 #endif
 }
-

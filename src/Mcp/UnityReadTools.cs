@@ -8,10 +8,6 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UniverseLib.Input;
 
-#if INTEROP
-using ModelContextProtocol.Server;
-#endif
-
 namespace UnityExplorer.Mcp
 {
 #if INTEROP
@@ -202,6 +198,19 @@ namespace UnityExplorer.Mcp
             }
             names.Reverse();
             return "/" + string.Join("/", names);
+        }
+
+        [McpServerTool, Description("Version information for UnityExplorer MCP and Unity runtime.")]
+        public static async Task<VersionInfoDto> GetVersion(CancellationToken ct)
+        {
+            return await MainThread.Run(() =>
+            {
+                var explorerVersion = ExplorerCore.VERSION;
+                var mcpVersion = typeof(McpSimpleHttp).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+                var unityVersion = Application.unityVersion;
+                var runtime = Universe.Context.ToString();
+                return new VersionInfoDto(explorerVersion, mcpVersion, unityVersion, runtime);
+            });
         }
 
         [McpServerTool, Description("Search objects across scenes by name/type/path.")]

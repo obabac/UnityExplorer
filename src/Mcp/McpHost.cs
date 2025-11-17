@@ -6,7 +6,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-// ASP.NET Core transport removed for net6.0 compatibility. Custom HTTP/SSE transport will be added later.
+// ASP.NET Core transport removed for net6.0 compatibility. Lightweight HTTP streaming transport is implemented in McpSimpleHttp.
 
 namespace UnityExplorer.Mcp
 {
@@ -37,7 +37,7 @@ namespace UnityExplorer.Mcp
                 _http = new McpSimpleHttp(cfg.BindAddress, cfg.Port, cfg.AuthToken);
                 _http.Start();
                 WriteDiscovery($"http://{cfg.BindAddress}:{_http.Port}", cfg.AuthToken);
-                ExplorerCore.Log($"MCP (SSE) listening on http://{cfg.BindAddress}:{_http.Port}");
+                ExplorerCore.Log($"MCP (streamable-http) listening on http://{cfg.BindAddress}:{_http.Port}");
             }
             catch (Exception ex)
             {
@@ -63,7 +63,7 @@ namespace UnityExplorer.Mcp
                     pid = Process.GetCurrentProcess().Id,
                     port,
                     baseUrl = uri.ToString(),
-                    modeHints = new[] { "streamable-http", "sse" },
+                    modeHints = new[] { "streamable-http" },
                     startedAt = DateTimeOffset.UtcNow.ToString("o"),
                     authToken = authToken
                 };

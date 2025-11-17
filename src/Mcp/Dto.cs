@@ -28,5 +28,8 @@ namespace UnityExplorer.Mcp
 
     public record SelectionDto(string? ActiveId, IReadOnlyList<string> Items);
     public record PickResultDto(string? Id, string Mode, bool Hit);
+    public record HookDto(string Signature, bool Enabled);
+    public record ConsoleScriptDto(string Name, string Path);
+    public record VersionInfoDto(string ExplorerVersion, string McpVersion, string UnityVersion, string Runtime);
 #endif
 }

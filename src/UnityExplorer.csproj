@@ -361,8 +361,5 @@
     </Reference>
   </ItemGroup>
 
-  <!-- MCP server: only include for CoreCLR (INTEROP) net6 targets -->
-  <ItemGroup Condition="'$(IncludeMcpPackages)'=='true'">
-    <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3" />
-  </ItemGroup>
+  <!-- MCP server: custom lightweight HTTP streaming transport; no external MCP SDK package required at runtime -->
 </Project>
