@@ -1,293 +1,296 @@
+using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
-internal static class Program
+static class Discovery
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    public sealed record Info(int Pid, int Port, Uri? BaseUrl, string? AuthToken)
     {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
-    public static async Task<int> Main(string[] args)
-    {
-        var parseResult = ParsedArgs.Parse(args);
-        if (parseResult.ShowHelp)
-        {
-            ShowHelp();
-            return 1;
-        }
-
-        var client = CreateClient(parseResult, out var discovery);
-        var ct = CancellationToken.None;
-
-        switch (parseResult.Command)
-        {
-            case "status":
-                await GetResourceAsync(client, discovery, "unity://status", ct);
-                return 0;
-            case "scenes":
-                await GetResourceAsync(client, discovery, "unity://scenes", ct);
-                return 0;
-            case "objects":
-                if (parseResult.Arguments.Count < 1)
-                {
-                    Console.Error.WriteLine("Usage: objects <sceneId>");
-                    return 1;
-                }
-                await GetResourceAsync(client, discovery, $"unity://scene/{parseResult.Arguments[0]}/objects", ct);
-                return 0;
-            case "search":
-                if (parseResult.Arguments.Count < 1)
-                {
-                    Console.Error.WriteLine("Usage: search <query>");
-                    return 1;
-                }
-                var query = parseResult.Arguments[0];
-                await GetResourceAsync(client, discovery, $"unity://search?query={Uri.EscapeDataString(query)}", ct);
-                return 0;
-            case "camera":
-                await GetResourceAsync(client, discovery, "unity://camera/active", ct);
-                return 0;
-            case "selection":
-                await GetResourceAsync(client, discovery, "unity://selection", ct);
-                return 0;
-            case "logs":
-                int count = 200;
-                if (parseResult.Arguments.Count > 0 && int.TryParse(parseResult.Arguments[0], out var parsed))
-                {
-                    count = parsed;
-                }
-                await GetResourceAsync(client, discovery, $"unity://logs/tail?count={count}", ct);
-                return 0;
-            case "read":
-                if (parseResult.Arguments.Count < 1)
-                {
-                    Console.Error.WriteLine("Usage: read <unity://uri>");
-                    return 1;
-                }
-                await GetResourceAsync(client, discovery, parseResult.Arguments[0], ct);
-                return 0;
-            case "list-tools":
-                await ListToolsAsync(client, ct);
-                return 0;
-            default:
-                ShowHelp();
-                return 1;
-        }
+        public Uri EffectiveBaseUrl => BaseUrl ?? new Uri($"http://127.0.0.1:{Port}/");
     }
 
-    private static HttpClient CreateClient(ParsedArgs parseResult, out Discovery discovery)
+    public static Info? Load()
     {
-        var baseUrl = parseResult.BaseUrl;
-        var tokenOverride = parseResult.Token;
-        discovery = Discovery.Load();
-
-        var effectiveBase = baseUrl ?? discovery.BaseUrl ?? "http://127.0.0.1:0/";
-        var handler = new HttpClientHandler { AllowAutoRedirect = false };
-        var client = new HttpClient(handler)
-        {
-            BaseAddress = new Uri(effectiveBase, UriKind.Absolute),
-            Timeout = TimeSpan.FromSeconds(15)
-        };
-
-        var token = tokenOverride ?? discovery.AuthToken;
-        if (!string.IsNullOrEmpty(token))
-        {
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        }
-
-        return client;
-    }
-
-    private static async Task GetResourceAsync(HttpClient client, Discovery discovery, string unityUri, CancellationToken ct)
-    {
-        var encoded = Uri.EscapeDataString(unityUri);
-        var path = $"read?uri={encoded}";
-        var response = await client.GetAsync(path, ct).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-        {
-            Console.Error.WriteLine($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
-            if (!string.IsNullOrWhiteSpace(body))
-            {
-                Console.Error.WriteLine(body);
-            }
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            Console.WriteLine("<empty>");
-            return;
-        }
-
         try
         {
-            using var doc = JsonDocument.Parse(body);
-            var pretty = JsonSerializer.Serialize(doc.RootElement, JsonOptions);
-            Console.WriteLine(pretty);
+            var path = Environment.GetEnvironmentVariable("UE_MCP_DISCOVERY");
+            if (string.IsNullOrWhiteSpace(path))
+                path = Path.Combine(Path.GetTempPath(), "unity-explorer-mcp.json");
+            if (!File.Exists(path)) return null;
+            using var fs = File.OpenRead(path);
+            using var doc = JsonDocument.Parse(fs);
+            var root = doc.RootElement;
+            var pid = root.GetProperty("pid").GetInt32();
+            var port = root.GetProperty("port").GetInt32();
+            Uri? baseUrl = null;
+            if (root.TryGetProperty("baseUrl", out var bu) && Uri.TryCreate(bu.GetString(), UriKind.Absolute, out var u))
+                baseUrl = u;
+            var token = root.TryGetProperty("authToken", out var tok) ? tok.GetString() : null;
+            return new Info(pid, port, baseUrl, token);
         }
-        catch
+        catch { return null; }
+    }
+}
+
+class Program
+{
+    static async Task<int> Main(string[] args)
+    {
+        if (args.Length == 0 || args[0] is "-h" or "--help")
         {
-            Console.WriteLine(body);
+            Console.WriteLine("mcpcli commands:\n  list-tools\n  read <uri>\n  call <toolName> [jsonArgs]\n  status\n  scenes\n  objects [sceneId]\n  search <q>\n  camera\n  selection\n  logs [count]\n  pick [world|ui]\n  stream-events\n  set-active <objId> <true|false> [--confirm]\n  add-comp <objId> <FullTypeName> [--confirm]\n  rm-comp <objId> <typeOrIndex> [--confirm]\n  reparent <childId> <parentId> [--confirm]\n  destroy <objId> [--confirm]\n  select <objId>\n  rename <objId> <newName> [--confirm]\n  set-tag <objId> <tag> [--confirm]\n  set-layer <objId> <layer> [--confirm]\n  config writes <on|off> [--no-confirm]\n  config token <value> [--restart]\n");
+            return 0;
         }
+
+        var info = Discovery.Load();
+        if (info is null) { Console.Error.WriteLine("No discovery file; server not running?"); return 2; }
+        using var http = new HttpClient { BaseAddress = info.EffectiveBaseUrl };
+        if (!string.IsNullOrEmpty(info.AuthToken))
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", info.AuthToken);
+        http.Timeout = TimeSpan.FromSeconds(10);
+
+        var cmd = args[0];
+        if (cmd == "read")
+        {
+            if (args.Length < 2) { Console.Error.WriteLine("read requires a uri"); return 2; }
+            var uri = args[1];
+            var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString(uri)}");
+            res.EnsureSuccessStatusCode();
+            Console.WriteLine(await res.Content.ReadAsStringAsync());
+            return 0;
+        }
+
+        // Convenience commands via GET /read
+        if (cmd == "status")
+        {
+            await ReadAsync(http, "unity://status");
+            return 0;
+        }
+        if (cmd == "scenes")
+        {
+            await ReadAsync(http, "unity://scenes");
+            return 0;
+        }
+        if (cmd == "objects")
+        {
+            var scene = args.Length >= 2 ? args[1] : string.Empty;
+            var uri = string.IsNullOrEmpty(scene) ? "unity://scene//objects" : $"unity://scene/{scene}/objects";
+            await ReadAsync(http, uri);
+            return 0;
+        }
+        if (cmd == "search")
+        {
+            if (args.Length < 2) { Console.Error.WriteLine("search requires query"); return 2; }
+            var q = Uri.EscapeDataString(args[1]);
+            await ReadAsync(http, $"unity://search?query={q}");
+            return 0;
+        }
+        if (cmd == "camera") { await ReadAsync(http, "unity://camera/active"); return 0; }
+        if (cmd == "selection") { await ReadAsync(http, "unity://selection"); return 0; }
+        if (cmd == "logs") { var n = args.Length>=2? args[1]:"200"; await ReadAsync(http, $"unity://logs/tail?count={n}"); return 0; }
+
+        if (cmd == "list-tools")
+        {
+            var root = await PostJsonRpcAsync(http, new { jsonrpc = "2.0", id = Guid.NewGuid().ToString(), method = "list_tools" });
+            if (root.TryGetProperty("result", out var result) && result.TryGetProperty("tools", out var tools))
+            {
+                Console.WriteLine(JsonSerializer.Serialize(tools, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            else
+            {
+                Console.WriteLine(root.GetRawText());
+            }
+            return 0;
+        }
+
+        if (cmd == "call")
+        {
+            if (args.Length < 2) { Console.Error.WriteLine("call requires a tool name"); return 2; }
+            string name = args[1];
+            JsonElement arguments = default;
+            if (args.Length >= 3)
+            {
+                using var doc = JsonDocument.Parse(args[2]);
+                arguments = doc.RootElement.Clone();
+            }
+            var root = await PostJsonRpcAsync(http, new { jsonrpc = "2.0", id = Guid.NewGuid().ToString(), method = "call_tool", @params = new { name, arguments } });
+            Console.WriteLine(root.GetRawText());
+            return 0;
+        }
+
+        if (cmd == "pick")
+        {
+            var mode = args.Length >= 2 ? args[1] : "world";
+            var root = await PostJsonRpcAsync(http, new { jsonrpc = "2.0", id = Guid.NewGuid().ToString(), method = "call_tool", @params = new { name = "MousePick", arguments = new { mode } } });
+            Console.WriteLine(root.GetRawText());
+            return 0;
+        }
+
+        if (cmd == "stream-events")
+        {
+            return await StreamEventsAsync(http);
+        }
+
+        if (cmd == "set-active")
+        {
+            if (args.Length < 3) { Console.Error.WriteLine("set-active <objId> <true|false> [--confirm]"); return 2; }
+            var id = args[1];
+            if (!bool.TryParse(args[2], out var active)) { Console.Error.WriteLine("second arg must be true|false"); return 2; }
+            var confirm = args.Length >= 4 && args[3] == "--confirm";
+            return await SetActiveAsync(http, id, active, confirm);
+        }
+
+        if (cmd == "add-comp")
+        {
+            if (args.Length < 3) { Console.Error.WriteLine("add-comp <objId> <FullTypeName> [--confirm]"); return 2; }
+            var id = args[1]; var type = args[2]; var confirm = args.Length >= 4 && args[3] == "--confirm";
+            return await CallToolAsync(http, "AddComponent", new { objectId = id, type, confirm });
+        }
+        if (cmd == "rm-comp")
+        {
+            if (args.Length < 3) { Console.Error.WriteLine("rm-comp <objId> <typeOrIndex> [--confirm]"); return 2; }
+            var id = args[1]; var val = args[2]; var confirm = args.Length >= 4 && args[3] == "--confirm";
+            return await CallToolAsync(http, "RemoveComponent", new { objectId = id, typeOrIndex = val, confirm });
+        }
+        if (cmd == "reparent")
+        {
+            if (args.Length < 3) { Console.Error.WriteLine("reparent <childId> <parentId> [--confirm]"); return 2; }
+            var child = args[1]; var parent = args[2]; var confirm = args.Length >= 4 && args[3] == "--confirm";
+            return await CallToolAsync(http, "Reparent", new { objectId = child, newParentId = parent, confirm });
+        }
+        if (cmd == "destroy")
+        {
+            if (args.Length < 2) { Console.Error.WriteLine("destroy <objId> [--confirm]"); return 2; }
+            var id = args[1]; var confirm = args.Length >= 3 && args[2] == "--confirm";
+            return await CallToolAsync(http, "DestroyObject", new { objectId = id, confirm });
+        }
+        if (cmd == "select")
+        {
+            if (args.Length < 2) { Console.Error.WriteLine("select <objId>"); return 2; }
+            var id = args[1];
+            return await CallToolAsync(http, "SelectObject", new { objectId = id });
+        }
+        if (cmd == "rename")
+        {
+            if (args.Length < 3) { Console.Error.WriteLine("rename <objId> <newName> [--confirm]"); return 2; }
+            var id = args[1]; var name = args[2]; var confirm = args.Length >= 4 && args[3] == "--confirm";
+            return await CallToolAsync(http, "SetName", new { objectId = id, name, confirm });
+        }
+        if (cmd == "set-tag")
+        {
+            if (args.Length < 3) { Console.Error.WriteLine("set-tag <objId> <tag> [--confirm]"); return 2; }
+            var id = args[1]; var tag = args[2]; var confirm = args.Length >= 4 && args[3] == "--confirm";
+            return await CallToolAsync(http, "SetTag", new { objectId = id, tag, confirm });
+        }
+        if (cmd == "set-layer")
+        {
+            if (args.Length < 3 || !int.TryParse(args[2], out var layer)) { Console.Error.WriteLine("set-layer <objId> <layer:int> [--confirm]"); return 2; }
+            var id = args[1]; var confirm = args.Length >= 4 && args[3] == "--confirm";
+            return await CallToolAsync(http, "SetLayer", new { objectId = id, layer, confirm });
+        }
+
+        if (cmd == "config" && args.Length >= 2)
+        {
+            var sub = args[1];
+            if (sub == "writes")
+            {
+                if (args.Length < 3) { Console.Error.WriteLine("config writes <on|off> [--no-confirm]"); return 2; }
+                var allow = args[2].Equals("on", StringComparison.OrdinalIgnoreCase);
+                var requireConfirm = !(args.Length >= 4 && args[3] == "--no-confirm");
+                return await CallToolAsync(http, "SetConfig", new { allowWrites = allow, requireConfirm });
+            }
+            if (sub == "token")
+            {
+                if (args.Length < 3) { Console.Error.WriteLine("config token <value> [--restart]"); return 2; }
+                var token = args[2]; var restart = args.Length >= 4 && args[3] == "--restart";
+                return await CallToolAsync(http, "SetConfig", new { authToken = token, restart });
+            }
+        }
+
+        Console.Error.WriteLine($"Unknown command: {cmd}");
+        return 2;
     }
 
-    private static async Task ListToolsAsync(HttpClient client, CancellationToken ct)
+    static async Task<JsonElement> PostJsonRpcAsync(HttpClient http, object payload)
+    {
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/message");
+        req.Content = content;
+        req.Headers.Accept.Clear();
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        var res = await http.SendAsync(req);
+        res.EnsureSuccessStatusCode();
+        var body = await res.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(body);
+        return doc.RootElement.Clone();
+    }
+
+    static async Task ReadAsync(HttpClient http, string uri)
+    {
+        var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString(uri)}");
+        res.EnsureSuccessStatusCode();
+        Console.WriteLine(await res.Content.ReadAsStringAsync());
+    }
+
+    // helper for set-active
+    static async Task<int> SetActiveAsync(HttpClient http, string objectId, bool active, bool confirm)
+    {
+        var root = await PostJsonRpcAsync(http, new
+        {
+            jsonrpc = "2.0",
+            id = Guid.NewGuid().ToString(),
+            method = "call_tool",
+            @params = new { name = "SetActive", arguments = new { objectId, active, confirm } }
+        });
+        Console.WriteLine(root.GetRawText());
+        return 0;
+    }
+
+    static async Task<int> CallToolAsync(HttpClient http, string name, object args)
+    {
+        var root = await PostJsonRpcAsync(http, new
+        {
+            jsonrpc = "2.0",
+            id = Guid.NewGuid().ToString(),
+            method = "call_tool",
+            @params = new { name, arguments = args }
+        });
+        Console.WriteLine(root.GetRawText());
+        return 0;
+    }
+
+    static async Task<int> StreamEventsAsync(HttpClient http)
     {
         var payload = new
         {
             jsonrpc = "2.0",
-            id = 1,
-            method = "list_tools",
+            id = Guid.NewGuid().ToString(),
+            method = "stream_events",
             @params = new { }
         };
+
         var json = JsonSerializer.Serialize(payload);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var response = await client.PostAsync("message", content, ct).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/message");
+        req.Content = content;
+        req.Headers.Accept.Clear();
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        using var res = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        res.EnsureSuccessStatusCode();
+
+        await using var stream = await res.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        string? line;
+        while ((line = await reader.ReadLineAsync()) != null)
         {
-            Console.Error.WriteLine($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
-            return;
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+            Console.WriteLine(line);
         }
 
-        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            Console.WriteLine("<empty>");
-            return;
-        }
-
-        try
-        {
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-            if (root.TryGetProperty("result", out var resultElement) &&
-                resultElement.TryGetProperty("tools", out var toolsElement) &&
-                toolsElement.ValueKind == JsonValueKind.Array)
-            {
-                var pretty = JsonSerializer.Serialize(toolsElement, JsonOptions);
-                Console.WriteLine(pretty);
-                return;
-            }
-
-            // Fallback: pretty-print whole JSON-RPC envelope.
-            var prettyEnvelope = JsonSerializer.Serialize(root, JsonOptions);
-            Console.WriteLine(prettyEnvelope);
-        }
-        catch
-        {
-            Console.WriteLine(body);
-        }
-    }
-
-    private sealed record Discovery(string? BaseUrl, string? AuthToken)
-    {
-        public static Discovery Load()
-        {
-            try
-            {
-                var path = Path.Combine(Path.GetTempPath(), "unity-explorer-mcp.json");
-                if (!File.Exists(path))
-                {
-                    return new Discovery(null, null);
-                }
-
-                using var fs = File.OpenRead(path);
-                using var doc = JsonDocument.Parse(fs);
-                var root = doc.RootElement;
-                var url = root.TryGetProperty("baseUrl", out var u) ? u.GetString() : null;
-                var token = root.TryGetProperty("authToken", out var a) ? a.GetString() : null;
-                return new Discovery(url, token);
-            }
-            catch
-            {
-                return new Discovery(null, null);
-            }
-        }
-    }
-    private sealed class ParsedArgs
-    {
-        public string? BaseUrl { get; init; }
-        public string? Token { get; init; }
-        public string Command { get; init; } = string.Empty;
-        public List<string> Arguments { get; } = new();
-        public bool ShowHelp { get; init; }
-
-        public static ParsedArgs Parse(string[] args)
-        {
-            string? baseUrl = null;
-            string? token = null;
-            var rest = new List<string>();
-
-            for (int i = 0; i < args.Length; i++)
-            {
-                var arg = args[i];
-                if (arg == "--base-url" && i + 1 < args.Length)
-                {
-                    baseUrl = args[++i];
-                }
-                else if (arg.StartsWith("--base-url=", StringComparison.Ordinal))
-                {
-                    baseUrl = arg.Substring("--base-url=".Length);
-                }
-                else if (arg == "--token" && i + 1 < args.Length)
-                {
-                    token = args[++i];
-                }
-                else if (arg.StartsWith("--token=", StringComparison.Ordinal))
-                {
-                    token = arg.Substring("--token=".Length);
-                }
-                else
-                {
-                    rest.Add(arg);
-                }
-            }
-
-            if (rest.Count == 0)
-            {
-                return new ParsedArgs { BaseUrl = baseUrl, Token = token, ShowHelp = true };
-            }
-
-            var command = rest[0];
-            var arguments = rest.Skip(1).ToList();
-
-            return new ParsedArgs
-            {
-                BaseUrl = baseUrl,
-                Token = token,
-                Command = command,
-            }.WithArguments(arguments);
-        }
-
-        private ParsedArgs WithArguments(List<string> args)
-        {
-            Arguments.AddRange(args);
-            return this;
-        }
-    }
-
-    private static void ShowHelp()
-    {
-        Console.WriteLine("Unity Explorer MCP CLI");
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  mcpcli [--base-url URL] [--token TOKEN] <command> [args]");
-        Console.WriteLine();
-        Console.WriteLine("Commands:");
-        Console.WriteLine("  status             Get global Unity status");
-        Console.WriteLine("  scenes             List loaded scenes");
-        Console.WriteLine("  objects <sceneId>  List objects in a scene (e.g. scn:0)");
-        Console.WriteLine("  search <query>     Search objects by query string");
-        Console.WriteLine("  camera             Get active camera info");
-        Console.WriteLine("  selection          Get current Unity selection");
-        Console.WriteLine("  logs [count]       Tail recent logs (default 200)");
-        Console.WriteLine("  read <unity://uri> Read an arbitrary unity:// resource");
-        Console.WriteLine("  list-tools         List MCP tools via JSON-RPC list_tools");
-        Console.WriteLine();
-        Console.WriteLine("If --base-url/--token are omitted, values from the discovery file");
-        Console.WriteLine("at %TEMP%/unity-explorer-mcp.json are used when available.");
+        return 0;
     }
 }
