@@ -20,9 +20,8 @@ namespace UnityExplorer.Mcp
         private readonly ConcurrentDictionary<int, Stream> _httpStreams = new();
         private int _nextClientId;
         public int Port { get; }
-        private readonly string? _authToken;
 
-        public McpSimpleHttp(string bindAddress, int port, string? authToken)
+        public McpSimpleHttp(string bindAddress, int port)
         {
             var ip = IPAddress.Parse(string.IsNullOrWhiteSpace(bindAddress) ? "127.0.0.1" : bindAddress);
             if (port == 0)
@@ -34,7 +33,6 @@ namespace UnityExplorer.Mcp
             }
             Port = port;
             _listener = new TcpListener(ip, Port);
-            _authToken = authToken;
         }
 
         public void Start()
@@ -77,7 +75,6 @@ namespace UnityExplorer.Mcp
                 long contentLength = 0;
                 string? acceptHeader = null;
                 string? contentType = null;
-                string? authorization = null;
                 string? line;
                 while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync().ConfigureAwait(false)))
                 {
@@ -88,10 +85,7 @@ namespace UnityExplorer.Mcp
                     if (name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)) long.TryParse(val, out contentLength);
                     if (name.Equals("Accept", StringComparison.OrdinalIgnoreCase)) acceptHeader = val;
                     if (name.Equals("Content-Type", StringComparison.OrdinalIgnoreCase)) contentType = val;
-                    if (name.Equals("Authorization", StringComparison.OrdinalIgnoreCase)) authorization = val;
                 }
-
-                if (!Authorize(authorization)) { await WriteResponseAsync(stream, 401, "unauthorized", ct).ConfigureAwait(false); return; }
 
                 string body = string.Empty;
                 if (method == "POST" && contentLength > 0)
@@ -432,19 +426,6 @@ namespace UnityExplorer.Mcp
             return BroadcastHttpStreamAsync(json, ct);
         }
 
-        private bool Authorize(string? authHeader)
-        {
-            if (string.IsNullOrEmpty(_authToken)) return true;
-            if (string.IsNullOrEmpty(authHeader)) return false;
-            const string prefix = "Bearer ";
-            if (authHeader.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                var token = authHeader.Substring(prefix.Length).Trim();
-                return string.Equals(token, _authToken, StringComparison.Ordinal);
-            }
-            return false;
-        }
-
         private async Task SendJsonRpcResultAsync(JsonElement requestRoot, object result, CancellationToken ct)
         {
             object? idVal = null;
@@ -548,11 +529,14 @@ namespace UnityExplorer.Mcp
         public static object[] ListTools()
         {
             var list = new System.Collections.Generic.List<object>();
-            var type = typeof(UnityReadTools);
-            foreach (var mi in type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+            var toolTypes = new[] { typeof(UnityReadTools), typeof(UnityWriteTools) };
+            foreach (var type in toolTypes)
             {
-                if (Attribute.IsDefined(mi, typeof(McpServerToolAttribute)))
+                foreach (var mi in type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
                 {
+                    if (!Attribute.IsDefined(mi, typeof(McpServerToolAttribute)))
+                        continue;
+
                     var name = mi.Name;
                     var desc = mi.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false);
                     string? d = (desc.Length > 0) ? ((System.ComponentModel.DescriptionAttribute)desc[0]).Description : null;
@@ -573,10 +557,15 @@ namespace UnityExplorer.Mcp
         public static async Task<object?> InvokeToolAsync(string name, JsonElement args)
         {
             if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("tool name required");
-            var type = typeof(UnityReadTools);
-            var mi = Array.Find(type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static),
-                m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase) &&
-                     Attribute.IsDefined(m, typeof(McpServerToolAttribute)));
+            var toolTypes = new[] { typeof(UnityReadTools), typeof(UnityWriteTools) };
+            System.Reflection.MethodInfo? mi = null;
+            foreach (var type in toolTypes)
+            {
+                mi = Array.Find(type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static),
+                    m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase) &&
+                         Attribute.IsDefined(m, typeof(McpServerToolAttribute)));
+                if (mi != null) break;
+            }
             if (mi == null) throw new InvalidOperationException($"Tool not found: {name}");
 
             var parameters = mi.GetParameters();
@@ -690,7 +679,7 @@ namespace UnityExplorer.Mcp
         public static McpSimpleHttp? Current { get; private set; }
         public int Port { get; }
 
-        public McpSimpleHttp(string bindAddress, int port, string? authToken)
+        public McpSimpleHttp(string bindAddress, int port)
         {
             Port = port;
         }

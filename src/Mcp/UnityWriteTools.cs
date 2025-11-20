@@ -17,7 +17,6 @@ namespace UnityExplorer.Mcp
         public static object SetConfig(
             bool? allowWrites = null,
             bool? requireConfirm = null,
-            string? authToken = null,
             bool? enableConsoleEval = null,
             string[]? componentAllowlist = null,
             string[]? reflectionAllowlistMembers = null,
@@ -29,7 +28,6 @@ namespace UnityExplorer.Mcp
                 var cfg = McpConfig.Load();
                 if (allowWrites.HasValue) cfg.AllowWrites = allowWrites.Value;
                 if (requireConfirm.HasValue) cfg.RequireConfirm = requireConfirm.Value;
-                if (authToken != null) cfg.AuthToken = authToken;
                 if (enableConsoleEval.HasValue) cfg.EnableConsoleEval = enableConsoleEval.Value;
                 if (componentAllowlist != null) cfg.ComponentAllowlist = componentAllowlist;
                 if (reflectionAllowlistMembers != null) cfg.ReflectionAllowlistMembers = reflectionAllowlistMembers;
@@ -60,7 +58,6 @@ namespace UnityExplorer.Mcp
                     requireConfirm = cfg.RequireConfirm,
                     exportRoot = cfg.ExportRoot,
                     logLevel = cfg.LogLevel,
-                    hasAuthToken = !string.IsNullOrEmpty(cfg.AuthToken),
                     componentAllowlist = cfg.ComponentAllowlist,
                     reflectionAllowlistMembers = cfg.ReflectionAllowlistMembers,
                     enableConsoleEval = cfg.EnableConsoleEval,

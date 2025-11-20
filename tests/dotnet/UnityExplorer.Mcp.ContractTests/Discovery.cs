@@ -4,7 +4,7 @@ namespace UnityExplorer.Mcp.ContractTests;
 
 public static class Discovery
 {
-    public sealed record Info(int Pid, int Port, Uri? BaseUrl, string[]? Modes, DateTimeOffset? StartedAt, string? AuthToken)
+    public sealed record Info(int Pid, int Port, Uri? BaseUrl, string[]? Modes, DateTimeOffset? StartedAt)
     {
         public Uri EffectiveBaseUrl => BaseUrl ?? new Uri($"http://127.0.0.1:{Port}/");
     }
@@ -36,12 +36,10 @@ public static class Discovery
             var startedStr = root.GetPropertyOrDefault("startedAt")?.GetString();
             if (!string.IsNullOrWhiteSpace(startedStr) && DateTimeOffset.TryParse(startedStr, out var dto))
                 started = dto;
-            var token = root.GetPropertyOrDefault("authToken")?.GetString();
-
             if (pid < 0 || port <= 0)
                 return false;
 
-            info = new Info(pid, port, baseUrl, modes, started, token);
+            info = new Info(pid, port, baseUrl, modes, started);
             return true;
         }
         catch

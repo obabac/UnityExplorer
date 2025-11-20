@@ -22,7 +22,6 @@ namespace UnityExplorer.Mcp
         public string[]? ReflectionAllowlistMembers { get; set; }
         public string? ExportRoot { get; set; }
         public string LogLevel { get; set; } = "Information";
-        public string? AuthToken { get; set; }
         public string[]? ComponentAllowlist { get; set; }
         // Phase-2 / advanced features (disabled by default).
         public bool EnableConsoleEval { get; set; } = false;

@@ -5,7 +5,7 @@ using System.Text.Json;
 
 static class Discovery
 {
-    public sealed record Info(int Pid, int Port, Uri? BaseUrl, string? AuthToken)
+    public sealed record Info(int Pid, int Port, Uri? BaseUrl)
     {
         public Uri EffectiveBaseUrl => BaseUrl ?? new Uri($"http://127.0.0.1:{Port}/");
     }
@@ -26,8 +26,7 @@ static class Discovery
             Uri? baseUrl = null;
             if (root.TryGetProperty("baseUrl", out var bu) && Uri.TryCreate(bu.GetString(), UriKind.Absolute, out var u))
                 baseUrl = u;
-            var token = root.TryGetProperty("authToken", out var tok) ? tok.GetString() : null;
-            return new Info(pid, port, baseUrl, token);
+            return new Info(pid, port, baseUrl);
         }
         catch { return null; }
     }
@@ -39,15 +38,13 @@ class Program
     {
         if (args.Length == 0 || args[0] is "-h" or "--help")
         {
-            Console.WriteLine("mcpcli commands:\n  list-tools\n  read <uri>\n  call <toolName> [jsonArgs]\n  status\n  scenes\n  objects [sceneId]\n  search <q>\n  camera\n  selection\n  logs [count]\n  pick [world|ui]\n  stream-events\n  set-active <objId> <true|false> [--confirm]\n  add-comp <objId> <FullTypeName> [--confirm]\n  rm-comp <objId> <typeOrIndex> [--confirm]\n  reparent <childId> <parentId> [--confirm]\n  destroy <objId> [--confirm]\n  select <objId>\n  rename <objId> <newName> [--confirm]\n  set-tag <objId> <tag> [--confirm]\n  set-layer <objId> <layer> [--confirm]\n  config writes <on|off> [--no-confirm]\n  config token <value> [--restart]\n");
+            Console.WriteLine("mcpcli commands:\n  list-tools\n  read <uri>\n  call <toolName> [jsonArgs]\n  status\n  scenes\n  objects [sceneId]\n  search <q>\n  camera\n  selection\n  logs [count]\n  pick [world|ui]\n  stream-events\n  set-active <objId> <true|false> [--confirm]\n  add-comp <objId> <FullTypeName> [--confirm]\n  rm-comp <objId> <typeOrIndex> [--confirm]\n  reparent <childId> <parentId> [--confirm]\n  destroy <objId> [--confirm]\n  select <objId>\n  rename <objId> <newName> [--confirm]\n  set-tag <objId> <tag> [--confirm]\n  set-layer <objId> <layer> [--confirm]\n  config writes <on|off> [--no-confirm]\n");
             return 0;
         }
 
         var info = Discovery.Load();
         if (info is null) { Console.Error.WriteLine("No discovery file; server not running?"); return 2; }
         using var http = new HttpClient { BaseAddress = info.EffectiveBaseUrl };
-        if (!string.IsNullOrEmpty(info.AuthToken))
-            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", info.AuthToken);
         http.Timeout = TimeSpan.FromSeconds(10);
 
         var cmd = args[0];
@@ -199,12 +196,6 @@ class Program
                 var allow = args[2].Equals("on", StringComparison.OrdinalIgnoreCase);
                 var requireConfirm = !(args.Length >= 4 && args[3] == "--no-confirm");
                 return await CallToolAsync(http, "SetConfig", new { allowWrites = allow, requireConfirm });
-            }
-            if (sub == "token")
-            {
-                if (args.Length < 3) { Console.Error.WriteLine("config token <value> [--restart]"); return 2; }
-                var token = args[2]; var restart = args.Length >= 4 && args[3] == "--restart";
-                return await CallToolAsync(http, "SetConfig", new { authToken = token, restart });
             }
         }
 

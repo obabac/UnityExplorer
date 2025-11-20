@@ -96,14 +96,6 @@ When connecting with a generic MCP client (including `@modelcontextprotocol/insp
 3. `list_tools`, `read_resource`, `call_tool`, and `stream_events`  
    - Use `list_tools` to discover tools, `call_tool` for RPCs, `read_resource` for `unity://...` URIs, and `stream_events` for log/scene/selection/tool_result notifications.
 
-### Auth
-
-If `authToken` is set in `mcp.config.json`, all HTTP endpoints require:
-
-- HTTP header: `Authorization: Bearer <token>`
-
-If `authToken` is empty or missing, no auth is enforced (local use only is recommended).
-
 ## Resources
 
 Resources are addressed using `unity://` URIs:
@@ -162,7 +154,7 @@ Guarded write tools (require `allowWrites: true`; many also require confirm):
   - `SetMember(objId, CompType, Member, jsonValue)` — guarded by reflection allowlist (`Type.Member`).
   - `CallMethod(objId, CompType, Method, jsonArrayArgs?)` — also allowlisted.
 - Config:
-  - `SetConfig(allowWrites?, requireConfirm?, authToken?, enableConsoleEval?, componentAllowlist?, reflectionAllowlistMembers?, hookAllowlistSignatures?, restart?)`
+  - `SetConfig(allowWrites?, requireConfirm?, enableConsoleEval?, componentAllowlist?, reflectionAllowlistMembers?, hookAllowlistSignatures?, restart?)`
   - `GetConfig()` — returns a sanitized view of the current config.
 - Selection / hooks / console:
   - `SelectObject(objId)` — open a GameObject in the inspector.
@@ -230,12 +222,9 @@ class Program
         using var doc = JsonDocument.Parse(fs);
         var root = doc.RootElement;
         var baseUrlStr = root.GetProperty("baseUrl").GetString();
-        var authToken = root.TryGetProperty("authToken", out var tok) ? tok.GetString() : null;
         var baseUri = new Uri(baseUrlStr!, UriKind.Absolute);
 
         using var http = new HttpClient { BaseAddress = baseUri };
-        if (!string.IsNullOrEmpty(authToken))
-            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", authToken);
 
         var payload = new
         {
@@ -279,9 +268,6 @@ This matches the `stream_events` behavior used by `UnityExplorer/tools/mcpcli` a
     - `Get-Content  $env:TEMP\unity-explorer-mcp.json | Write-Host`
 - Wrong base URL or port:
   - Verify `baseUrl` and `port` values in the discovery file match what you expect.
-- Auth failures:
-  - If `authToken` is present in the discovery file, ensure clients send `Authorization: Bearer <token>`.
-  - For quick local testing, you can temporarily clear `authToken` via the MCP Options panel or `SetConfig` tool.
 - No events on stream_events:
   - Confirm `modeHints` includes `"streamable-http"` in the discovery file.
   - Use `stream-events` in `mcpcli`:

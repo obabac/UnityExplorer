@@ -39,9 +39,6 @@ These tests are designed as a technical validation harness for the in‑process 
     - JSON‑RPC responses for `list_tools`, `call_tool`, and `read_resource` via `POST /message`.
     - `stream_events` HTTP streaming contract (chunked JSON, correct content type).
     - Emission and shape of `tool_result` notifications on `stream_events` after `call_tool`.
-  - `AuthContractTests` validate that:
-    - When an `authToken` is configured, unauthenticated requests fail with `401`.
-    - The same endpoints succeed when a `Bearer` token is supplied.
 
 For CI, the expected pattern is:
 
