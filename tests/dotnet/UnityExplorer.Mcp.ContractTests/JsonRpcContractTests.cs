@@ -381,7 +381,7 @@ public class JsonRpcContractTests
             if (line is null)
             {
                 // End-of-stream arrived unexpectedly soon.
-                Assert.False(true, "stream_events HTTP stream ended unexpectedly while idle.");
+                Assert.Fail("stream_events HTTP stream ended unexpectedly while idle.");
             }
 
             // Ignore any actual notifications; this test only cares that the
@@ -479,7 +479,7 @@ public class JsonRpcContractTests
         }
 
         // If we time out without observing a tool_result, fail for technical validation.
-        Assert.True(false, "Expected a 'tool_result' notification on stream_events after invoking call_tool.");
+        Assert.Fail("Expected a 'tool_result' notification on stream_events after invoking call_tool.");
     }
 
     [Fact]
