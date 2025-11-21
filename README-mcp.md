@@ -15,32 +15,6 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 3. Discovery file is written to `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modeHints, startedAt }`.
 4. Connect a client via the MCP C# SDK using `HttpClientTransport` (AutoDetect mode), or talk directly to the HTTP endpoints described below.
 
-### Tiny CLI (local)
-
-Build once:
-
-```
-dotnet build UnityExplorer/tools/mcpcli/McpCli.csproj -c Debug
-```
-
-While a Unity title with Explorer is running (CoreCLR target), use:
-
-```
-dotnet run --project UnityExplorer/tools/mcpcli -- status
-dotnet run --project UnityExplorer/tools/mcpcli -- scenes
-dotnet run --project UnityExplorer/tools/mcpcli -- objects scn:0
-dotnet run --project UnityExplorer/tools/mcpcli -- search Player
-dotnet run --project UnityExplorer/tools/mcpcli -- camera
-dotnet run --project UnityExplorer/tools/mcpcli -- selection
-dotnet run --project UnityExplorer/tools/mcpcli -- logs 100
-dotnet run --project UnityExplorer/tools/mcpcli -- list-tools
-dotnet run --project UnityExplorer/tools/mcpcli -- call GetStatus
-dotnet run --project UnityExplorer/tools/mcpcli -- stream-events
-
-# guarded write (requires sinai-dev-UnityExplorer/mcp.config.json: { "allowWrites": true })
-dotnet run --project UnityExplorer/tools/mcpcli -- set-active obj:12345 true --confirm
-```
-
 ## Configuration
 
 The config file is created at `{ExplorerFolder}/mcp.config.json` (Explorer folder is typically `sinai-dev-UnityExplorer/`). Example:
@@ -208,7 +182,7 @@ class Program
 {
     static async Task Main()
     {
-        // Load discovery file (same shape as UnityExplorer/tools/mcpcli)
+        // Load discovery file
         var path = Environment.GetEnvironmentVariable("UE_MCP_DISCOVERY");
         if (string.IsNullOrWhiteSpace(path))
             path = Path.Combine(Path.GetTempPath(), "unity-explorer-mcp.json");
@@ -257,7 +231,7 @@ class Program
 }
 ```
 
-This matches the `stream_events` behavior used by `UnityExplorer/tools/mcpcli` and will print JSON‑RPC `notification`, `result`, and `error` objects as one JSON object per line.
+This matches the `stream_events` behavior and will print JSON‑RPC `notification`, `result`, and `error` objects as one JSON object per line.
 
 ## Troubleshooting
 
@@ -268,10 +242,9 @@ This matches the `stream_events` behavior used by `UnityExplorer/tools/mcpcli` a
     - `Get-Content  $env:TEMP\unity-explorer-mcp.json | Write-Host`
 - Wrong base URL or port:
   - Verify `baseUrl` and `port` values in the discovery file match what you expect.
-- No events on stream_events:
+ - No events on stream_events:
   - Confirm `modeHints` includes `"streamable-http"` in the discovery file.
-  - Use `stream-events` in `mcpcli`:
-    - `dotnet run --project UnityExplorer/tools/mcpcli -- stream-events`
+  - Use the C# snippet above or `curl -N -H "Content-Type: application/json" -d '{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"stream_events\"}' http://<host>:<port>/message`.
   - Trigger activity in the Unity game (logs, selection changes, scene changes, or tool calls) and verify JSON lines appear.
 
 ## Inspector Quick‑Start (`@modelcontextprotocol/inspector`)
