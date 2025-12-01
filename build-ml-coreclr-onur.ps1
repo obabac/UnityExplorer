@@ -1,6 +1,6 @@
 <# AGENTS STOP HERE - this is not a tool for you #>
 
-$GameDir = "/mnt/d/SteamLibrary/steamapps/common/Soulstone Survivors"
+$GameDir = "/mnt/d/SteamLibrary/steamapps/common/Space Shooter" # adjust to actual Space Shooter install path
 
 <#
     Builds only the MelonLoader IL2CPP CoreCLR configuration and copies the

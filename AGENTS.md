@@ -56,7 +56,7 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
 - `Get-ML-Log.ps1` will:
   - Poll the Windows Test-VM over SSH until it sees UnityExplorer / MelonLoader
     startup markers in  
-    `C:\Program Files (x86)\Steam\steamapps\common\Soulstone Survivors\MelonLoader\Latest.log`,
+    `C:\Program Files (x86)\Steam\steamapps\common\Space Shooter\MelonLoader\Latest.log` (adjust if installed elsewhere),
   - Then print the full log contents (including information about loaded mods).
 - You can adjust the wait time, e.g.:
   ```powershell
@@ -79,7 +79,7 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
   to copy the mod files to the Test-VM.
 - **Start/stop the game**:
   - Use the Windows MCP tools (PowerShell / UI automation) to kill any running  
-    `Soulstone Survivors.exe` and then start it again, rather than doing this
+    `Space Shooter.exe` (adjust name if different) and then start it again, rather than doing this
     over SSH (which runs under different privileges and cannot reliably control
     the interactive session).
   - Agents working on MCP behavior should treat starting/stopping the game as
@@ -93,10 +93,10 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
     to tail the MelonLoader log in real time, or run it without `-Stream` to
     wait for UnityExplorer startup and then dump the log once.
 
-### Test-VM: Soulstone Survivors + UnityExplorer
+### Test-VM: Space Shooter + UnityExplorer
 
-- The Windows test VM runs Soulstone Survivors from  
-  `C:\Program Files (x86)\Steam\steamapps\common\Soulstone Survivors\`.
+- The Windows test VM runs **Space Shooter** from  
+  `C:\Program Files (x86)\Steam\steamapps\common\Space Shooter\` (adjust if installed elsewhere).
 - After building the `Release` MelonLoader IL2CPP CoreCLR target, you can push the
   mod files to the VM from the repo root with:
   - `cd UnityExplorer`
@@ -105,7 +105,7 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
   into the game’s install folder (using SSH to `GPUVM@192.168.178.210`).
 - To start the game on the VM, use PowerShell on Windows:
   ```powershell
-  Start-Process "C:\Program Files (x86)\Steam\steamapps\common\Soulstone Survivors\Soulstone Survivors.exe"
+  Start-Process "C:\Program Files (x86)\Steam\steamapps\common\Space Shooter\Space Shooter.exe"
   ```
   or launch it via the MCP Windows tools by executing the same `Start-Process`
   command through the PowerShell tool.
@@ -116,7 +116,7 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
   - From repo root: `cd UnityExplorer`
   - `pwsh ./build-ml-coreclr.ps1`
 - **Launch the game on the Test‑VM:**
-  - Use the Windows MCP tools (PowerShell) to kill any running `Soulstone Survivors.exe` and start it again.
+  - Use the Windows MCP tools (PowerShell) to kill any running `Space Shooter.exe` (adjust name if different) and start it again.
 - **Connect an MCP inspector:**
   - From your dev machine, run  
     `npx @modelcontextprotocol/inspector --transport http --server-url http://<TestVM-IP>:51477`

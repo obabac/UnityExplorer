@@ -2,14 +2,14 @@
     update-mods.ps1
 
     Copies the built UnityExplorer MelonLoader IL2CPP CoreCLR files
-    from the local repo into the Soulstone Survivors install folder
+    from the local repo into the Space Shooter install folder
     on the Windows test VM over SSH/SCP.
 
     Defaults:
       From (local):
         ./UnityExplorer/Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR/*
       To (remote, on GPUVM):
-        C:/Program Files (x86)/Steam/steamapps/common/Soulstone Survivors/
+        C:/Program Files (x86)/Steam/steamapps/common/Space Shooter/
 
     Requirements:
     - `scp` (OpenSSH client) available on PATH.
@@ -22,13 +22,13 @@
       pwsh ./tools/update-mods.ps1 `
         -LocalSource "./UnityExplorer/Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR/*" `
         -RemoteUserHost "GPUVM@192.168.178.210" `
-        -RemoteTarget "C:/Program Files (x86)/Steam/steamapps/common/Soulstone Survivors/"
+        -RemoteTarget "C:/Program Files (x86)/Steam/steamapps/common/Space Shooter/"
 #>
 
 param(
     [string]$LocalSource = "./Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR/*",
     [string]$RemoteUserHost = "GPUVM@192.168.178.210",
-    [string]$RemoteTarget = "C:/Program Files (x86)/Steam/steamapps/common/Soulstone Survivors/"
+    [string]$RemoteTarget = "C:/Program Files (x86)/Steam/steamapps/common/Space Shooter/"
 )
 
 $ErrorActionPreference = "Stop"

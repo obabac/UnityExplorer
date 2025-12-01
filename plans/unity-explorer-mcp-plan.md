@@ -217,7 +217,7 @@ These tests must stay green whenever MCP code is changed.
 - Build + deploy:
   - `cd UnityExplorer && pwsh ./build-ml-coreclr.ps1`
 - Launch game (Test‑VM):
-  - `Start-Process "C:\Program Files (x86)\Steam\steamapps\common\Soulstone Survivors\Soulstone Survivors.exe"`
+  - `Start-Process "C:\Program Files (x86)\Steam\steamapps\common\Space Shooter\Space Shooter.exe"`
 - Logs:
   - `pwsh ./tools/Get-ML-Log.ps1` (with `-Stream` for live tail).
 - Inspector:

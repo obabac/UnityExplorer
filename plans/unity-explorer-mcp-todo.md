@@ -3,6 +3,14 @@
 Date: 2025‑11‑17  
 Scope: Remaining work to get close to UnityExplorer feature parity over MCP, with a stable streamable‑http surface.
 
+### Definition of Done (100%)
+- All checkboxes in this file are checked (including tests and docs updates).
+- `dotnet test UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests` passes.
+- `@modelcontextprotocol/inspector` flow works end‑to‑end: `initialize` → `notifications/initialized` → `list_tools` → `call_tool` (at least status/logs) → `read_resource` (status/scenes/objects/search/selection/logs) → `stream_events` (receive non‑tool event).
+- Smoke CLI (call‑mcp script) succeeds against a running game.
+- Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
+- Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
+
 ---
 
 ## 0. Path to 100% MCP Inspector Validation
@@ -27,6 +35,20 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 
 ---
 
+### Recommended execution order
+1) DTO/schema alignment + error envelope + rate limiting.
+2) Read surface parity (logs metadata, camera/freecam, mouse inspect multi‑hit) and tests.
+3) Guarded writes (SelectObject test, SetMember/ConsoleEval/Hooks) and new time‑scale tool.
+4) Streams cleanup and rate‑limit tests.
+5) Inspector/README-mcp/documentation polish.
+6) Space Shooter validation (no game-specific assumptions).
+
+### Pitfalls / reminders for agents
+- Keep `plans/mcp-interface-concept.md`, DTO code, and contract tests in sync; update all three together when shapes change.
+- Do not add game-specific assumptions; tests must pass on Space Shooter.
+- Guarded writes: always enforce `allowWrites` + `RequireConfirm` and return structured `ok=false` errors instead of throwing.
+- When adding new behaviour, include an example payload in the concept doc and a contract test.
+
 ## 1. Transport & Protocol Polish
 
 - [x] Remove legacy SSE wording/naming in code (e.g. `McpSseState` → neutral name) while keeping behavior unchanged.
@@ -48,12 +70,12 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [ ] Verify `GetCameraInfo` works when Freecam is enabled and document any limitations.
 - Logs & Log Panel:
   - [x] Ensure `unity://logs/tail` always returns a stable `{ items: [...] }` shape; tighten contract test expectations.
-  - [ ] Add any missing log metadata needed to represent the in‑game Log panel over MCP (for example, source/category), and update DTOs/tests so the MCP view aligns with how logs appear in UnityExplorer.
+  - [ ] Add any missing log metadata needed to represent the in‑game Log panel over MCP (for example, source/category), and update DTOs/tests so the MCP view aligns with how logs appear in UnityExplorer. (Code: `UnityExplorer/src/Mcp/Dto.cs`, `UnityReadTools.TailLogs`; Tests: log-related contract tests.)
 - Mouse Inspect & UI Inspector Results:
   - [x] Cover `MousePick` via contract test (even when `Hit=false`).
-  - [ ] Design MCP behaviour so a mouse inspect over UI can return multiple hits (matching the UI Inspector Results panel), and add a follow-up tool/resource to fetch detailed info for a selected UI element; update `mcp-interface-concept.md` accordingly.
+  - [ ] Design MCP behaviour so a mouse inspect over UI can return multiple hits (matching the UI Inspector Results panel), and add a follow-up tool/resource to fetch detailed info for a selected UI element; update `mcp-interface-concept.md` accordingly. (Code: `UnityReadTools.MousePick`, `Dto.cs`; Tests: add UI multi-hit contract test.)
 - Time-Scale & Playback Control (Guarded Write – future phase):
-  - [ ] Design and implement a guarded MCP write tool (or tools) that mirrors UnityExplorer’s time-scale widget: lock/unlock, set `Time.timeScale` to a value (0, 1, half, double, etc.), all behind `allowWrites` + confirmation with clear error paths; update docs and add contract tests.
+  - [ ] Design and implement a guarded MCP write tool (or tools) that mirrors UnityExplorer’s time-scale widget: lock/unlock, set `Time.timeScale` to a value (0, 1, half, double, etc.), all behind `allowWrites` + confirmation with clear error paths; update docs and add contract tests. (Code: likely `UnityWriteTools`; Tests: new contract tests.)
 
 ## 3. Streams & Notifications
 
@@ -113,8 +135,8 @@ Note: All writes remain behind `allowWrites` + confirmation.
 - [x] Add a contract test that calls `MousePick` and verifies the result shape (even if `Hit=false`).
 - [x] Add a contract test that calls `TailLogs` via `call_tool` (not just `read_resource`).
 - [ ] Ensure all DTOs are serializable without extra JSON options (no cycles, no Unity types leaking through).
-- [ ] Add a simple rate‑limit in `McpSimpleHttp` (e.g., max ~32 concurrent requests) and a test that overload returns a clear error with message `"Cannot have more than X parallel requests. Please slow down."`.
-- [ ] Standardize structured error data for common cases (`NotReady`, `NotFound`, `PermissionDenied`, `RateLimited`) using the existing JSON‑RPC error envelope (`error.code`, `error.message`, `error.data.kind`, optional `error.data.hint`) and assert this shape in tests (including tool `ok=false` payloads).
+- [ ] Add a simple rate‑limit in `McpSimpleHttp` (e.g., max ~32 concurrent requests) and a test that overload returns a clear error with message `"Cannot have more than X parallel requests. Please slow down."`. (Code: `UnityExplorer/src/Mcp/McpSimpleHttp.cs`; Tests: `UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests/HttpContractTests.cs`.)
+- [ ] Standardize structured error data for common cases (`NotReady`, `NotFound`, `PermissionDenied`, `RateLimited`) using the existing JSON‑RPC error envelope (`error.code`, `error.message`, `error.data.kind`, optional `error.data.hint`) and assert this shape in tests (including tool `ok=false` payloads). (Code: `McpSimpleHttp`, `UnityWriteTools`; Tests: JSON‑RPC + tool contract tests.)
 - [ ] Verify `stream_events` gracefully handles client disconnects (no unbounded dictionary growth); add a test that opens and closes multiple streams.
 - [x] Add logging hooks for MCP errors into the MelonLoader log (short prefix, e.g. `[MCP]`), with a test that triggers at least one intentional error and reads it back via `logs/tail`.
 - [x] Add a small “version” resource or tool (e.g., `unity://status` already has version, but expose a dedicated `GetVersion` tool and test it).
@@ -129,6 +151,6 @@ Note: All writes remain behind `allowWrites` + confirmation.
 - [ ] Add short snippets to `docs/space-shooter-test-plan.md` showing the above calls and expected JSON shapes so agents can quickly verify behavior.
 - [ ] Add a minimal `stream_events` check against Space Shooter: open `stream_events`, call a tool (e.g. `GetStatus`), and confirm a `tool_result` notification is received; note any `logs` / `scenes` notifications.
 - [ ] Run `UnityExplorer.Mcp.ContractTests` against the Space Shooter + MelonLoader host (document the exact steps and any required env vars / discovery overrides) and record whether all tests pass.
-- [ ] Ensure no contract tests assume Soulstone‑specific content; adjust tests and docs so Space Shooter is a fully supported host for MCP contract validation (Soulstone is just one example host).
+- [ ] Ensure no contract tests assume game‑specific content; adjust tests and docs so Space Shooter is the fully supported host for MCP contract validation (other titles are examples only).
 - [ ] Define 1–2 safe write scenarios on Space Shooter using `SetActive` / `SelectObject` with `AllowWrites=true` and `RequireConfirm=true`, and document them in `docs/space-shooter-test-plan.md`.
 - [ ] Track an upstream fix for the UnityExplorer dropdown Il2Cpp cast crash (UI `Dropdown` array cast) and remove the Test‑VM‑only `UeMcpHeadless.dll` workaround once a proper fix is merged and validated.

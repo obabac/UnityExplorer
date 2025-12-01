@@ -10,7 +10,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 $remoteUserHost = "GPUVM@192.168.178.210"
-$logPath = "C:\Program Files (x86)\Steam\steamapps\common\Soulstone Survivors\MelonLoader\Latest.log"
+# Adjust GameDir if Space Shooter is installed elsewhere on the Test-VM
+$GameDir = "C:\Program Files (x86)\Steam\steamapps\common\Space Shooter"
+$logPath = "$GameDir\MelonLoader\Latest.log"
 
 if ($Stream) {
     Write-Host "Streaming MelonLoader log from $remoteUserHost..." -ForegroundColor Cyan
