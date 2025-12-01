@@ -74,12 +74,12 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [ ] Verify `GetCameraInfo` works when Freecam is enabled and document any limitations.
 - Logs & Log Panel:
   - [x] Ensure `unity://logs/tail` always returns a stable `{ items: [...] }` shape; tighten contract test expectations.
-  - [ ] Add any missing log metadata needed to represent the in‑game Log panel over MCP (for example, source/category), and update DTOs/tests so the MCP view aligns with how logs appear in UnityExplorer. (Code: `UnityExplorer/src/Mcp/Dto.cs`, `UnityReadTools.TailLogs`; Tests: log-related contract tests.)
+  - [x] Add any missing log metadata needed to represent the in‑game Log panel over MCP (for example, source/category), and update DTOs/tests so the MCP view aligns with how logs appear in UnityExplorer. (Code: `UnityExplorer/src/Mcp/Dto.cs`, `UnityReadTools.TailLogs`; Tests: log-related contract tests.)
 - Mouse Inspect & UI Inspector Results:
   - [x] Cover `MousePick` via contract test (even when `Hit=false`).
-  - [ ] Design MCP behaviour so a mouse inspect over UI can return multiple hits (matching the UI Inspector Results panel), and add a follow-up tool/resource to fetch detailed info for a selected UI element; update `mcp-interface-concept.md` accordingly. (Code: `UnityReadTools.MousePick`, `Dto.cs`; Tests: add UI multi-hit contract test.)
+  - [x] Design MCP behaviour so a mouse inspect over UI can return multiple hits (matching the UI Inspector Results panel), and add a follow-up tool/resource to fetch detailed info for a selected UI element; update `mcp-interface-concept.md` accordingly. (Code: `UnityReadTools.MousePick`, `Dto.cs`; Tests: add UI multi-hit contract test.)
 - Time-Scale & Playback Control (Guarded Write – future phase):
-  - [ ] Design and implement a guarded MCP write tool (or tools) that mirrors UnityExplorer’s time-scale widget: lock/unlock, set `Time.timeScale` to a value (0, 1, half, double, etc.), all behind `allowWrites` + confirmation with clear error paths; update docs and add contract tests. (Code: likely `UnityWriteTools`; Tests: new contract tests.)
+  - [x] Design and implement a guarded MCP write tool (or tools) that mirrors UnityExplorer’s time-scale widget: lock/unlock, set `Time.timeScale` to a value (0, 1, half, double, etc.), all behind `allowWrites` + confirmation with clear error paths; update docs and add contract tests. (Code: likely `UnityWriteTools`; Tests: new contract tests.)
 
 ## 3. Streams & Notifications
 
@@ -139,8 +139,8 @@ Note: All writes remain behind `allowWrites` + confirmation.
 - [x] Add a contract test that calls `MousePick` and verifies the result shape (even if `Hit=false`).
 - [x] Add a contract test that calls `TailLogs` via `call_tool` (not just `read_resource`).
 - [ ] Ensure all DTOs are serializable without extra JSON options (no cycles, no Unity types leaking through).
-- [ ] Add a simple rate‑limit in `McpSimpleHttp` (e.g., max ~32 concurrent requests) and a test that overload returns a clear error with message `"Cannot have more than X parallel requests. Please slow down."`. (Code: `UnityExplorer/src/Mcp/McpSimpleHttp.cs`; Tests: `UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests/HttpContractTests.cs`.)
-- [ ] Standardize structured error data for common cases (`NotReady`, `NotFound`, `PermissionDenied`, `RateLimited`) using the existing JSON‑RPC error envelope (`error.code`, `error.message`, `error.data.kind`, optional `error.data.hint`) and assert this shape in tests (including tool `ok=false` payloads). (Code: `McpSimpleHttp`, `UnityWriteTools`; Tests: JSON‑RPC + tool contract tests.)
+- [x] Add a simple rate‑limit in `McpSimpleHttp` (e.g., max ~32 concurrent requests) and a test that overload returns a clear error with message `"Cannot have more than X parallel requests. Please slow down."`. (Code: `UnityExplorer/src/Mcp/McpSimpleHttp.cs`; Tests: `UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests/HttpContractTests.cs`.)
+- [x] Standardize structured error data for common cases (`NotReady`, `NotFound`, `PermissionDenied`, `RateLimited`) using the existing JSON‑RPC error envelope (`error.code`, `error.message`, `error.data.kind`, optional `error.data.hint`) and assert this shape in tests (including tool `ok=false` payloads). (Code: `McpSimpleHttp`, `UnityWriteTools`; Tests: JSON‑RPC + tool contract tests.)
 - [ ] Verify `stream_events` gracefully handles client disconnects (no unbounded dictionary growth); add a test that opens and closes multiple streams.
 - [x] Add logging hooks for MCP errors into the MelonLoader log (short prefix, e.g. `[MCP]`), with a test that triggers at least one intentional error and reads it back via `logs/tail`.
 - [x] Add a small “version” resource or tool (e.g., `unity://status` already has version, but expose a dedicated `GetVersion` tool and test it).
