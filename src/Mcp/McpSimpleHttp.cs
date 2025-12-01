@@ -130,9 +130,12 @@ namespace UnityExplorer.Mcp
                         return;
                     }
 
+                    bool acquiredSlot = false;
                     using (doc)
                     {
-                        var root = doc.RootElement;
+                        try
+                        {
+                            var root = doc.RootElement;
                         string methodName = root.TryGetProperty("method", out var m) ? m.GetString() ?? string.Empty : string.Empty;
                         if (string.IsNullOrWhiteSpace(methodName))
                         {
@@ -150,7 +153,6 @@ namespace UnityExplorer.Mcp
                         else if (string.Equals(methodName, "resources/read", StringComparison.OrdinalIgnoreCase))
                             methodName = "read_resource";
 
-                        var acquiredSlot = false;
                         try
                         {
                             if (!string.Equals(methodName, "stream_events", StringComparison.OrdinalIgnoreCase))
@@ -165,6 +167,7 @@ namespace UnityExplorer.Mcp
                                     return;
                                 }
                             }
+                        }
 
                         // MCP initialize handshake support for inspector and generic clients.
                         if (string.Equals(methodName, "initialize", StringComparison.OrdinalIgnoreCase))
@@ -355,10 +358,12 @@ namespace UnityExplorer.Mcp
                         return;
                     }
                 }
-                finally
-                {
-                    if (acquiredSlot) _requestSlots.Release();
-                }
+                        }
+                        finally
+                        {
+                            if (acquiredSlot) _requestSlots.Release();
+                        }
+                    }
 
                 if (method == "GET" && target.StartsWith("/read"))
                 {
