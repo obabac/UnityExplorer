@@ -354,3 +354,32 @@ MigrationBackup/
 
 /UnityEditorPackage/Runtime/UniverseLib.Mono.dll
 /UnityEditorPackage/Runtime/UnityExplorer.STANDALONE.Mono.dll
+
+
+#THIS PROBABLY NEEDS A CLEANUP
+##########
+.cache/
+.dotnet/
+.npm/
+.local/
+.codex/*sessions
+.codex/logs
+.codex/log
+.nuget/
+.templateengine/
+
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/

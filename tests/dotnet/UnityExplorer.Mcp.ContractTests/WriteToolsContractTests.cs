@@ -175,4 +175,56 @@ public class WriteToolsContractTests
         // on specific scene contents; this primarily validates auth/allowlist wiring.
         (okProp.ValueKind == JsonValueKind.True || okProp.ValueKind == JsonValueKind.False).Should().BeTrue();
     }
+
+    [Fact]
+    public async Task SelectObject_Updates_Selection_RoundTrip()
+    {
+        var http = TryCreateClient(out var ok);
+        if (!ok || http == null) return;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)true, requireConfirm = (bool?)false }, cts.Token);
+
+        var id = await GetFirstObjectIdAsync(http, cts.Token);
+        if (string.IsNullOrWhiteSpace(id)) return;
+
+        var select = await CallToolAsync(http, "SelectObject", new { objectId = id }, cts.Token);
+        select.Should().NotBeNull();
+        var selectJson = select!.Value;
+        selectJson.TryGetProperty("ok", out var okProp).Should().BeTrue();
+        okProp.ValueKind.Should().Be(JsonValueKind.True);
+
+        await Task.Delay(50, cts.Token);
+
+        var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString("unity://selection")}", cts.Token);
+        res.EnsureSuccessStatusCode();
+        var jsonText = await res.Content.ReadAsStringAsync(cts.Token);
+        using var doc = JsonDocument.Parse(jsonText);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("ActiveId", out var activeProp).Should().BeTrue();
+        var activeId = activeProp.GetString();
+        activeId.Should().NotBeNullOrWhiteSpace();
+        if (!string.IsNullOrWhiteSpace(activeId))
+            activeId.Should().Be(id);
+
+        root.TryGetProperty("Items", out var itemsProp).Should().BeTrue();
+        itemsProp.ValueKind.Should().Be(JsonValueKind.Array);
+
+        var found = false;
+        foreach (var el in itemsProp.EnumerateArray())
+        {
+            if (el.ValueKind == JsonValueKind.String && string.Equals(el.GetString(), id, StringComparison.Ordinal))
+            { found = true; break; }
+        }
+        found.Should().BeTrue();
+
+        var toolSelection = await CallToolAsync(http, "GetSelection", new { }, cts.Token);
+        if (toolSelection != null)
+        {
+            var selJson = toolSelection.Value;
+            selJson.TryGetProperty("ActiveId", out var toolActive).Should().BeTrue();
+            toolActive.GetString().Should().Be(activeId);
+        }
+    }
 }
