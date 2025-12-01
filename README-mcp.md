@@ -113,6 +113,10 @@ Read‑only tools (always available when the server is enabled):
 
 Guarded write tools (require `allowWrites: true`; many also require confirm):
 
+- UI test helpers (for UI pick validation):
+  - `SpawnTestUi(confirm)` — creates a simple overlay canvas with two raycastable blocks; ensure `allowWrites` and `confirm=true`.
+  - `DestroyTestUi(confirm)` — removes the test canvas if present.
+
 - Object state:
   - `SetActive(objId, bool)`
   - `SelectObject(objId)`

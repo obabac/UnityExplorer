@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 using UnityExplorer;
 using UnityExplorer.CSConsole;
 using UnityExplorer.Hooks;
@@ -20,6 +22,8 @@ namespace UnityExplorer.Mcp
     {
         private static object ToolError(string kind, string message, string? hint = null)
             => new { ok = false, error = new { kind, message, hint } };
+
+        private static GameObject? _testUiRoot;
 
         private static object ToolErrorFromException(Exception ex)
         {
@@ -610,6 +614,93 @@ namespace UnityExplorer.Mcp
                 value = widget.DesiredTime;
             }
             catch { }
+        }
+
+        [McpServerTool, Description("Spawn a simple UI canvas with raycastable elements for testing MousePick (requires allowWrites + confirm).")]
+        public static async Task<object> SpawnTestUi(bool confirm = false, CancellationToken ct = default)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            try
+            {
+                await MainThread.RunAsync(async () =>
+                {
+                    if (_testUiRoot != null) { await Task.CompletedTask; return; }
+
+                    // Ensure EventSystem exists
+                    if (EventSystem.current == null)
+                    {
+                        var es = new GameObject("McpTest_EventSystem");
+                        es.AddComponent<EventSystem>();
+                        es.AddComponent<StandaloneInputModule>();
+                        es.hideFlags = HideFlags.DontUnloadUnusedAsset;
+                    }
+
+                    var root = new GameObject("McpTestCanvas");
+                    var canvas = root.AddComponent<Canvas>();
+                    root.AddComponent<CanvasScaler>();
+                    root.AddComponent<GraphicRaycaster>();
+                    canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                    var scaler = root.GetComponent<CanvasScaler>();
+                    scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                    scaler.referenceResolution = new Vector2(1920, 1080);
+                    scaler.matchWidthOrHeight = 0.5f;
+
+                    void AddBlock(string name, Color color, Vector2 anchor, Vector2 size)
+                    {
+                        var go = new GameObject(name);
+                        go.transform.SetParent(root.transform, false);
+                        var rt = go.AddComponent<RectTransform>();
+                        go.AddComponent<CanvasRenderer>();
+                        var img = go.AddComponent<Image>();
+                        rt.anchorMin = anchor;
+                        rt.anchorMax = anchor;
+                        rt.sizeDelta = size;
+                        rt.anchoredPosition = Vector2.zero;
+                        img.color = color;
+                        img.raycastTarget = true;
+                    }
+
+                    AddBlock("McpTestBlock_Left", new Color(0.8f, 0.3f, 0.3f, 0.8f), new Vector2(0.35f, 0.5f), new Vector2(180, 180));
+                    AddBlock("McpTestBlock_Right", new Color(0.3f, 0.8f, 0.4f, 0.8f), new Vector2(0.65f, 0.5f), new Vector2(180, 180));
+
+                    _testUiRoot = root;
+                    await Task.CompletedTask;
+                });
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        [McpServerTool, Description("Destroy the test UI canvas created by SpawnTestUi (if present).")]
+        public static async Task<object> DestroyTestUi(bool confirm = false, CancellationToken ct = default)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            try
+            {
+                await MainThread.RunAsync(async () =>
+                {
+                    if (_testUiRoot != null)
+                    {
+                        try { GameObject.Destroy(_testUiRoot); } catch { }
+                        _testUiRoot = null;
+                    }
+                    await Task.CompletedTask;
+                });
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
         }
     }
 #endif
