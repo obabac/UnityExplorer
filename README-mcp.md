@@ -105,7 +105,7 @@ Read‑only tools (always available when the server is enabled):
 - `GetObject`
 - `GetComponents`
 - `SearchObjects`
-- `MousePick` (mode `world` = top-most hit; mode `ui` = ordered `Items` + primary `Id`)
+- `MousePick` (mode `world` = top-most hit; mode `ui` = ordered `Items` + primary `Id`; optional `x`,`y` override the live mouse, `normalized=true` treats them as 0–1 screen coords)
 - `GetCameraInfo`
 - `GetSelection`
 - `TailLogs`

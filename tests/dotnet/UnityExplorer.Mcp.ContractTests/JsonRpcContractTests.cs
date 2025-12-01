@@ -615,7 +615,7 @@ public class JsonRpcContractTests
             @params = new
             {
                 name = "MousePick",
-                arguments = new { mode = "ui" }
+                arguments = new { mode = "ui", x = 0.5, y = 0.5, normalized = true }
             }
         };
 

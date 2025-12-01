@@ -84,7 +84,7 @@ public static class UnityReadTools
         int? limit, int? offset, CancellationToken ct);
 
     [McpServerTool, Description("Pick object(s) under mouse (world/ui). For `mode=world` returns a single top‑most hit; for `mode=ui` may return multiple hits.")]
-    public static Task<PickResultDto> MousePick(string mode = "world", CancellationToken ct);
+    public static Task<PickResultDto> MousePick(string mode = "world", float? x = null, float? y = null, bool normalized = false, CancellationToken ct = default);
 
     [McpServerTool, Description("Get active camera info.")]
     public static Task<CameraInfoDto> GetCameraInfo(CancellationToken ct);
