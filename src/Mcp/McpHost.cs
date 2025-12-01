@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+#nullable enable
+
 // ASP.NET Core transport removed for net6.0 compatibility. Lightweight HTTP streaming transport is implemented in McpSimpleHttp.
 
 namespace UnityExplorer.Mcp

@@ -4,6 +4,8 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+#nullable enable
+
 namespace UnityExplorer.Mcp
 {
 #if INTEROP

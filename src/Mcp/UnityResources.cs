@@ -9,6 +9,8 @@ using HarmonyLib;
 using UnityExplorer.CSConsole;
 using UnityExplorer.Hooks;
 
+#nullable enable
+
 namespace UnityExplorer.Mcp
 {
 #if INTEROP

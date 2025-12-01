@@ -9,6 +9,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+#nullable enable
+
 namespace UnityExplorer.Mcp
 {
 #if INTEROP

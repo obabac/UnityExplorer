@@ -9,6 +9,8 @@ using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UniverseLib.Input;
 
+#nullable enable
+
 namespace UnityExplorer.Mcp
 {
 #if INTEROP
@@ -179,8 +181,20 @@ namespace UnityExplorer.Mcp
                 var list = new List<ComponentCardDto>();
                 foreach (var c in slice)
                 {
-                    string typeName = c != null ? c.GetType().FullName : "<null>";
-                    string summary = c != null ? c.ToString() : "<null>";
+                    string typeName;
+                    string summary;
+                    if (c == null)
+                    {
+                        typeName = "<null>";
+                        summary = "<null>";
+                    }
+                    else
+                    {
+                        var t = c.GetType();
+                        typeName = t != null ? (t.FullName ?? "<null>") : "<null>";
+                        var s = c.ToString();
+                        summary = string.IsNullOrEmpty(s) ? "<null>" : s;
+                    }
                     list.Add(new ComponentCardDto(typeName, summary));
                 }
                 var items = list.ToArray();

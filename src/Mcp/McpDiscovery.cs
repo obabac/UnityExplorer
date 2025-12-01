@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Text.Json;
 
+#nullable enable
+
 namespace UnityExplorer.Mcp
 {
 #if INTEROP

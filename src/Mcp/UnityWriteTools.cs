@@ -10,6 +10,8 @@ using UnityExplorer.CSConsole;
 using UnityExplorer.Hooks;
 using UnityExplorer.UI.Widgets;
 
+#nullable enable
+
 namespace UnityExplorer.Mcp
 {
 #if INTEROP

@@ -2,6 +2,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
+#nullable enable
+
 namespace UnityExplorer.Mcp
 {
     internal static class MainThread
