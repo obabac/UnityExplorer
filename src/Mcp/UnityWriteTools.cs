@@ -1,11 +1,13 @@
 using System;
 using System.ComponentModel;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityExplorer;
 using UnityExplorer.CSConsole;
 using UnityExplorer.Hooks;
+using UnityExplorer.UI.Widgets;
 
 namespace UnityExplorer.Mcp
 {
@@ -13,6 +15,33 @@ namespace UnityExplorer.Mcp
     [McpServerToolType]
     public static class UnityWriteTools
     {
+        private static object ToolError(string kind, string message, string? hint = null)
+            => new { ok = false, error = new { kind, message, hint } };
+
+        private static object ToolErrorFromException(Exception ex)
+        {
+            if (ex is InvalidOperationException inv)
+            {
+                return inv.Message switch
+                {
+                    "NotFound" => ToolError("NotFound", "Not found"),
+                    "PermissionDenied" => ToolError("PermissionDenied", "Permission denied"),
+                    "ConfirmationRequired" => ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true"),
+                    "Denied by allowlist" => ToolError("PermissionDenied", "Denied by allowlist"),
+                    "Component not found" => ToolError("NotFound", "Component not found"),
+                    "Method overload not found" => ToolError("NotFound", "Method overload not found"),
+                    "Method not found" => ToolError("NotFound", "Method not found"),
+                    "Type not found" => ToolError("NotFound", "Type not found"),
+                    _ => ToolError("InvalidArgument", inv.Message)
+                };
+            }
+
+            if (ex is ArgumentException arg)
+                return ToolError("InvalidArgument", arg.Message);
+
+            return ToolError("Internal", ex.Message);
+        }
+
         [McpServerTool, Description("Update MCP config settings and optionally restart the server.")]
         public static object SetConfig(
             bool? allowWrites = null,
@@ -40,8 +69,9 @@ namespace UnityExplorer.Mcp
                 }
                 return new { ok = true };
             }
-            catch (Exception ex) { return new { ok = false, error = ex.Message }; }
+            catch (Exception ex) { return ToolError("Internal", ex.Message); }
         }
+
         [McpServerTool, Description("Read current MCP config (sanitized).")]
         public static object GetConfig()
         {
@@ -66,22 +96,23 @@ namespace UnityExplorer.Mcp
             }
             catch (Exception ex)
             {
-                return new { ok = false, error = ex.Message };
+                return ToolError("Internal", ex.Message);
             }
         }
+
         [McpServerTool, Description("Set a GameObject's active state (guarded by config). Pass confirm=true to bypass confirmation when required.")]
         public static async Task<object> SetActive(string objectId, bool active, bool confirm = false, CancellationToken ct = default)
         {
             var cfg = McpConfig.Load();
             if (!cfg.AllowWrites)
-                return new { ok = false, error = "PermissionDenied: writes disabled" };
+                return ToolError("PermissionDenied", "Writes disabled");
             if (cfg.RequireConfirm && !confirm)
-                return new { ok = false, error = "ConfirmationRequired", hint = "resend with confirm=true" };
+                return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
 
             if (string.IsNullOrWhiteSpace(objectId) || !objectId.StartsWith("obj:"))
-                return new { ok = false, error = "Invalid objectId; expected 'obj:<instanceId>'" };
+                return ToolError("InvalidArgument", "Invalid objectId; expected 'obj:<instanceId>'");
             if (!int.TryParse(objectId.Substring(4), out var iid))
-                return new { ok = false, error = "Invalid instance id" };
+                return ToolError("InvalidArgument", "Invalid instance id");
 
             try
             {
@@ -96,11 +127,11 @@ namespace UnityExplorer.Mcp
             }
             catch (Exception ex)
             {
-                return new { ok = false, error = ex.Message };
+                return ToolErrorFromException(ex);
             }
         }
 
-        static bool IsAllowed(string typeFullName, string member)
+        private static bool IsAllowed(string typeFullName, string member)
         {
             var cfg = McpConfig.Load();
             if (cfg.ReflectionAllowlistMembers == null || cfg.ReflectionAllowlistMembers.Length == 0) return false;
@@ -112,7 +143,7 @@ namespace UnityExplorer.Mcp
             return false;
         }
 
-        static bool TryGetComponent(GameObject go, string typeFullName, out UnityEngine.Component? comp)
+        private static bool TryGetComponent(GameObject go, string typeFullName, out UnityEngine.Component? comp)
         {
             comp = null;
             var comps = go.GetComponents<UnityEngine.Component>();
@@ -124,7 +155,7 @@ namespace UnityExplorer.Mcp
             return false;
         }
 
-        static object? DeserializeTo(string json, Type type)
+        private static object? DeserializeTo(string json, Type type)
         {
             try { return System.Text.Json.JsonSerializer.Deserialize(json, type); }
             catch { }
@@ -137,11 +168,11 @@ namespace UnityExplorer.Mcp
         {
             var cfg = McpConfig.Load();
             if (!cfg.EnableConsoleEval)
-                return new { ok = false, error = "ConsoleEval disabled by config" };
+                return ToolError("PermissionDenied", "ConsoleEval disabled by config");
             if (!cfg.AllowWrites)
-                return new { ok = false, error = "PermissionDenied: writes disabled" };
+                return ToolError("PermissionDenied", "Writes disabled");
             if (cfg.RequireConfirm && !confirm)
-                return new { ok = false, error = "ConfirmationRequired", hint = "resend with confirm=true" };
+                return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
 
             if (string.IsNullOrWhiteSpace(code))
                 return new { ok = true, result = string.Empty };
@@ -162,8 +193,6 @@ namespace UnityExplorer.Mcp
                             compiled.Invoke(ref ret);
                             result = ret?.ToString();
                         }
-                        // Non-REPL statements are allowed; they may log to the console
-                        // without returning a direct value.
                     }
                     catch (Exception ex)
                     {
@@ -172,11 +201,11 @@ namespace UnityExplorer.Mcp
                     await Task.CompletedTask;
                 });
 
-           		return new { ok = true, result };
+                return new { ok = true, result };
             }
             catch (Exception ex)
             {
-                return new { ok = false, error = ex.Message };
+                return ToolErrorFromException(ex);
             }
         }
 
@@ -184,12 +213,12 @@ namespace UnityExplorer.Mcp
         public static async Task<object> SetMember(string objectId, string componentType, string member, string jsonValue, bool confirm = false, CancellationToken ct = default)
         {
             var cfg = McpConfig.Load();
-            if (!cfg.AllowWrites) return new { ok = false, error = "PermissionDenied: writes disabled" };
-            if (cfg.RequireConfirm && !confirm) return new { ok = false, error = "ConfirmationRequired", hint = "resend with confirm=true" };
-            if (!IsAllowed(componentType, member)) return new { ok = false, error = "Denied by allowlist" };
-            var idStr = objectId.StartsWith("obj:") ? objectId.Substring(4) : "";
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+            if (!IsAllowed(componentType, member)) return ToolError("PermissionDenied", "Denied by allowlist");
+            var idStr = objectId.StartsWith("obj:") ? objectId.Substring(4) : string.Empty;
             if (!int.TryParse(idStr, out var iid))
-                return new { ok = false, error = "Invalid id" };
+                return ToolError("InvalidArgument", "Invalid id");
 
             try
             {
@@ -200,7 +229,7 @@ namespace UnityExplorer.Mcp
                     if (!TryGetComponent(go, componentType, out var comp) || comp == null)
                         throw new InvalidOperationException("Component not found");
                     var t = comp.GetType();
-                    var fi = t.GetField(member, System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance);
+                    var fi = t.GetField(member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                     if (fi != null)
                     {
                         var val = DeserializeTo(jsonValue, fi.FieldType);
@@ -208,7 +237,7 @@ namespace UnityExplorer.Mcp
                     }
                     else
                     {
-                        var pi = t.GetProperty(member, System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance);
+                        var pi = t.GetProperty(member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                         if (pi == null || !pi.CanWrite) throw new InvalidOperationException("Member not writable");
                         var val = DeserializeTo(jsonValue, pi.PropertyType);
                         pi.SetValue(comp, val);
@@ -217,19 +246,19 @@ namespace UnityExplorer.Mcp
                 });
                 return new { ok = true };
             }
-            catch (Exception ex) { return new { ok = false, error = ex.Message }; }
+            catch (Exception ex) { return ToolErrorFromException(ex); }
         }
 
         [McpServerTool, Description("Call a method on a component (allowlist enforced): componentType, method, argsJson (array)")]
         public static async Task<object> CallMethod(string objectId, string componentType, string method, string argsJson = "[]", bool confirm = false, CancellationToken ct = default)
         {
             var cfg = McpConfig.Load();
-            if (!cfg.AllowWrites) return new { ok = false, error = "PermissionDenied: writes disabled" };
-            if (cfg.RequireConfirm && !confirm) return new { ok = false, error = "ConfirmationRequired", hint = "resend with confirm=true" };
-            if (!IsAllowed(componentType, method)) return new { ok = false, error = "Denied by allowlist" };
-            var idStr2 = objectId.StartsWith("obj:") ? objectId.Substring(4) : "";
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+            if (!IsAllowed(componentType, method)) return ToolError("PermissionDenied", "Denied by allowlist");
+            var idStr2 = objectId.StartsWith("obj:") ? objectId.Substring(4) : string.Empty;
             if (!int.TryParse(idStr2, out var iid))
-                return new { ok = false, error = "Invalid id" };
+                return ToolError("InvalidArgument", "Invalid id");
 
             try
             {
@@ -241,23 +270,23 @@ namespace UnityExplorer.Mcp
                     if (!TryGetComponent(go, componentType, out var comp) || comp == null)
                         throw new InvalidOperationException("Component not found");
                     var t = comp.GetType();
-                    using var doc = System.Text.Json.JsonDocument.Parse(string.IsNullOrEmpty(argsJson)?"[]":argsJson);
-                    var arr = doc.RootElement.ValueKind==System.Text.Json.JsonValueKind.Array ? doc.RootElement : default;
-                    var methods = t.GetMethods(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance);
-                    System.Reflection.MethodInfo? pick = null;
+                    using var doc = System.Text.Json.JsonDocument.Parse(string.IsNullOrEmpty(argsJson) ? "[]" : argsJson);
+                    var arr = doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array ? doc.RootElement : default;
+                    var methods = t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    MethodInfo? pick = null;
                     object?[]? callArgs = null;
                     foreach (var mi in methods)
                     {
                         if (!string.Equals(mi.Name, method, StringComparison.Ordinal)) continue;
                         var ps = mi.GetParameters();
-                        if (arr.ValueKind==default || arr.GetArrayLength()!=ps.Length) continue;
+                        if (arr.ValueKind == default || arr.GetArrayLength() != ps.Length) continue;
                         var tmp = new object?[ps.Length];
-                        bool ok = true; int idx=0;
+                        int idx = 0;
                         foreach (var p in ps)
                         {
                             var el = arr[idx];
                             var val = System.Text.Json.JsonSerializer.Deserialize(el.GetRawText(), p.ParameterType);
-                            tmp[idx]=val; idx++;
+                            tmp[idx] = val; idx++;
                         }
                         pick = mi; callArgs = tmp; break;
                     }
@@ -267,28 +296,29 @@ namespace UnityExplorer.Mcp
                 });
                 return new { ok = true, result = resultObj?.ToString() };
             }
-            catch (Exception ex) { return new { ok = false, error = ex.Message }; }
+            catch (Exception ex) { return ToolErrorFromException(ex); }
         }
+
         [McpServerTool, Description("Add a component by full type name to a GameObject (guarded by allowlist).")]
         public static async Task<object> AddComponent(string objectId, string type, bool confirm = false, CancellationToken ct = default)
         {
             var cfg = McpConfig.Load();
-            if (!cfg.AllowWrites) return new { ok = false, error = "PermissionDenied: writes disabled" };
-            if (cfg.RequireConfirm && !confirm) return new { ok = false, error = "ConfirmationRequired", hint = "resend with confirm=true" };
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
             if (cfg.ComponentAllowlist == null || cfg.ComponentAllowlist.Length == 0)
-                return new { ok = false, error = "No components are allowlisted" };
+                return ToolError("PermissionDenied", "No components are allowlisted");
             if (Array.IndexOf(cfg.ComponentAllowlist, type) < 0)
-                return new { ok = false, error = "Denied by allowlist" };
+                return ToolError("PermissionDenied", "Denied by allowlist");
             if (string.IsNullOrWhiteSpace(objectId) || !objectId.StartsWith("obj:"))
-                return new { ok = false, error = "Invalid objectId; expected 'obj:<instanceId>'" };
+                return ToolError("InvalidArgument", "Invalid objectId; expected 'obj:<instanceId>'");
             if (!int.TryParse(objectId.Substring(4), out var iid))
-                return new { ok = false, error = "Invalid instance id" };
+                return ToolError("InvalidArgument", "Invalid instance id");
 
             try
             {
                 Type? t = ReflectionUtility.GetTypeByName(type);
                 if (t == null || !typeof(UnityEngine.Component).IsAssignableFrom(t))
-                    return new { ok = false, error = "Type not found or not a Component" };
+                    return ToolError("InvalidArgument", "Type not found or not a Component");
 
                 await MainThread.RunAsync(async () =>
                 {
@@ -299,19 +329,19 @@ namespace UnityExplorer.Mcp
                 });
                 return new { ok = true };
             }
-            catch (Exception ex) { return new { ok = false, error = ex.Message }; }
+            catch (Exception ex) { return ToolErrorFromException(ex); }
         }
 
         [McpServerTool, Description("Remove a component by full type name or index from a GameObject (allowlist enforced when by type).")]
         public static async Task<object> RemoveComponent(string objectId, string typeOrIndex, bool confirm = false, CancellationToken ct = default)
         {
             var cfg = McpConfig.Load();
-            if (!cfg.AllowWrites) return new { ok = false, error = "PermissionDenied: writes disabled" };
-            if (cfg.RequireConfirm && !confirm) return new { ok = false, error = "ConfirmationRequired", hint = "resend with confirm=true" };
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
             if (string.IsNullOrWhiteSpace(objectId) || !objectId.StartsWith("obj:"))
-                return new { ok = false, error = "Invalid objectId; expected 'obj:<instanceId>'" };
+                return ToolError("InvalidArgument", "Invalid objectId; expected 'obj:<instanceId>'");
             if (!int.TryParse(objectId.Substring(4), out var iid))
-                return new { ok = false, error = "Invalid instance id" };
+                return ToolError("InvalidArgument", "Invalid instance id");
 
             try
             {
@@ -330,10 +360,8 @@ namespace UnityExplorer.Mcp
                         Type? t = ReflectionUtility.GetTypeByName(typeOrIndex);
                         if (t != null)
                         {
-                            // enforce allowlist by type name if provided
                             if (cfg.ComponentAllowlist == null || Array.IndexOf(cfg.ComponentAllowlist, t.FullName) < 0)
                                 throw new InvalidOperationException("Denied by allowlist");
-                            // Avoid IL2CPP type parameter; match by FullName
                             var comps = go.GetComponents<UnityEngine.Component>();
                             foreach (var c in comps)
                             {
@@ -347,10 +375,10 @@ namespace UnityExplorer.Mcp
                 });
                 return new { ok = true };
             }
-            catch (Exception ex) { return new { ok = false, error = ex.Message }; }
+            catch (Exception ex) { return ToolErrorFromException(ex); }
         }
 
-        static bool IsHookAllowed(string typeFullName)
+        private static bool IsHookAllowed(string typeFullName)
         {
             var cfg = McpConfig.Load();
             var allow = cfg.HookAllowlistSignatures;
@@ -367,9 +395,9 @@ namespace UnityExplorer.Mcp
         public static async Task<object> HookAdd(string type, string method, bool confirm = false, CancellationToken ct = default)
         {
             var cfg = McpConfig.Load();
-            if (!cfg.AllowWrites) return new { ok = false, error = "PermissionDenied: writes disabled" };
-            if (cfg.RequireConfirm && !confirm) return new { ok = false, error = "ConfirmationRequired", hint = "resend with confirm=true" };
-            if (!IsHookAllowed(type)) return new { ok = false, error = "Denied by hook allowlist" };
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+            if (!IsHookAllowed(type)) return ToolError("PermissionDenied", "Denied by hook allowlist");
 
             try
             {
@@ -393,7 +421,7 @@ namespace UnityExplorer.Mcp
             }
             catch (Exception ex)
             {
-                return new { ok = false, error = ex.Message };
+                return ToolErrorFromException(ex);
             }
         }
 
@@ -401,8 +429,8 @@ namespace UnityExplorer.Mcp
         public static async Task<object> HookRemove(string signature, bool confirm = false, CancellationToken ct = default)
         {
             var cfg = McpConfig.Load();
-            if (!cfg.AllowWrites) return new { ok = false, error = "PermissionDenied: writes disabled" };
-            if (cfg.RequireConfirm && !confirm) return new { ok = false, error = "ConfirmationRequired", hint = "resend with confirm=true" };
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
 
             try
             {
@@ -421,7 +449,7 @@ namespace UnityExplorer.Mcp
             }
             catch (Exception ex)
             {
-                return new { ok = false, error = ex.Message };
+                return ToolErrorFromException(ex);
             }
         }
 
@@ -429,12 +457,12 @@ namespace UnityExplorer.Mcp
         public static async Task<object> Reparent(string objectId, string newParentId, bool confirm = false, CancellationToken ct = default)
         {
             var cfg = McpConfig.Load();
-            if (!cfg.AllowWrites) return new { ok = false, error = "PermissionDenied: writes disabled" };
-            if (cfg.RequireConfirm && !confirm) return new { ok = false, error = "ConfirmationRequired", hint = "resend with confirm=true" };
-            if (!int.TryParse(objectId.StartsWith("obj:") ? objectId.Substring(4) : "", out var iid))
-                return new { ok = false, error = "Invalid child id" };
-            if (!int.TryParse(newParentId.StartsWith("obj:") ? newParentId.Substring(4) : "", out var pid))
-                return new { ok = false, error = "Invalid parent id" };
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+            if (!int.TryParse(objectId.StartsWith("obj:") ? objectId.Substring(4) : string.Empty, out var iid))
+                return ToolError("InvalidArgument", "Invalid child id");
+            if (!int.TryParse(newParentId.StartsWith("obj:") ? newParentId.Substring(4) : string.Empty, out var pid))
+                return ToolError("InvalidArgument", "Invalid parent id");
 
             try
             {
@@ -443,23 +471,23 @@ namespace UnityExplorer.Mcp
                     var child = UnityQuery.FindByInstanceId(iid);
                     var parent = UnityQuery.FindByInstanceId(pid);
                     if (child == null || parent == null) throw new InvalidOperationException("NotFound");
-                    if (child == parent) throw new InvalidOperationException("Cannot parent to self");
+                    if (child == parent) throw new InvalidOperationException("InvalidArgument");
                     child.transform.SetParent(parent.transform, true);
                     await Task.CompletedTask;
                 });
                 return new { ok = true };
             }
-            catch (Exception ex) { return new { ok = false, error = ex.Message }; }
+            catch (Exception ex) { return ToolErrorFromException(ex); }
         }
 
         [McpServerTool, Description("Destroy a GameObject.")]
         public static async Task<object> DestroyObject(string objectId, bool confirm = false, CancellationToken ct = default)
         {
             var cfg = McpConfig.Load();
-            if (!cfg.AllowWrites) return new { ok = false, error = "PermissionDenied: writes disabled" };
-            if (cfg.RequireConfirm && !confirm) return new { ok = false, error = "ConfirmationRequired", hint = "resend with confirm=true" };
-            if (!int.TryParse(objectId.StartsWith("obj:") ? objectId.Substring(4) : "", out var iid))
-                return new { ok = false, error = "Invalid id" };
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+            if (!int.TryParse(objectId.StartsWith("obj:") ? objectId.Substring(4) : string.Empty, out var iid))
+                return ToolError("InvalidArgument", "Invalid id");
             try
             {
                 await MainThread.RunAsync(async () =>
@@ -471,7 +499,7 @@ namespace UnityExplorer.Mcp
                 });
                 return new { ok = true };
             }
-            catch (Exception ex) { return new { ok = false, error = ex.Message }; }
+            catch (Exception ex) { return ToolErrorFromException(ex); }
         }
 
         [McpServerTool, Description("Select a GameObject in the UnityExplorer inspector (read-only impact).")]
@@ -479,12 +507,12 @@ namespace UnityExplorer.Mcp
         {
             var cfg = McpConfig.Load();
             if (!cfg.AllowWrites)
-                return new { ok = false, error = "PermissionDenied: writes disabled" };
+                return ToolError("PermissionDenied", "Writes disabled");
 
             if (string.IsNullOrWhiteSpace(objectId) || !objectId.StartsWith("obj:"))
-                return new { ok = false, error = "Invalid objectId; expected 'obj:<instanceId>'" };
+                return ToolError("InvalidArgument", "Invalid objectId; expected 'obj:<instanceId>'");
             if (!int.TryParse(objectId.Substring(4), out var iid))
-                return new { ok = false, error = "Invalid instance id" };
+                return ToolError("InvalidArgument", "Invalid instance id");
 
             try
             {
@@ -499,8 +527,86 @@ namespace UnityExplorer.Mcp
             }
             catch (Exception ex)
             {
-                return new { ok = false, error = ex.Message };
+                return ToolErrorFromException(ex);
             }
+        }
+
+        [McpServerTool, Description("Get current Unity time-scale and lock state (read-only).")]
+        public static async Task<object> GetTimeScale(CancellationToken ct = default)
+        {
+            bool locked = false;
+            float value = Time.timeScale;
+            await MainThread.RunAsync(async () =>
+            {
+                TryGetTimeScaleState(TimeScaleWidget.Instance, out locked, out value);
+                await Task.CompletedTask;
+            });
+            return new { ok = true, value, locked };
+        }
+
+        [McpServerTool, Description("Set Unity Time.timeScale (guarded by allowWrites + confirm).")]
+        public static async Task<object> SetTimeScale(float value, bool? @lock = null, bool confirm = false, CancellationToken ct = default)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            var clamped = Mathf.Clamp(value, 0f, 4f);
+            try
+            {
+                bool locked = false;
+                float applied = clamped;
+                await MainThread.RunAsync(async () =>
+                {
+                    var widget = TimeScaleWidget.Instance;
+                    if (@lock == true && widget != null)
+                    {
+                        widget.LockTo(clamped);
+                    }
+                    else
+                    {
+                        Time.timeScale = clamped;
+                        if (@lock == false && widget != null)
+                        {
+                            UnlockTimeScale(widget);
+                        }
+                    }
+                    TryGetTimeScaleState(widget, out locked, out applied);
+                    await Task.CompletedTask;
+                });
+                return new { ok = true, value = applied, locked };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        private static void UnlockTimeScale(TimeScaleWidget widget)
+        {
+            try
+            {
+                var lockedField = typeof(TimeScaleWidget).GetField("locked", BindingFlags.NonPublic | BindingFlags.Instance);
+                lockedField?.SetValue(widget, false);
+                var updateUi = typeof(TimeScaleWidget).GetMethod("UpdateUi", BindingFlags.NonPublic | BindingFlags.Instance);
+                updateUi?.Invoke(widget, null);
+            }
+            catch { }
+        }
+
+        private static void TryGetTimeScaleState(TimeScaleWidget? widget, out bool locked, out float value)
+        {
+            locked = false;
+            value = Time.timeScale;
+            if (widget == null) return;
+            try
+            {
+                var lockedField = typeof(TimeScaleWidget).GetField("locked", BindingFlags.NonPublic | BindingFlags.Instance);
+                var lockedVal = lockedField?.GetValue(widget);
+                if (lockedVal is bool b) locked = b;
+                value = widget.DesiredTime;
+            }
+            catch { }
         }
     }
 #endif

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UniverseLib.Input;
 
@@ -139,7 +140,7 @@ namespace UnityExplorer.Mcp
             {
                 var go = UnityQuery.FindByInstanceId(iid);
                 if (go == null) throw new InvalidOperationException("NotFound");
-                var path = BuildPath(go.transform);
+                var path = UnityQuery.BuildPath(go.transform);
                 int compCount = 0;
                 try { var comps2 = go.GetComponents<UnityEngine.Component>(); compCount = comps2 != null ? comps2.Length : 0; } catch { }
                 return new ObjectCardDto(
@@ -185,19 +186,6 @@ namespace UnityExplorer.Mcp
                 var items = list.ToArray();
                 return new Page<ComponentCardDto>(total, items);
             });
-        }
-
-        private static string BuildPath(Transform t)
-        {
-            var names = new List<string>();
-            var cur = t;
-            while (cur != null)
-            {
-                names.Add(cur.name);
-                cur = cur.parent;
-            }
-            names.Reverse();
-            return "/" + string.Join("/", names);
         }
 
         [McpServerTool, Description("Version information for UnityExplorer MCP and Unity runtime.")]
@@ -280,27 +268,53 @@ namespace UnityExplorer.Mcp
             });
         }
 
-        [McpServerTool, Description("Raycast at current mouse position to pick a world object.")]
+        [McpServerTool, Description("Raycast at current mouse position to pick a world or UI object.")]
         public static async Task<PickResultDto> MousePick(string mode = "world", CancellationToken ct = default)
         {
             return await MainThread.Run(() =>
             {
-                if (!string.Equals(mode, "world", StringComparison.OrdinalIgnoreCase))
-                    return new PickResultDto(null, mode, false);
+                var normalizedMode = string.IsNullOrWhiteSpace(mode) ? "world" : mode.ToLowerInvariant();
+
+                if (normalizedMode == "ui")
+                {
+                    var eventSystem = EventSystem.current;
+                    if (eventSystem == null)
+                        return new PickResultDto("ui", false, null, Array.Empty<PickHit>());
+
+                    var pointer = new PointerEventData(eventSystem)
+                    {
+                        position = InputManager.MousePosition
+                    };
+                    var raycastResults = new List<RaycastResult>();
+                    eventSystem.RaycastAll(pointer, raycastResults);
+                    var items = new List<PickHit>();
+                    foreach (var rr in raycastResults)
+                    {
+                        var go = rr.gameObject;
+                        if (go == null) continue;
+                        var id = $"obj:{go.GetInstanceID()}";
+                        var path = UnityQuery.BuildPath(go.transform);
+                        items.Add(new PickHit(id, go.name, path));
+                    }
+
+                    var primaryId = items.Count > 0 ? items[0].Id : null;
+                    return new PickResultDto("ui", items.Count > 0, primaryId, items);
+                }
 
                 Camera cam = Camera.main;
                 if (cam == null && Camera.allCamerasCount > 0) cam = Camera.allCameras[0];
-                if (cam == null) return new PickResultDto(null, mode, false);
+                if (cam == null) return new PickResultDto("world", false, null, null);
                 Vector3 mousePos = InputManager.MousePosition;
                 var ray = cam.ScreenPointToRay(mousePos);
                 if (Physics.Raycast(ray, out var hit))
                 {
                     var col = hit.collider;
-                    if (col == null) return new PickResultDto(null, mode, false);
+                    if (col == null) return new PickResultDto("world", false, null, null);
                     var go = col.gameObject;
-                    return new PickResultDto(go != null ? $"obj:{go.GetInstanceID()}" : null, mode, go != null);
+                    var id = go != null ? $"obj:{go.GetInstanceID()}" : null;
+                    return new PickResultDto("world", go != null, id, null);
                 }
-                return new PickResultDto(null, mode, false);
+                return new PickResultDto("world", false, null, null);
             });
         }
 

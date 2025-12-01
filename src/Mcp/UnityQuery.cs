@@ -47,6 +47,19 @@ namespace UnityExplorer.Mcp
             }
             return null;
         }
+
+        public static string BuildPath(Transform t)
+        {
+            var names = new List<string>();
+            var cur = t;
+            while (cur != null)
+            {
+                names.Add(cur.name);
+                cur = cur.parent;
+            }
+            names.Reverse();
+            return "/" + string.Join("/", names);
+        }
     }
 #endif
 }

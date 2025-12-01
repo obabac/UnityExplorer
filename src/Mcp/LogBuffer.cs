@@ -11,11 +11,12 @@ namespace UnityExplorer.Mcp
         private static readonly Queue<LogLine> Buffer = new();
         private const int MaxLines = 2000;
 
-        public static void Add(string level, string message)
+        public static void Add(string level, string message, string source = "unity", string? category = null)
         {
+            var ts = DateTimeOffset.UtcNow;
             lock (Gate)
             {
-                Buffer.Enqueue(new LogLine(DateTimeOffset.UtcNow, level, message));
+                Buffer.Enqueue(new LogLine(ts, level, message, source, category));
                 while (Buffer.Count > MaxLines)
                     Buffer.Dequeue();
             }
@@ -24,7 +25,7 @@ namespace UnityExplorer.Mcp
                 var http = McpSimpleHttp.Current;
                 if (http != null)
                 {
-                    _ = http.BroadcastNotificationAsync("log", new { level, message, t = DateTimeOffset.UtcNow });
+                    _ = http.BroadcastNotificationAsync("log", new { level, message, source, category, t = ts });
                 }
             }
             catch { }

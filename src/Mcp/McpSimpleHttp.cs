@@ -18,8 +18,22 @@ namespace UnityExplorer.Mcp
         private readonly TcpListener _listener;
         private readonly CancellationTokenSource _cts = new();
         private readonly ConcurrentDictionary<int, Stream> _httpStreams = new();
+        private readonly SemaphoreSlim _requestSlots = new(ConcurrencyLimit, ConcurrencyLimit);
         private int _nextClientId;
         public int Port { get; }
+
+        // JSON-RPC codes (spec + domain)
+        private const int ErrorInvalidRequest = -32600;
+        private const int ErrorMethodNotFound = -32601;
+        private const int ErrorInvalidParams = -32602;
+        private const int ErrorInternal = -32603;
+        private const int ErrorNotReady = -32002;
+        private const int ErrorPermissionDenied = -32003;
+        private const int ErrorNotFound = -32004;
+        private const int ErrorRateLimited = -32005;
+        private const int ConcurrencyLimit = 32;
+
+        private readonly record struct ErrorShape(int Code, int HttpStatus, string Kind, string Message, string? Hint, string? Detail);
 
         public McpSimpleHttp(string bindAddress, int port)
         {
@@ -110,8 +124,8 @@ namespace UnityExplorer.Mcp
                     }
                     catch (JsonException ex)
                     {
-                        await SendJsonRpcErrorAsync(-32700, "Parse error", new { detail = ex.Message }, ct).ConfigureAwait(false);
-                        var errorPayload = BuildJsonRpcErrorPayload(-32700, "Parse error", new { detail = ex.Message });
+                        await SendJsonRpcErrorAsync(-32700, "Parse error", "InvalidRequest", null, ex.Message, ct).ConfigureAwait(false);
+                        var errorPayload = BuildJsonRpcErrorPayload(-32700, "Parse error", "InvalidRequest", null, ex.Message);
                         await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                         return;
                     }
@@ -122,8 +136,8 @@ namespace UnityExplorer.Mcp
                         string methodName = root.TryGetProperty("method", out var m) ? m.GetString() ?? string.Empty : string.Empty;
                         if (string.IsNullOrWhiteSpace(methodName))
                         {
-                            await SendJsonRpcErrorAsync(root, -32600, "Invalid request: 'method' is required.", null, ct).ConfigureAwait(false);
-                            var errorPayload = BuildJsonRpcErrorPayload(root, -32600, "Invalid request: 'method' is required.", null);
+                            await SendJsonRpcErrorAsync(root, ErrorInvalidRequest, "Invalid request: 'method' is required.", "InvalidRequest", null, null, ct).ConfigureAwait(false);
+                            var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidRequest, "Invalid request: 'method' is required.", "InvalidRequest", null, null);
                             await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                             return;
                         }
@@ -135,6 +149,22 @@ namespace UnityExplorer.Mcp
                             methodName = "call_tool";
                         else if (string.Equals(methodName, "resources/read", StringComparison.OrdinalIgnoreCase))
                             methodName = "read_resource";
+
+                        var acquiredSlot = false;
+                        try
+                        {
+                            if (!string.Equals(methodName, "stream_events", StringComparison.OrdinalIgnoreCase))
+                            {
+                                acquiredSlot = _requestSlots.Wait(0);
+                                if (!acquiredSlot)
+                                {
+                                    var msg = $"Cannot have more than {ConcurrencyLimit} parallel requests. Please slow down.";
+                                    await SendJsonRpcErrorAsync(root, ErrorRateLimited, msg, "RateLimited", null, null, ct).ConfigureAwait(false);
+                                    var errorPayload = BuildJsonRpcErrorPayload(root, ErrorRateLimited, msg, "RateLimited", null, null);
+                                    await WriteJsonResponseAsync(stream, 429, errorPayload, ct).ConfigureAwait(false);
+                                    return;
+                                }
+                            }
 
                         // MCP initialize handshake support for inspector and generic clients.
                         if (string.Equals(methodName, "initialize", StringComparison.OrdinalIgnoreCase))
@@ -166,8 +196,8 @@ namespace UnityExplorer.Mcp
                             }
                             catch (Exception ex)
                             {
-                                await SendJsonRpcErrorAsync(root, -32603, "Internal error", new { detail = ex.Message }, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32603, "Internal error", new { detail = ex.Message });
+                                await SendJsonRpcErrorAsync(root, ErrorInternal, "Internal error", "Internal", null, ex.Message, ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInternal, "Internal error", "Internal", null, ex.Message);
                                 await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
                             }
                             return;
@@ -207,8 +237,8 @@ namespace UnityExplorer.Mcp
                             }
                             catch (Exception ex)
                             {
-                                await SendJsonRpcErrorAsync(root, -32603, "Internal error", new { detail = ex.Message }, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32603, "Internal error", new { detail = ex.Message });
+                                await SendJsonRpcErrorAsync(root, ErrorInternal, "Internal error", "Internal", null, ex.Message, ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInternal, "Internal error", "Internal", null, ex.Message);
                                 await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
                             }
                             return;
@@ -218,8 +248,8 @@ namespace UnityExplorer.Mcp
                         {
                             if (!root.TryGetProperty("params", out var pr))
                             {
-                                await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'params' object is required.", null, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, "Invalid params: 'params' object is required.", null);
+                                await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null);
                                 await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                                 return;
                             }
@@ -228,8 +258,8 @@ namespace UnityExplorer.Mcp
                             var args = pr.TryGetProperty("arguments", out var a) ? a : default;
                             if (string.IsNullOrWhiteSpace(name))
                             {
-                                await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'name' is required.", null, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, "Invalid params: 'name' is required.", null);
+                                await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'name' is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'name' is required.", "InvalidArgument", null, null);
                                 await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                                 return;
                             }
@@ -243,26 +273,17 @@ namespace UnityExplorer.Mcp
                                 var responsePayload = BuildJsonRpcResultPayload(root, wrapped);
                                 await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
                             }
-                            catch (ArgumentException ex)
-                            {
-                                await SendJsonRpcErrorAsync(root, -32602, ex.Message, null, ct).ConfigureAwait(false);
-                                try { await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32602, message = ex.Message } }, ct).ConfigureAwait(false); } catch { }
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, ex.Message, null);
-                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
-                            }
-                            catch (InvalidOperationException ex)
-                            {
-                                await SendJsonRpcErrorAsync(root, -32601, ex.Message, null, ct).ConfigureAwait(false);
-                                try { await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32601, message = ex.Message } }, ct).ConfigureAwait(false); } catch { }
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32601, ex.Message, null);
-                                await WriteJsonResponseAsync(stream, 404, errorPayload, ct).ConfigureAwait(false);
-                            }
                             catch (Exception ex)
                             {
-                                await SendJsonRpcErrorAsync(root, -32603, "Internal error", new { detail = ex.Message }, ct).ConfigureAwait(false);
-                                try { await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32603, message = "Internal error" } }, ct).ConfigureAwait(false); } catch { }
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32603, "Internal error", new { detail = ex.Message });
-                                await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
+                                var err = MapExceptionToError(ex);
+                                await SendJsonRpcErrorAsync(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail, ct).ConfigureAwait(false);
+                                try
+                                {
+                                    await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = err.Code, message = err.Message, data = BuildErrorData(err.Kind, err.Hint, err.Detail) } }, ct).ConfigureAwait(false);
+                                }
+                                catch { }
+                                var errorPayload = BuildJsonRpcErrorPayload(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail);
+                                await WriteJsonResponseAsync(stream, err.HttpStatus, errorPayload, ct).ConfigureAwait(false);
                             }
                             return;
                         }
@@ -271,8 +292,8 @@ namespace UnityExplorer.Mcp
                         {
                             if (!root.TryGetProperty("params", out var pr))
                             {
-                                await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'params' object is required.", null, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, "Invalid params: 'params' object is required.", null);
+                                await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null);
                                 await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                                 return;
                             }
@@ -280,8 +301,8 @@ namespace UnityExplorer.Mcp
                             var uri = pr.TryGetProperty("uri", out var u) ? (u.GetString() ?? string.Empty) : string.Empty;
                             if (string.IsNullOrWhiteSpace(uri))
                             {
-                                await SendJsonRpcErrorAsync(root, -32602, "Invalid params: 'uri' is required.", null, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, "Invalid params: 'uri' is required.", null);
+                                await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'uri' is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'uri' is required.", "InvalidArgument", null, null);
                                 await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
                                 return;
                             }
@@ -294,23 +315,12 @@ namespace UnityExplorer.Mcp
                                 var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
                                 await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
                             }
-                            catch (ArgumentException ex)
-                            {
-                                await SendJsonRpcErrorAsync(root, -32602, ex.Message, null, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32602, ex.Message, null);
-                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
-                            }
-                            catch (NotSupportedException ex)
-                            {
-                                await SendJsonRpcErrorAsync(root, -32601, ex.Message, null, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32601, ex.Message, null);
-                                await WriteJsonResponseAsync(stream, 404, errorPayload, ct).ConfigureAwait(false);
-                            }
                             catch (Exception ex)
                             {
-                                await SendJsonRpcErrorAsync(root, -32603, "Internal error", new { detail = ex.Message }, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, -32603, "Internal error", new { detail = ex.Message });
-                                await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
+                                var err = MapExceptionToError(ex);
+                                await SendJsonRpcErrorAsync(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail, ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail);
+                                await WriteJsonResponseAsync(stream, err.HttpStatus, errorPayload, ct).ConfigureAwait(false);
                             }
                             return;
                         }
@@ -339,11 +349,15 @@ namespace UnityExplorer.Mcp
                             return;
                         }
 
-                        await SendJsonRpcErrorAsync(root, -32601, $"Method not found: {methodName}", null, ct).ConfigureAwait(false);
-                        var notFoundPayload = BuildJsonRpcErrorPayload(root, -32601, $"Method not found: {methodName}", null);
+                        await SendJsonRpcErrorAsync(root, ErrorMethodNotFound, $"Method not found: {methodName}", "MethodNotFound", null, null, ct).ConfigureAwait(false);
+                        var notFoundPayload = BuildJsonRpcErrorPayload(root, ErrorMethodNotFound, $"Method not found: {methodName}", "MethodNotFound", null, null);
                         await WriteJsonResponseAsync(stream, 400, notFoundPayload, ct).ConfigureAwait(false);
                         return;
                     }
+                }
+                finally
+                {
+                    if (acquiredSlot) _requestSlots.Release();
                 }
 
                 if (method == "GET" && target.StartsWith("/read"))
@@ -377,10 +391,20 @@ namespace UnityExplorer.Mcp
             }
         }
 
+        private static string ReasonPhrase(int statusCode) => statusCode switch
+        {
+            400 => "Bad Request",
+            403 => "Forbidden",
+            404 => "Not Found",
+            429 => "Too Many Requests",
+            500 => "Internal Server Error",
+            _ => "OK"
+        };
+
         private static async Task WriteResponseAsync(Stream stream, int code, string text, CancellationToken ct)
         {
             var body = Encoding.UTF8.GetBytes(text);
-            var header = $"HTTP/1.1 {code} OK\r\nContent-Type: text/plain\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n";
+            var header = $"HTTP/1.1 {code} {ReasonPhrase(code)}\r\nContent-Type: text/plain\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n";
             var headerBytes = Encoding.UTF8.GetBytes(header);
             await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
             await stream.WriteAsync(body, 0, body.Length, ct).ConfigureAwait(false);
@@ -390,7 +414,7 @@ namespace UnityExplorer.Mcp
         {
             var json = JsonSerializer.Serialize(payload);
             var body = Encoding.UTF8.GetBytes(json);
-            var header = $"HTTP/1.1 {code} OK\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n";
+            var header = $"HTTP/1.1 {code} {ReasonPhrase(code)}\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n";
             var headerBytes = Encoding.UTF8.GetBytes(header);
             await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
             await stream.WriteAsync(body, 0, body.Length, ct).ConfigureAwait(false);
@@ -437,31 +461,31 @@ namespace UnityExplorer.Mcp
             await BroadcastHttpStreamAsync(payload, ct).ConfigureAwait(false);
         }
 
-        private async Task SendJsonRpcErrorAsync(JsonElement requestRoot, int code, string message, object? data, CancellationToken ct)
+        private async Task SendJsonRpcErrorAsync(JsonElement requestRoot, int code, string message, string kind, string? hint, string? detail, CancellationToken ct)
         {
             object? idVal = null;
             if (requestRoot.ValueKind == JsonValueKind.Object && requestRoot.TryGetProperty("id", out var idEl))
             {
                 try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
             }
-            try { ExplorerCore.LogWarning($"[MCP] error {code}: {message}"); } catch { }
+            try { ExplorerCore.LogWarning($"[MCP] error {code}: {message}"); LogBuffer.Add("error", message, "mcp", kind); } catch { }
             var payload = JsonSerializer.Serialize(new
             {
                 jsonrpc = "2.0",
                 id = idVal,
-                error = new { code, message, data }
+                error = new { code, message, data = BuildErrorData(kind, hint, detail) }
             });
             await BroadcastHttpStreamAsync(payload, ct).ConfigureAwait(false);
         }
 
-        private async Task SendJsonRpcErrorAsync(int code, string message, object? data, CancellationToken ct)
+        private async Task SendJsonRpcErrorAsync(int code, string message, string kind, string? hint, string? detail, CancellationToken ct)
         {
-            try { ExplorerCore.LogWarning($"[MCP] error {code}: {message}"); } catch { }
+            try { ExplorerCore.LogWarning($"[MCP] error {code}: {message}"); LogBuffer.Add("error", message, "mcp", kind); } catch { }
             var payload = JsonSerializer.Serialize(new
             {
                 jsonrpc = "2.0",
                 id = (object?)null,
-                error = new { code, message, data }
+                error = new { code, message, data = BuildErrorData(kind, hint, detail) }
             });
             await BroadcastHttpStreamAsync(payload, ct).ConfigureAwait(false);
         }
@@ -476,7 +500,7 @@ namespace UnityExplorer.Mcp
             return new { jsonrpc = "2.0", id = idVal, result };
         }
 
-        private static object BuildJsonRpcErrorPayload(JsonElement requestRoot, int code, string message, object? data)
+        private static object BuildJsonRpcErrorPayload(JsonElement requestRoot, int code, string message, string kind, string? hint = null, string? detail = null)
         {
             object? idVal = null;
             if (requestRoot.ValueKind == JsonValueKind.Object && requestRoot.TryGetProperty("id", out var idEl))
@@ -487,18 +511,48 @@ namespace UnityExplorer.Mcp
             {
                 jsonrpc = "2.0",
                 id = idVal,
-                error = new { code, message, data }
+                error = new { code, message, data = BuildErrorData(kind, hint, detail) }
             };
         }
 
-        private static object BuildJsonRpcErrorPayload(int code, string message, object? data)
+        private static object BuildJsonRpcErrorPayload(int code, string message, string kind, string? hint = null, string? detail = null)
         {
             return new
             {
                 jsonrpc = "2.0",
                 id = (object?)null,
-                error = new { code, message, data }
+                error = new { code, message, data = BuildErrorData(kind, hint, detail) }
             };
+        }
+
+        private static object BuildErrorData(string kind, string? hint, string? detail)
+        {
+            return detail != null
+                ? new { kind, hint, detail }
+                : new { kind, hint };
+        }
+
+        private static ErrorShape MapExceptionToError(Exception ex)
+        {
+            if (ex is ArgumentException arg)
+                return new ErrorShape(ErrorInvalidParams, 400, "InvalidArgument", arg.Message, null, null);
+
+            if (ex is InvalidOperationException inv)
+            {
+                return inv.Message switch
+                {
+                    "NotFound" => new ErrorShape(ErrorNotFound, 404, "NotFound", "Not found", null, null),
+                    "PermissionDenied" => new ErrorShape(ErrorPermissionDenied, 403, "PermissionDenied", "Permission denied", null, null),
+                    "ConfirmationRequired" => new ErrorShape(ErrorPermissionDenied, 403, "PermissionDenied", "Confirmation required", "resend with confirm=true", null),
+                    "NotReady" => new ErrorShape(ErrorNotReady, 503, "NotReady", "Not ready", null, null),
+                    _ => new ErrorShape(ErrorInvalidParams, 400, "InvalidArgument", inv.Message, null, null)
+                };
+            }
+
+            if (ex is NotSupportedException notSup)
+                return new ErrorShape(ErrorNotFound, 404, "NotFound", notSup.Message, null, null);
+
+            return new ErrorShape(ErrorInternal, 500, "Internal", "Internal error", null, ex.Message);
         }
 
         public void Dispose()

@@ -23,11 +23,12 @@ namespace UnityExplorer.Mcp
     public record TransformDto(Vector3Dto Pos, Vector3Dto Rot, Vector3Dto Scale);
     public record Vector3Dto(float X, float Y, float Z);
     public record CameraInfoDto(bool IsFreecam, string Name, float Fov, Vector3Dto Pos, Vector3Dto Rot);
-    public record LogLine(DateTimeOffset T, string Level, string Message);
+    public record LogLine(DateTimeOffset T, string Level, string Message, string Source, string? Category = null);
     public record LogTailDto(IReadOnlyList<LogLine> Items);
 
     public record SelectionDto(string? ActiveId, IReadOnlyList<string> Items);
-    public record PickResultDto(string? Id, string Mode, bool Hit);
+    public record PickHit(string Id, string Name, string Path);
+    public record PickResultDto(string Mode, bool Hit, string? Id, IReadOnlyList<PickHit>? Items);
     public record HookDto(string Signature, bool Enabled);
     public record ConsoleScriptDto(string Name, string Path);
     public record VersionInfoDto(string ExplorerVersion, string McpVersion, string UnityVersion, string Runtime);
