@@ -117,10 +117,7 @@ namespace UnityExplorer.UI.Panels
             UIFactory.SetLayoutElement(copyTokenBtn.Component.gameObject, minHeight: 25, minWidth: 110);
             copyTokenBtn.OnClick += () =>
             {
-                var latestCfg = McpConfig.Load();
-                var latestInfo = McpDiscovery.TryLoad();
-                var tokenValue = latestInfo?.AuthToken ?? latestCfg.AuthToken ?? string.Empty;
-                ClipboardPanel.Copy(tokenValue);
+                ClipboardPanel.Copy(string.Empty);
             };
 
             // Second row for write-safety toggles

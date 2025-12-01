@@ -285,11 +285,12 @@ namespace UnityExplorer.Mcp
                     {
                         position = InputManager.MousePosition
                     };
-                    var raycastResults = new List<RaycastResult>();
+                    var raycastResults = new Il2CppSystem.Collections.Generic.List<RaycastResult>();
                     eventSystem.RaycastAll(pointer, raycastResults);
-                    var items = new List<PickHit>();
-                    foreach (var rr in raycastResults)
+                    var items = new List<PickHit>(raycastResults.Count);
+                    for (int i = 0; i < raycastResults.Count; i++)
                     {
+                        var rr = raycastResults[i];
                         var go = rr.gameObject;
                         if (go == null) continue;
                         var id = $"obj:{go.GetInstanceID()}";

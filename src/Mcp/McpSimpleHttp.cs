@@ -136,25 +136,23 @@ namespace UnityExplorer.Mcp
                         try
                         {
                             var root = doc.RootElement;
-                        string methodName = root.TryGetProperty("method", out var m) ? m.GetString() ?? string.Empty : string.Empty;
-                        if (string.IsNullOrWhiteSpace(methodName))
-                        {
-                            await SendJsonRpcErrorAsync(root, ErrorInvalidRequest, "Invalid request: 'method' is required.", "InvalidRequest", null, null, ct).ConfigureAwait(false);
-                            var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidRequest, "Invalid request: 'method' is required.", "InvalidRequest", null, null);
-                            await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
-                            return;
-                        }
+                            string methodName = root.TryGetProperty("method", out var m) ? m.GetString() ?? string.Empty : string.Empty;
+                            if (string.IsNullOrWhiteSpace(methodName))
+                            {
+                                await SendJsonRpcErrorAsync(root, ErrorInvalidRequest, "Invalid request: 'method' is required.", "InvalidRequest", null, null, ct).ConfigureAwait(false);
+                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidRequest, "Invalid request: 'method' is required.", "InvalidRequest", null, null);
+                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
+                                return;
+                            }
 
-                        // Support both UnityExplorer-specific and MCP-standard method names.
-                        if (string.Equals(methodName, "tools/list", StringComparison.OrdinalIgnoreCase))
-                            methodName = "list_tools";
-                        else if (string.Equals(methodName, "tools/call", StringComparison.OrdinalIgnoreCase))
-                            methodName = "call_tool";
-                        else if (string.Equals(methodName, "resources/read", StringComparison.OrdinalIgnoreCase))
-                            methodName = "read_resource";
+                            // Support both UnityExplorer-specific and MCP-standard method names.
+                            if (string.Equals(methodName, "tools/list", StringComparison.OrdinalIgnoreCase))
+                                methodName = "list_tools";
+                            else if (string.Equals(methodName, "tools/call", StringComparison.OrdinalIgnoreCase))
+                                methodName = "call_tool";
+                            else if (string.Equals(methodName, "resources/read", StringComparison.OrdinalIgnoreCase))
+                                methodName = "read_resource";
 
-                        try
-                        {
                             if (!string.Equals(methodName, "stream_events", StringComparison.OrdinalIgnoreCase))
                             {
                                 acquiredSlot = _requestSlots.Wait(0);
@@ -167,203 +165,201 @@ namespace UnityExplorer.Mcp
                                     return;
                                 }
                             }
-                        }
 
-                        // MCP initialize handshake support for inspector and generic clients.
-                        if (string.Equals(methodName, "initialize", StringComparison.OrdinalIgnoreCase))
-                        {
-                            try
+                            // MCP initialize handshake support for inspector and generic clients.
+                            if (string.Equals(methodName, "initialize", StringComparison.OrdinalIgnoreCase))
                             {
-                                const string protocolVersion = "2024-11-05";
-                                var serverInfo = new
-                                {
-                                    name = "UnityExplorer.Mcp",
-                                    version = typeof(McpSimpleHttp).Assembly.GetName().Version?.ToString() ?? "0.0.0"
-                                };
-                                var capabilities = new
-                                {
-                                    tools = new { listChanged = true },
-                                    resources = new { listChanged = true },
-                                    experimental = new { streamEvents = true }
-                                };
-
-                                var instructions =
-                                    "Unity Explorer MCP exposes Unity scenes, objects, and logs as tools " +
-                                    "and resources. Use list_tools + call_tool for inspection, and " +
-                                    "read_resource with unity:// URIs for structured state.";
-
-                                var resultObj = new { protocolVersion, capabilities, serverInfo, instructions };
-                                await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
-                                var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
-                                await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
-                            }
-                            catch (Exception ex)
-                            {
-                                await SendJsonRpcErrorAsync(root, ErrorInternal, "Internal error", "Internal", null, ex.Message, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInternal, "Internal error", "Internal", null, ex.Message);
-                                await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
-                            }
-                            return;
-                        }
-
-                        // Client-side notification after initialize; accept and ignore.
-                        if (string.Equals(methodName, "notifications/initialized", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var payload = new
-                            {
-                                jsonrpc = "2.0",
-                                id = (object?)null,
-                                result = new { ok = true }
-                            };
-                            await WriteJsonResponseAsync(stream, 200, payload, ct).ConfigureAwait(false);
-                            return;
-                        }
-
-                        if (string.Equals(methodName, "ping", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var resultObj = new { };
-                            await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
-                            var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
-                            await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
-                            return;
-                        }
-
-                        if (string.Equals(methodName, "list_tools", StringComparison.OrdinalIgnoreCase))
-                        {
-                            try
-                            {
-                                var tools = McpReflection.ListTools();
-                                var resultObj = new { tools };
-                                await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
-                                var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
-                                await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
-                            }
-                            catch (Exception ex)
-                            {
-                                await SendJsonRpcErrorAsync(root, ErrorInternal, "Internal error", "Internal", null, ex.Message, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInternal, "Internal error", "Internal", null, ex.Message);
-                                await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
-                            }
-                            return;
-                        }
-
-                        if (string.Equals(methodName, "call_tool", StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (!root.TryGetProperty("params", out var pr))
-                            {
-                                await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null);
-                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
-                                return;
-                            }
-
-                            var name = pr.TryGetProperty("name", out var n) ? (n.GetString() ?? string.Empty) : string.Empty;
-                            var args = pr.TryGetProperty("arguments", out var a) ? a : default;
-                            if (string.IsNullOrWhiteSpace(name))
-                            {
-                                await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'name' is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'name' is required.", "InvalidArgument", null, null);
-                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
-                                return;
-                            }
-
-                            try
-                            {
-                                var result = await McpReflection.InvokeToolAsync(name, args).ConfigureAwait(false);
-                                var wrapped = new { content = new[] { new { type = "json", json = result } } };
-                                await SendJsonRpcResultAsync(root, wrapped, ct).ConfigureAwait(false);
-                                try { await BroadcastNotificationAsync("tool_result", new { name, ok = true, result }, ct).ConfigureAwait(false); } catch { }
-                                var responsePayload = BuildJsonRpcResultPayload(root, wrapped);
-                                await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
-                            }
-                            catch (Exception ex)
-                            {
-                                var err = MapExceptionToError(ex);
-                                await SendJsonRpcErrorAsync(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail, ct).ConfigureAwait(false);
                                 try
                                 {
-                                    await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = err.Code, message = err.Message, data = BuildErrorData(err.Kind, err.Hint, err.Detail) } }, ct).ConfigureAwait(false);
+                                    const string protocolVersion = "2024-11-05";
+                                    var serverInfo = new
+                                    {
+                                        name = "UnityExplorer.Mcp",
+                                        version = typeof(McpSimpleHttp).Assembly.GetName().Version?.ToString() ?? "0.0.0"
+                                    };
+                                    var capabilities = new
+                                    {
+                                        tools = new { listChanged = true },
+                                        resources = new { listChanged = true },
+                                        experimental = new { streamEvents = true }
+                                    };
+
+                                    var instructions =
+                                        "Unity Explorer MCP exposes Unity scenes, objects, and logs as tools " +
+                                        "and resources. Use list_tools + call_tool for inspection, and " +
+                                        "read_resource with unity:// URIs for structured state.";
+
+                                    var resultObj = new { protocolVersion, capabilities, serverInfo, instructions };
+                                    await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
+                                    var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
+                                    await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
                                 }
-                                catch { }
-                                var errorPayload = BuildJsonRpcErrorPayload(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail);
-                                await WriteJsonResponseAsync(stream, err.HttpStatus, errorPayload, ct).ConfigureAwait(false);
-                            }
-                            return;
-                        }
-
-                        if (string.Equals(methodName, "read_resource", StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (!root.TryGetProperty("params", out var pr))
-                            {
-                                await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null);
-                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
+                                catch (Exception ex)
+                                {
+                                    await SendJsonRpcErrorAsync(root, ErrorInternal, "Internal error", "Internal", null, ex.Message, ct).ConfigureAwait(false);
+                                    var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInternal, "Internal error", "Internal", null, ex.Message);
+                                    await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
+                                }
                                 return;
                             }
 
-                            var uri = pr.TryGetProperty("uri", out var u) ? (u.GetString() ?? string.Empty) : string.Empty;
-                            if (string.IsNullOrWhiteSpace(uri))
+                            // Client-side notification after initialize; accept and ignore.
+                            if (string.Equals(methodName, "notifications/initialized", StringComparison.OrdinalIgnoreCase))
                             {
-                                await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'uri' is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'uri' is required.", "InvalidArgument", null, null);
-                                await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
+                                var payload = new
+                                {
+                                    jsonrpc = "2.0",
+                                    id = (object?)null,
+                                    result = new { ok = true }
+                                };
+                                await WriteJsonResponseAsync(stream, 200, payload, ct).ConfigureAwait(false);
                                 return;
                             }
 
-                            try
+                            if (string.Equals(methodName, "ping", StringComparison.OrdinalIgnoreCase))
                             {
-                                var rr = await McpReflection.ReadResourceAsync(uri).ConfigureAwait(false);
-                                var resultObj = new { contents = new[] { new { uri, mimeType = "application/json", text = JsonSerializer.Serialize(rr) } } };
+                                var resultObj = new { };
                                 await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
                                 var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
                                 await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
+                                return;
                             }
-                            catch (Exception ex)
+
+                            if (string.Equals(methodName, "list_tools", StringComparison.OrdinalIgnoreCase))
                             {
-                                var err = MapExceptionToError(ex);
-                                await SendJsonRpcErrorAsync(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail, ct).ConfigureAwait(false);
-                                var errorPayload = BuildJsonRpcErrorPayload(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail);
-                                await WriteJsonResponseAsync(stream, err.HttpStatus, errorPayload, ct).ConfigureAwait(false);
+                                try
+                                {
+                                    var tools = McpReflection.ListTools();
+                                    var resultObj = new { tools };
+                                    await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
+                                    var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
+                                    await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
+                                }
+                                catch (Exception ex)
+                                {
+                                    await SendJsonRpcErrorAsync(root, ErrorInternal, "Internal error", "Internal", null, ex.Message, ct).ConfigureAwait(false);
+                                    var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInternal, "Internal error", "Internal", null, ex.Message);
+                                    await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
+                                }
+                                return;
                             }
+
+                            if (string.Equals(methodName, "call_tool", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (!root.TryGetProperty("params", out var pr))
+                                {
+                                    await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
+                                    var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null);
+                                    await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
+                                    return;
+                                }
+
+                                var name = pr.TryGetProperty("name", out var n) ? (n.GetString() ?? string.Empty) : string.Empty;
+                                var args = pr.TryGetProperty("arguments", out var a) ? a : default;
+                                if (string.IsNullOrWhiteSpace(name))
+                                {
+                                    await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'name' is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
+                                    var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'name' is required.", "InvalidArgument", null, null);
+                                    await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
+                                    return;
+                                }
+
+                                try
+                                {
+                                    var result = await McpReflection.InvokeToolAsync(name, args).ConfigureAwait(false);
+                                    var wrapped = new { content = new[] { new { type = "json", json = result } } };
+                                    await SendJsonRpcResultAsync(root, wrapped, ct).ConfigureAwait(false);
+                                    try { await BroadcastNotificationAsync("tool_result", new { name, ok = true, result }, ct).ConfigureAwait(false); } catch { }
+                                    var responsePayload = BuildJsonRpcResultPayload(root, wrapped);
+                                    await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
+                                }
+                                catch (Exception ex)
+                                {
+                                    var err = MapExceptionToError(ex);
+                                    await SendJsonRpcErrorAsync(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail, ct).ConfigureAwait(false);
+                                    try
+                                    {
+                                        await BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = err.Code, message = err.Message, data = BuildErrorData(err.Kind, err.Hint, err.Detail) } }, ct).ConfigureAwait(false);
+                                    }
+                                    catch { }
+                                    var errorPayload = BuildJsonRpcErrorPayload(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail);
+                                    await WriteJsonResponseAsync(stream, err.HttpStatus, errorPayload, ct).ConfigureAwait(false);
+                                }
+                                return;
+                            }
+
+                            if (string.Equals(methodName, "read_resource", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (!root.TryGetProperty("params", out var pr))
+                                {
+                                    await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
+                                    var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'params' object is required.", "InvalidArgument", null, null);
+                                    await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
+                                    return;
+                                }
+
+                                var uri = pr.TryGetProperty("uri", out var u) ? (u.GetString() ?? string.Empty) : string.Empty;
+                                if (string.IsNullOrWhiteSpace(uri))
+                                {
+                                    await SendJsonRpcErrorAsync(root, ErrorInvalidParams, "Invalid params: 'uri' is required.", "InvalidArgument", null, null, ct).ConfigureAwait(false);
+                                    var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInvalidParams, "Invalid params: 'uri' is required.", "InvalidArgument", null, null);
+                                    await WriteJsonResponseAsync(stream, 400, errorPayload, ct).ConfigureAwait(false);
+                                    return;
+                                }
+
+                                try
+                                {
+                                    var rr = await McpReflection.ReadResourceAsync(uri).ConfigureAwait(false);
+                                    var resultObj = new { contents = new[] { new { uri, mimeType = "application/json", text = JsonSerializer.Serialize(rr) } } };
+                                    await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
+                                    var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
+                                    await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
+                                }
+                                catch (Exception ex)
+                                {
+                                    var err = MapExceptionToError(ex);
+                                    await SendJsonRpcErrorAsync(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail, ct).ConfigureAwait(false);
+                                    var errorPayload = BuildJsonRpcErrorPayload(root, err.Code, err.Message, err.Kind, err.Hint, err.Detail);
+                                    await WriteJsonResponseAsync(stream, err.HttpStatus, errorPayload, ct).ConfigureAwait(false);
+                                }
+                                return;
+                            }
+
+                            if (string.Equals(methodName, "stream_events", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Stream notifications over HTTP using chunked transfer encoding.
+                                var header = "HTTP/1.1 200 OK\r\n" +
+                                             "Content-Type: application/json\r\n" +
+                                             "Transfer-Encoding: chunked\r\n" +
+                                             "Connection: keep-alive\r\n\r\n";
+                                var headerBytes = Encoding.UTF8.GetBytes(header);
+                                await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
+                                await stream.FlushAsync(ct).ConfigureAwait(false);
+
+                                int id = Interlocked.Increment(ref _nextClientId);
+                                _httpStreams[id] = stream;
+                                try
+                                {
+                                    await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+                                }
+                                catch
+                                {
+                                }
+                                _httpStreams.TryRemove(id, out _);
+                                return;
+                            }
+
+                            await SendJsonRpcErrorAsync(root, ErrorMethodNotFound, $"Method not found: {methodName}", "MethodNotFound", null, null, ct).ConfigureAwait(false);
+                            var notFoundPayload = BuildJsonRpcErrorPayload(root, ErrorMethodNotFound, $"Method not found: {methodName}", "MethodNotFound", null, null);
+                            await WriteJsonResponseAsync(stream, 400, notFoundPayload, ct).ConfigureAwait(false);
                             return;
-                        }
-
-                        if (string.Equals(methodName, "stream_events", StringComparison.OrdinalIgnoreCase))
-                        {
-                            // Stream notifications over HTTP using chunked transfer encoding.
-                            var header = "HTTP/1.1 200 OK\r\n" +
-                                         "Content-Type: application/json\r\n" +
-                                         "Transfer-Encoding: chunked\r\n" +
-                                         "Connection: keep-alive\r\n\r\n";
-                            var headerBytes = Encoding.UTF8.GetBytes(header);
-                            await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
-                            await stream.FlushAsync(ct).ConfigureAwait(false);
-
-                            int id = Interlocked.Increment(ref _nextClientId);
-                            _httpStreams[id] = stream;
-                            try
-                            {
-                                await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
-                            }
-                            catch
-                            {
-                            }
-                            _httpStreams.TryRemove(id, out _);
-                            return;
-                        }
-
-                        await SendJsonRpcErrorAsync(root, ErrorMethodNotFound, $"Method not found: {methodName}", "MethodNotFound", null, null, ct).ConfigureAwait(false);
-                        var notFoundPayload = BuildJsonRpcErrorPayload(root, ErrorMethodNotFound, $"Method not found: {methodName}", "MethodNotFound", null, null);
-                        await WriteJsonResponseAsync(stream, 400, notFoundPayload, ct).ConfigureAwait(false);
-                        return;
-                    }
-                }
                         }
                         finally
                         {
                             if (acquiredSlot) _requestSlots.Release();
                         }
                     }
+                }
 
                 if (method == "GET" && target.StartsWith("/read"))
                 {
