@@ -9,7 +9,7 @@
       From (local):
         ./UnityExplorer/Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR/*
       To (remote, on GPUVM):
-        C:/Program Files (x86)/Steam/steamapps/common/Space Shooter/
+        C:/codex-workspace/space-shooter-build/SpaceShooter_IL2CPP/
 
     Requirements:
     - `scp` (OpenSSH client) available on PATH.
@@ -22,13 +22,13 @@
       pwsh ./tools/update-mods.ps1 `
         -LocalSource "./UnityExplorer/Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR/*" `
         -RemoteUserHost "GPUVM@192.168.178.210" `
-        -RemoteTarget "C:/Program Files (x86)/Steam/steamapps/common/Space Shooter/"
+        -RemoteTarget "C:/codex-workspace/space-shooter-build/SpaceShooter_IL2CPP/"
 #>
 
 param(
     [string]$LocalSource = "./Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR/*",
     [string]$RemoteUserHost = "GPUVM@192.168.178.210",
-    [string]$RemoteTarget = "C:/Program Files (x86)/Steam/steamapps/common/Space Shooter/"
+    [string]$RemoteTarget = "C:/codex-workspace/space-shooter-build/SpaceShooter_IL2CPP/"
 )
 
 $ErrorActionPreference = "Stop"

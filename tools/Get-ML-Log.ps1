@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 
 $remoteUserHost = "GPUVM@192.168.178.210"
 # Adjust GameDir if Space Shooter is installed elsewhere on the Test-VM
-$GameDir = "C:\Program Files (x86)\Steam\steamapps\common\Space Shooter"
+$GameDir = "C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP"
 $logPath = "$GameDir\MelonLoader\Latest.log"
 
 if ($Stream) {

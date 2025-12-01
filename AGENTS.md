@@ -56,7 +56,7 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
 - `Get-ML-Log.ps1` will:
   - Poll the Windows Test-VM over SSH until it sees UnityExplorer / MelonLoader
     startup markers in  
-    `C:\Program Files (x86)\Steam\steamapps\common\Space Shooter\MelonLoader\Latest.log` (adjust if installed elsewhere),
+    `C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\MelonLoader\Latest.log` (adjust if installed elsewhere),
   - Then print the full log contents (including information about loaded mods).
 - You can adjust the wait time, e.g.:
   ```powershell
@@ -79,7 +79,7 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
   to copy the mod files to the Test-VM.
 - **Start/stop the game**:
   - Use the Windows MCP tools (PowerShell / UI automation) to kill any running  
-    `Space Shooter.exe` (adjust name if different) and then start it again, rather than doing this
+    `SpaceShooter.exe` and then start it again, rather than doing this
     over SSH (which runs under different privileges and cannot reliably control
     the interactive session).
   - Agents working on MCP behavior should treat starting/stopping the game as
@@ -96,7 +96,7 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
 ### Test-VM: Space Shooter + UnityExplorer
 
 - The Windows test VM runs **Space Shooter** from  
-  `C:\Program Files (x86)\Steam\steamapps\common\Space Shooter\` (adjust if installed elsewhere).
+  `C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\`.
 - After building the `Release` MelonLoader IL2CPP CoreCLR target, you can push the
   mod files to the VM from the repo root with:
   - `cd UnityExplorer`
@@ -105,10 +105,11 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
   into the game’s install folder (using SSH to `GPUVM@192.168.178.210`).
 - To start the game on the VM, use PowerShell on Windows:
   ```powershell
-  Start-Process "C:\Program Files (x86)\Steam\steamapps\common\Space Shooter\Space Shooter.exe"
+  Start-Process "C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe"
   ```
   or launch it via the MCP Windows tools by executing the same `Start-Process`
   command through the PowerShell tool.
+- MelonLoader log on the VM: `C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\MelonLoader\Latest.log`.
 
 ### MCP Quick‑Start (for agents)
 

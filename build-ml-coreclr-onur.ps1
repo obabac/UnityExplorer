@@ -1,6 +1,6 @@
 <# AGENTS STOP HERE - this is not a tool for you #>
 
-$GameDir = "/mnt/d/SteamLibrary/steamapps/common/Space Shooter" # adjust to actual Space Shooter install path
+$GameDir = "/mnt/c/codex-workspace/space-shooter-build/SpaceShooter_IL2CPP" # adjust to actual Space Shooter install path on this host
 
 <#
     Builds only the MelonLoader IL2CPP CoreCLR configuration and copies the
