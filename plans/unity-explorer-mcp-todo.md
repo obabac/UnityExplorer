@@ -48,6 +48,10 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 - Do not add game-specific assumptions; tests must pass on Space Shooter.
 - Guarded writes: always enforce `allowWrites` + `RequireConfirm` and return structured `ok=false` errors instead of throwing.
 - When adding new behaviour, include an example payload in the concept doc and a contract test.
+- Error envelope: use `error.code/message/data.kind[/hint]`; tool `ok=false` errors mirror `kind/hint`. Rate-limit message: `"Cannot have more than X parallel requests. Please slow down."` (include X).
+- Mouse UI multi-hit: UI mode should return a list of hits (`Items`) plus `primaryId`; follow-up via `GetObject`/`GetComponents` (or a UI detail tool) on the selected `Id`.
+- Logs: include `source`; if `category` exists, include it or document its absence.
+- Time-scale writes: single guarded tool; add tests and docs when implemented.
 
 ## 1. Transport & Protocol Polish
 

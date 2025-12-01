@@ -237,3 +237,43 @@ public record LogLine(DateTimeOffset T, string Level, string Source, string Mess
 
 Status: Concept draft v0.2 (updated for logs metadata, mouse‑inspect multi‑hit design, error envelope, and DTO sketch for time/log tooling)
 
+---
+
+## Agent UX polish checklist (to implement)
+
+- **Discoverability & examples**
+  - Keep descriptions action-oriented in `list_tools` and docs; include example payloads for logs (with `source`), mouse UI multi-hit, time-scale write, guarded writes (`ok=false` with `kind/hint`).
+
+- **Mouse inspect UI multi-hit flow**
+  - UI mode returns `Items` (stable list of `{ id, name, path }`) and `primaryId` for the top-most hit. Follow-up: call `GetObject`/`GetComponents` (or a lightweight UI detail tool) on the selected `Id`.
+
+- **Logs ergonomics**
+  - Keep `source` and `level`; if UE exposes `category`, include it, otherwise document its absence. Consider `since`/`cursor` or document `count`-only behavior.
+
+- **Errors / rate limit**
+  - Enforce `error.code/message/data.kind[/hint]` everywhere; tool `ok=false` mirrors `kind/hint`. Rate-limit message: `"Cannot have more than X parallel requests. Please slow down."` (include X). Use consistent codes for domain errors (or document chosen codes).
+
+- **Time-scale writes**
+  - Single tool (e.g., `SetTimeScale(value, lock?, confirm?)`), guarded by `allowWrites+RequireConfirm`, clear error paths. Add a read path for current time scale. Document clamps/rounding.
+
+- **Selection semantics**
+  - Clarify `selection` meaning (Inspector active tabs). Ensure `SelectObject` round-trips: call → selection changes → `unity://selection` shows it → streamed `selection` event. Add a small example.
+
+- **Camera/Freecam**
+  - Include `isFreecam`; if unavailable, use `NotReady/NotFound` with `kind` instead of empty fields.
+
+- **Hooks / Console writes**
+  - Guarded surfaces return structured `kind/hint` for all denial cases. Add one short allow/deny example for `ConsoleEval` and `HookAdd/HookRemove`.
+
+- **Pagination defaults**
+  - Document default `limit` and max `limit`; consider `nextOffset` in responses.
+
+- **Versioning & capabilities**
+  - `initialize` should expose `capabilities` for optional surfaces (e.g., `uiMultiPick`, `timeScaleWrite`, `hooksEnabled`, `consoleEvalEnabled`). Keep `GetVersion` or embed version in `status`.
+
+- **Host assumptions**
+  - Space Shooter is the validation host; no game-specific IDs/paths in examples/tests.
+
+- **Doc/DTO/test sync**
+  - For any shape change, update `mcp-interface-concept.md`, `Dto.cs`, contract tests, and `README-mcp.md`, plus an example payload for every non-trivial shape (logs, mouse UI, errors, time-scale).
+
