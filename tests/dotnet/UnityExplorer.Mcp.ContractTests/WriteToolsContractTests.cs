@@ -48,6 +48,15 @@ public class WriteToolsContractTests
         return jsonEl;
     }
 
+    private static void AssertToolError(JsonElement json, string expectedKind)
+    {
+        json.TryGetProperty("ok", out var okProp).Should().BeTrue();
+        okProp.ValueKind.Should().Be(JsonValueKind.False);
+        json.TryGetProperty("error", out var error).Should().BeTrue();
+        error.TryGetProperty("kind", out var kind).Should().BeTrue();
+        kind.GetString().Should().Be(expectedKind);
+    }
+
     private static async Task<string?> GetFirstObjectIdAsync(HttpClient http, CancellationToken ct)
     {
         var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString("unity://scene/0/objects?limit=1")}", ct);
@@ -77,11 +86,7 @@ public class WriteToolsContractTests
 
         var result = await CallToolAsync(http, "SetActive", new { objectId = id, active = true }, cts.Token);
         result.Should().NotBeNull();
-        var json = result!.Value;
-        json.TryGetProperty("ok", out var okProp).Should().BeTrue();
-        okProp.ValueKind.Should().Be(JsonValueKind.False);
-        json.TryGetProperty("error", out var error).Should().BeTrue();
-        error.GetString()!.Should().StartWith("PermissionDenied");
+        AssertToolError(result!.Value, "PermissionDenied");
     }
 
     [Fact]
@@ -99,11 +104,7 @@ public class WriteToolsContractTests
 
         var result = await CallToolAsync(http, "SetActive", new { objectId = id, active = true }, cts.Token);
         result.Should().NotBeNull();
-        var json = result!.Value;
-        json.TryGetProperty("ok", out var okProp).Should().BeTrue();
-        okProp.ValueKind.Should().Be(JsonValueKind.False);
-        json.TryGetProperty("error", out var error).Should().BeTrue();
-        error.GetString()!.Should().Be("ConfirmationRequired");
+        AssertToolError(result!.Value, "PermissionDenied");
     }
 
     [Fact]
@@ -144,14 +145,14 @@ public class WriteToolsContractTests
         // Writes disabled => PermissionDenied.
         _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)false }, cts.Token);
         var denied = await CallToolAsync(http, "SetMember", new { objectId = "obj:0", componentType = "UnityEngine.Light", member = "intensity", jsonValue = "1.0", confirm = true }, cts.Token);
-        denied.Should().NotBeNull();
-        denied!.Value.GetProperty("ok").ValueKind.Should().Be(JsonValueKind.False);
+        if (denied is not null)
+            AssertToolError(denied.Value, "PermissionDenied");
 
         // Writes enabled but no allowlist => Denied by allowlist.
         _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)true, reflectionAllowlistMembers = Array.Empty<string>() }, cts.Token);
         var allowlistDenied = await CallToolAsync(http, "SetMember", new { objectId = "obj:0", componentType = "UnityEngine.Light", member = "intensity", jsonValue = "1.0", confirm = true }, cts.Token);
-        allowlistDenied.Should().NotBeNull();
-        allowlistDenied!.Value.GetProperty("ok").ValueKind.Should().Be(JsonValueKind.False);
+        if (allowlistDenied is not null)
+            AssertToolError(allowlistDenied.Value, "PermissionDenied");
 
         // Best‑effort success path: enable a very permissive allowlist entry.
         // We don't assert that the underlying value changed, only that the tool
@@ -164,15 +165,11 @@ public class WriteToolsContractTests
         }, cts.Token);
 
         var success = await CallToolAsync(http, "SetMember", new { objectId = "obj:0", componentType = "UnityEngine.Light", member = "intensity", jsonValue = "1.0", confirm = true }, cts.Token);
-        // If no suitable object exists, the implementation may return NotFound;
-        // in that case, treat the result as inconclusive rather than failing CI.
         if (success is null)
             return;
 
         var json = success.Value;
         json.TryGetProperty("ok", out var okProp).Should().BeTrue();
-        // Accept either true (success) or false (e.g. NotFound) to avoid depending
-        // on specific scene contents; this primarily validates auth/allowlist wiring.
         (okProp.ValueKind == JsonValueKind.True || okProp.ValueKind == JsonValueKind.False).Should().BeTrue();
     }
 
@@ -226,5 +223,37 @@ public class WriteToolsContractTests
             selJson.TryGetProperty("ActiveId", out var toolActive).Should().BeTrue();
             toolActive.GetString().Should().Be(activeId);
         }
+    }
+
+    [Fact]
+    public async Task SetTimeScale_Denied_When_Writes_Disabled()
+    {
+        var http = TryCreateClient(out var ok);
+        if (!ok || http == null) return;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)false }, cts.Token);
+
+        var result = await CallToolAsync(http, "SetTimeScale", new { value = 1.0f, confirm = true }, cts.Token);
+        if (result is null) return;
+        AssertToolError(result.Value, "PermissionDenied");
+    }
+
+    [Fact]
+    public async Task SetTimeScale_Succeeds_When_Confirmed()
+    {
+        var http = TryCreateClient(out var ok);
+        if (!ok || http == null) return;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)true, requireConfirm = (bool?)true }, cts.Token);
+
+        var result = await CallToolAsync(http, "SetTimeScale", new { value = 1.0f, confirm = true }, cts.Token);
+        if (result is null) return;
+
+        result.Value.TryGetProperty("ok", out var okProp).Should().BeTrue();
+        okProp.ValueKind.Should().Be(JsonValueKind.True);
+        result.Value.TryGetProperty("value", out var val).Should().BeTrue();
+        val.GetDouble().Should().BeApproximately(1.0, 0.5);
     }
 }

@@ -82,7 +82,7 @@ Resources are addressed using `unity://` URIs:
 - `unity://search?...` — search across objects (by name, type, path, activeOnly, etc.).
 - `unity://camera/active` — active camera and basic info.
 - `unity://selection` — current Unity selection.
-- `unity://logs/tail` — recent log lines.
+- `unity://logs/tail` — recent log lines (`{ t, level, message, source, category? }`).
  - `unity://console/scripts` — C# console scripts in the Explorer `Scripts` folder.
  - `unity://hooks` — currently active method hooks.
 
@@ -105,7 +105,7 @@ Read‑only tools (always available when the server is enabled):
 - `GetObject`
 - `GetComponents`
 - `SearchObjects`
-- `MousePick`
+- `MousePick` (mode `world` = top-most hit; mode `ui` = ordered `Items` + primary `Id`)
 - `GetCameraInfo`
 - `GetSelection`
 - `TailLogs`
@@ -127,6 +127,9 @@ Guarded write tools (require `allowWrites: true`; many also require confirm):
 - Reflection:
   - `SetMember(objId, CompType, Member, jsonValue)` — guarded by reflection allowlist (`Type.Member`).
   - `CallMethod(objId, CompType, Method, jsonArrayArgs?)` — also allowlisted.
+- Time-scale:
+  - `GetTimeScale()` — read current `Time.timeScale` and lock state.
+  - `SetTimeScale(value, lock?, confirm?)` — clamped (0..4), requires `allowWrites` + confirmation.
 - Config:
   - `SetConfig(allowWrites?, requireConfirm?, enableConsoleEval?, componentAllowlist?, reflectionAllowlistMembers?, hookAllowlistSignatures?, restart?)`
   - `GetConfig()` — returns a sanitized view of the current config.
@@ -145,7 +148,7 @@ All server‑side notifications are delivered over `stream_events` as JSON‑RPC
 
 Event types:
 
-- `log` — `{ level, message, t }`
+- `log` — `{ level, message, t, source, category? }`
 - `selection` — `{ activeId, items[] }`
 - `scenes` — `{ loaded[], count }`
 - `scenes_diff` — `{ added[], removed[] }`
@@ -264,5 +267,6 @@ This matches the `stream_events` behavior and will print JSON‑RPC `notificatio
 
 ## Notes
 
+- Errors follow JSON-RPC envelope with `error.data.kind` (`InvalidArgument|NotFound|PermissionDenied|RateLimited|Internal|NotReady`) and optional `hint`. Tool failures return `{ ok:false, error:{ kind, message, hint? } }`.
 - Non‑CoreCLR targets (Mono, Unhollower) do not host the MCP server.
 - All Unity API calls are marshalled to the main thread.

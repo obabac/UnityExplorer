@@ -594,8 +594,89 @@ public class JsonRpcContractTests
         mode.GetString()!.Should().NotBeNullOrWhiteSpace();
         pick.TryGetProperty("Hit", out var hit).Should().BeTrue();
         (hit.ValueKind == JsonValueKind.True || hit.ValueKind == JsonValueKind.False).Should().BeTrue();
-        // Id may be null when nothing is under the mouse; only assert the property exists.
         pick.TryGetProperty("Id", out _).Should().BeTrue();
+        pick.TryGetProperty("Items", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CallTool_MousePick_Ui_Returns_Items_When_Available()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var payload = new
+        {
+            jsonrpc = "2.0",
+            id = "call-tool-mousepick-ui-test",
+            method = "call_tool",
+            @params = new
+            {
+                name = "MousePick",
+                arguments = new { mode = "ui" }
+            }
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var res = await http.PostAsync("/message", content, cts.Token);
+        res.EnsureSuccessStatusCode();
+
+        var body = await res.Content.ReadAsStringAsync(cts.Token);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("result", out var result).Should().BeTrue();
+        result.TryGetProperty("content", out var contentArr).Should().BeTrue();
+        contentArr.ValueKind.Should().Be(JsonValueKind.Array);
+        if (contentArr.GetArrayLength() == 0)
+            return;
+
+        var first = contentArr[0];
+        first.TryGetProperty("json", out var jsonEl).Should().BeTrue();
+        var pick = jsonEl;
+        pick.TryGetProperty("Mode", out var mode).Should().BeTrue();
+        mode.GetString().Should().Be("ui");
+        pick.TryGetProperty("Items", out var items).Should().BeTrue();
+        items.ValueKind.Should().Be(JsonValueKind.Array);
+        if (items.GetArrayLength() < 1)
+            return; // skip if no UI hits available in the scene
+
+        // Should expose primary Id for top-most hit
+        pick.TryGetProperty("Id", out var id).Should().BeTrue();
+        id.ValueKind.Should().Be(JsonValueKind.String);
+
+        // Ensure each item has Id/Name/Path
+        foreach (var item in items.EnumerateArray())
+        {
+            item.TryGetProperty("Id", out var iid).Should().BeTrue();
+            iid.ValueKind.Should().Be(JsonValueKind.String);
+            item.TryGetProperty("Name", out _).Should().BeTrue();
+            item.TryGetProperty("Path", out _).Should().BeTrue();
+        }
+
+        // Follow-up GetObject on primary if present
+        var primaryId = id.GetString();
+        if (!string.IsNullOrWhiteSpace(primaryId))
+        {
+            var followPayload = new
+            {
+                jsonrpc = "2.0",
+                id = "call-tool-getobject-from-ui-pick",
+                method = "call_tool",
+                @params = new
+                {
+                    name = "GetObject",
+                    arguments = new { id = primaryId }
+                }
+            };
+            var followJson = JsonSerializer.Serialize(followPayload);
+            using var followContent = new StringContent(followJson, Encoding.UTF8, "application/json");
+            using var followRes = await http.PostAsync("/message", followContent, cts.Token);
+            followRes.EnsureSuccessStatusCode();
+        }
     }
 
     [Fact]
@@ -678,8 +759,48 @@ public class JsonRpcContractTests
             if (res.IsSuccessStatusCode)
                 continue;
 
-            // Accept 429 as a valid rate‑limit signal.
+            // Accept 429 as a valid rate‑limit signal with structured error body.
             ((int)res.StatusCode == 429).Should().BeTrue();
+            var body = await res.Content.ReadAsStringAsync(cts.Token);
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            root.TryGetProperty("error", out var error).Should().BeTrue();
+            error.GetProperty("code").GetInt32().Should().Be(-32005);
+            error.GetProperty("message").GetString()!.Should().Contain("parallel requests");
+            error.TryGetProperty("data", out var data).Should().BeTrue();
+            data.GetProperty("kind").GetString().Should().Be("RateLimited");
+            data.TryGetProperty("hint", out _).Should().BeTrue();
         }
+    }
+
+    [Fact]
+    public async Task ReadResource_Unknown_Returns_NotFound_Error_With_Kind()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var payload = new
+        {
+            jsonrpc = "2.0",
+            id = "read-resource-unknown",
+            method = "read_resource",
+            @params = new { uri = "unity://no-such-resource" }
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var res = await http.PostAsync("/message", content, cts.Token);
+        var body = await res.Content.ReadAsStringAsync(cts.Token);
+        res.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        root.TryGetProperty("error", out var error).Should().BeTrue();
+        error.GetProperty("code").GetInt32().Should().Be(-32004);
+        var data = error.GetProperty("data");
+        data.GetProperty("kind").GetString().Should().Be("NotFound");
     }
 }

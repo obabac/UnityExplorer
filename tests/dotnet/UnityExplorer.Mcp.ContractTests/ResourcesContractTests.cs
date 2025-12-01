@@ -79,7 +79,29 @@ public class ResourcesContractTests
             first.TryGetProperty("T", out _).Should().BeTrue();
             first.TryGetProperty("Level", out _).Should().BeTrue();
             first.TryGetProperty("Message", out _).Should().BeTrue();
+            first.TryGetProperty("Source", out var source).Should().BeTrue();
+            source.GetString().Should().NotBeNullOrWhiteSpace();
+            if (first.TryGetProperty("Category", out var cat))
+            {
+                cat.ValueKind.Should().BeOneOf(JsonValueKind.String, JsonValueKind.Null);
+            }
         }
+    }
+
+    [Fact]
+    public async Task Read_Camera_Active_Freecam_Info_Present()
+    {
+        var http = TryCreateClient(out var ok);
+        if (!ok || http == null) return;
+
+        var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString("unity://camera/active")}");
+        res.EnsureSuccessStatusCode();
+        var json = await res.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        root.TryGetProperty("IsFreecam", out var freecam).Should().BeTrue();
+        freecam.ValueKind.Should().BeOneOf(JsonValueKind.True, JsonValueKind.False);
+        root.TryGetProperty("Name", out _).Should().BeTrue();
     }
 
     [Fact]

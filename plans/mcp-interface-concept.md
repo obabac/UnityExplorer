@@ -48,9 +48,10 @@
 - `unity://camera/active`
   - Shape: `{ camera: { name, fov, pos, rot, isFreecam }, freecam: { enabled } }`
 - `unity://logs/tail?count=200`
-  - Shape: `{ items: [{ t, level, source, message }] }`  
+  - Shape: `{ items: [{ t, level, message, source, category? }] }`  
     - `level`: e.g. `info|warn|error|exception`  
-    - `source`: e.g. `UnityExplorer` (internal), `UnityEngine` (forwarded logs), `MCP` (server‑side messages)
+    - `source`: e.g. `unity` (forwarded logs), `mcp` (server‑side), `explorer` (internal)
+    - `category` is optional (when Unity supplies it)
 
 ---
 
@@ -230,7 +231,7 @@ public record PickHit(string Id, string Name, string Path);
 public record PickResultDto(string Mode, bool Hit, string? Id, IReadOnlyList<PickHit>? Items);
 public record CameraInfoDto(bool IsFreecam, string Name, float Fov, Vector3Dto Pos, Vector3Dto Rot);
 public record LogTailDto(IReadOnlyList<LogLine> Items);
-public record LogLine(DateTimeOffset T, string Level, string Source, string Message);
+public record LogLine(DateTimeOffset T, string Level, string Message, string Source, string? Category = null);
 ```
 
 ---
@@ -245,7 +246,7 @@ Status: Concept draft v0.2 (updated for logs metadata, mouse‑inspect multi‑h
   - Keep descriptions action-oriented in `list_tools` and docs; include example payloads for logs (with `source`), mouse UI multi-hit, time-scale write, guarded writes (`ok=false` with `kind/hint`).
 
 - **Mouse inspect UI multi-hit flow**
-  - UI mode returns `Items` (stable list of `{ id, name, path }`) and `primaryId` for the top-most hit. Follow-up: call `GetObject`/`GetComponents` (or a lightweight UI detail tool) on the selected `Id`.
+  - UI mode returns `Items` (stable list of `{ id, name, path }`) and `Id` as the top-most hit. Follow-up: call `GetObject`/`GetComponents` on the selected `Id`.
 
 - **Logs ergonomics**
   - Keep `source` and `level`; if UE exposes `category`, include it, otherwise document its absence. Consider `since`/`cursor` or document `count`-only behavior.
@@ -254,7 +255,7 @@ Status: Concept draft v0.2 (updated for logs metadata, mouse‑inspect multi‑h
   - Enforce `error.code/message/data.kind[/hint]` everywhere; tool `ok=false` mirrors `kind/hint`. Rate-limit message: `"Cannot have more than X parallel requests. Please slow down."` (include X). Use consistent codes for domain errors (or document chosen codes).
 
 - **Time-scale writes**
-  - Single tool (e.g., `SetTimeScale(value, lock?, confirm?)`), guarded by `allowWrites+RequireConfirm`, clear error paths. Add a read path for current time scale. Document clamps/rounding.
+  - Single tool `SetTimeScale(value, lock?, confirm?)`, guarded by `allowWrites+RequireConfirm`, clear error paths. Add a read path (`GetTimeScale`) for current time scale. Document clamps/rounding.
 
 - **Selection semantics**
   - Clarify `selection` meaning (Inspector active tabs). Ensure `SelectObject` round-trips: call → selection changes → `unity://selection` shows it → streamed `selection` event. Add a small example.
