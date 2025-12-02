@@ -115,7 +115,11 @@ Guarded write tools (require `allowWrites: true`; many also require confirm):
 
 - UI test helpers (for UI pick validation):
   - `SpawnTestUi(confirm)` — creates a simple overlay canvas with two raycastable blocks; ensure `allowWrites` and `confirm=true`.
+    - Example: `curl -s -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"call_tool","params":{"name":"SpawnTestUi","arguments":{"confirm":true}}}' http://<host>:51477/message`
+  - `MousePick(mode="ui", x=?, y=?, normalized=true)` to hit the blocks (e.g., left: x=0.35, right: x=0.65 at y=0.5).
+    - Example: `curl -s -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":2,"method":"call_tool","params":{"name":"MousePick","arguments":{"mode":"ui","x":0.35,"y":0.5,"normalized":true}}}' http://<host>:51477/message`
   - `DestroyTestUi(confirm)` — removes the test canvas if present.
+    - Example: `curl -s -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":3,"method":"call_tool","params":{"name":"DestroyTestUi","arguments":{"confirm":true}}}' http://<host>:51477/message`
 
 - Object state:
   - `SetActive(objId, bool)`
