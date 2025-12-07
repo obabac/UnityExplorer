@@ -2,9 +2,11 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+#if INTEROP
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
+#endif
+using System.Threading;
 
 #nullable enable
 

@@ -7,7 +7,7 @@ cd ..
 dotnet build src/UnityExplorer.sln -c Release_ML_Cpp_net6preview
 $Path = "Release\UnityExplorer.MelonLoader.IL2CPP.net6preview"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net6 /lib:lib/unhollowed /lib:$Path /internalize /out:$Path/UnityExplorer.ML.IL2CPP.net6preview.dll $Path/UnityExplorer.ML.IL2CPP.net6preview.dll $Path/mcs.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net6 /lib:lib/unhollowed /lib:$Path /internalize /out:$Path/UnityExplorer.ML.IL2CPP.net6preview.dll $Path/UnityExplorer.ML.IL2CPP.net6preview.dll $Path/mcs.dll
 # (cleanup and move files)
 Remove-Item $Path/UnityExplorer.ML.IL2CPP.net6preview.deps.json
 Remove-Item $Path/UnityExplorer.ML.IL2CPP.net6preview.pdb
@@ -27,7 +27,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.MelonLoader.IL2CPP.net6preview
 dotnet build src/UnityExplorer.sln -c Release_ML_Cpp_CoreCLR
 $Path = "Release\UnityExplorer.MelonLoader.IL2CPP.CoreCLR"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net6 /lib:lib/interop /lib:$Path /internalize /out:$Path/UnityExplorer.ML.IL2CPP.CoreCLR.dll $Path/UnityExplorer.ML.IL2CPP.CoreCLR.dll $Path/mcs.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net6 /lib:lib/interop /lib:$Path /internalize /out:$Path/UnityExplorer.ML.IL2CPP.CoreCLR.dll $Path/UnityExplorer.ML.IL2CPP.CoreCLR.dll $Path/mcs.dll
 # (cleanup and move files)
 Remove-Item $Path/UnityExplorer.ML.IL2CPP.CoreCLR.deps.json
 Remove-Item $Path/UnityExplorer.ML.IL2CPP.CoreCLR.pdb
@@ -49,7 +49,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.MelonLoader.IL2CPP.CoreCLR.zip
 dotnet build src/UnityExplorer.sln -c Release_ML_Cpp_net472
 $Path = "Release/UnityExplorer.MelonLoader.IL2CPP"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net472 /lib:lib/net35 /lib:lib/unhollowed /lib:$Path /internalize /out:$Path/UnityExplorer.ML.IL2CPP.dll $Path/UnityExplorer.ML.IL2CPP.dll $Path/mcs.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net472 /lib:lib/net35 /lib:lib/unhollowed /lib:$Path /internalize /out:$Path/UnityExplorer.ML.IL2CPP.dll $Path/UnityExplorer.ML.IL2CPP.dll $Path/mcs.dll
 # (cleanup and move files)
 Remove-Item $Path/Tomlet.dll
 Remove-Item $Path/mcs.dll
@@ -68,7 +68,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.MelonLoader.IL2CPP.zip
 dotnet build src/UnityExplorer.sln -c Release_ML_Mono
 $Path = "Release/UnityExplorer.MelonLoader.Mono"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net35 /lib:$Path /internalize /out:$Path/UnityExplorer.ML.Mono.dll $Path/UnityExplorer.ML.Mono.dll $Path/mcs.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net35 /lib:$Path /internalize /out:$Path/UnityExplorer.ML.Mono.dll $Path/UnityExplorer.ML.Mono.dll $Path/mcs.dll
 # (cleanup and move files)
 Remove-Item $Path/Tomlet.dll
 Remove-Item $Path/mcs.dll
@@ -85,7 +85,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.MelonLoader.Mono.zip
 dotnet build src/UnityExplorer.sln -c Release_BIE_Cpp
 $Path = "Release/UnityExplorer.BepInEx.IL2CPP"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net472/BepInEx/build423~577 /lib:lib/unhollowed /lib:$Path /internalize /out:$Path/UnityExplorer.BIE.IL2CPP.dll $Path/UnityExplorer.BIE.IL2CPP.dll $Path/mcs.dll $Path/Tomlet.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net472/BepInEx/build423~577 /lib:lib/unhollowed /lib:$Path /internalize /out:$Path/UnityExplorer.BIE.IL2CPP.dll $Path/UnityExplorer.BIE.IL2CPP.dll $Path/mcs.dll $Path/Tomlet.dll
 # (cleanup and move files)
 Remove-Item $Path/Tomlet.dll
 Remove-Item $Path/mcs.dll
@@ -104,7 +104,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.BepInEx.IL2CPP.zip
 dotnet build src/UnityExplorer.sln -c Release_BIE_CoreCLR
 $Path = "Release/UnityExplorer.BepInEx.IL2CPP.CoreCLR"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net472/BepInEx/build423~577 /lib:lib/net6/ /lib:lib/interop/ /lib:$Path /internalize /out:$Path/UnityExplorer.BIE.IL2CPP.CoreCLR.dll $Path/UnityExplorer.BIE.IL2CPP.CoreCLR.dll $Path/mcs.dll $Path/Tomlet.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net472/BepInEx/build423~577 /lib:lib/net6/ /lib:lib/interop/ /lib:$Path /internalize /out:$Path/UnityExplorer.BIE.IL2CPP.CoreCLR.dll $Path/UnityExplorer.BIE.IL2CPP.CoreCLR.dll $Path/mcs.dll $Path/Tomlet.dll
 # (cleanup and move files)
 Remove-Item $Path/Tomlet.dll
 Remove-Item $Path/mcs.dll
@@ -126,7 +126,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.BepInEx.IL2CPP.CoreCLR.zip
 dotnet build src/UnityExplorer.sln -c Release_BIE_Unity_Cpp
 $Path = "Release/UnityExplorer.BepInEx.Unity.IL2CPP.CoreCLR"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net472/BepInEx/build647+ /lib:lib/net6/ /lib:lib/interop/ /lib:$Path /internalize /out:$Path/UnityExplorer.BIE.Unity.IL2CPP.CoreCLR.dll $Path/UnityExplorer.BIE.Unity.IL2CPP.CoreCLR.dll $Path/mcs.dll $Path/Tomlet.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net472/BepInEx/build647+ /lib:lib/net6/ /lib:lib/interop/ /lib:$Path /internalize /out:$Path/UnityExplorer.BIE.Unity.IL2CPP.CoreCLR.dll $Path/UnityExplorer.BIE.Unity.IL2CPP.CoreCLR.dll $Path/mcs.dll $Path/Tomlet.dll
 # (cleanup and move files)
 Remove-Item $Path/Tomlet.dll
 Remove-Item $Path/mcs.dll
@@ -148,7 +148,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.BepInEx.Unity.IL2CPP.CoreCLR.z
 dotnet build src/UnityExplorer.sln -c Release_BIE5_Mono
 $Path = "Release/UnityExplorer.BepInEx5.Mono"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net35 /lib:lib/net35/BepInEx /lib:$Path /internalize /out:$Path/UnityExplorer.BIE5.Mono.dll $Path/UnityExplorer.BIE5.Mono.dll $Path/mcs.dll $Path/Tomlet.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net35 /lib:lib/net35/BepInEx /lib:$Path /internalize /out:$Path/UnityExplorer.BIE5.Mono.dll $Path/UnityExplorer.BIE5.Mono.dll $Path/mcs.dll $Path/Tomlet.dll
 # (cleanup and move files)
 Remove-Item $Path/Tomlet.dll
 Remove-Item $Path/mcs.dll
@@ -165,7 +165,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.BepInEx5.Mono.zip
 dotnet build src/UnityExplorer.sln -c Release_BIE6_Mono
 $Path = "Release/UnityExplorer.BepInEx6.Mono"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net35 /lib:lib/net35/BepInEx/build423~577 /lib:$Path /internalize /out:$Path/UnityExplorer.BIE6.Mono.dll $Path/UnityExplorer.BIE6.Mono.dll $Path/mcs.dll $Path/Tomlet.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net35 /lib:lib/net35/BepInEx/build423~577 /lib:$Path /internalize /out:$Path/UnityExplorer.BIE6.Mono.dll $Path/UnityExplorer.BIE6.Mono.dll $Path/mcs.dll $Path/Tomlet.dll
 # (cleanup and move files)
 Remove-Item $Path/Tomlet.dll
 Remove-Item $Path/mcs.dll
@@ -182,7 +182,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.BepInEx6.Mono.zip
 dotnet build src/UnityExplorer.sln -c Release_BIE6_Unity_Mono
 $Path = "Release/UnityExplorer.BepInEx6.Unity.Mono"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net35 /lib:lib/net35/BepInEx/build647+ /lib:$Path /internalize /out:$Path/UnityExplorer.BIE6.Unity.Mono.dll $Path/UnityExplorer.BIE6.Unity.Mono.dll $Path/mcs.dll $Path/Tomlet.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net35 /lib:lib/net35/BepInEx/build647+ /lib:$Path /internalize /out:$Path/UnityExplorer.BIE6.Unity.Mono.dll $Path/UnityExplorer.BIE6.Unity.Mono.dll $Path/mcs.dll $Path/Tomlet.dll
 # (cleanup and move files)
 Remove-Item $Path/Tomlet.dll
 Remove-Item $Path/mcs.dll
@@ -199,7 +199,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.BepInEx6.Unity.Mono.zip
 dotnet build src/UnityExplorer.sln -c Release_STANDALONE_Mono
 $Path = "Release/UnityExplorer.Standalone.Mono"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net35 /lib:$Path /internalize /out:$Path/UnityExplorer.Standalone.Mono.dll $Path/UnityExplorer.Standalone.Mono.dll $Path/mcs.dll $Path/Tomlet.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net35 /lib:$Path /internalize /out:$Path/UnityExplorer.Standalone.Mono.dll $Path/UnityExplorer.Standalone.Mono.dll $Path/mcs.dll $Path/Tomlet.dll
 # (cleanup and move files)
 Remove-Item $Path/Tomlet.dll
 Remove-Item $Path/mcs.dll
@@ -211,7 +211,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.Standalone.Mono.zip
 dotnet build src/UnityExplorer.sln -c Release_STANDALONE_Cpp
 $Path = "Release/UnityExplorer.Standalone.IL2CPP"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net472 /lib:lib/unhollowed /lib:$Path /internalize /out:$Path/UnityExplorer.Standalone.IL2CPP.dll $Path/UnityExplorer.Standalone.IL2CPP.dll $Path/mcs.dll $Path/Tomlet.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net472 /lib:lib/unhollowed /lib:$Path /internalize /out:$Path/UnityExplorer.Standalone.IL2CPP.dll $Path/UnityExplorer.Standalone.IL2CPP.dll $Path/mcs.dll $Path/Tomlet.dll
 # (cleanup and move files)
 Remove-Item $Path/Tomlet.dll
 Remove-Item $Path/mcs.dll
@@ -225,7 +225,7 @@ compress-archive .\$Path\* $Path/../UnityExplorer.Standalone.IL2CPP.zip
 dotnet build src/UnityExplorer.sln -c Release_STANDALONE_Cpp_CoreCLR
 $Path = "Release/UnityExplorer.Standalone.IL2CPP.CoreCLR"
 # ILRepack
-lib/ILRepack.exe /target:library /lib:lib/net6/ /lib:lib/interop/ /lib:$Path /internalize /out:$Path/UnityExplorer.Standalone.IL2CPP.CoreCLR.dll $Path/UnityExplorer.Standalone.IL2CPP.CoreCLR.dll $Path/mcs.dll $Path/Tomlet.dll
+mono lib/ILRepack.exe /target:library /lib:lib/net6/ /lib:lib/interop/ /lib:$Path /internalize /out:$Path/UnityExplorer.Standalone.IL2CPP.CoreCLR.dll $Path/UnityExplorer.Standalone.IL2CPP.CoreCLR.dll $Path/mcs.dll $Path/Tomlet.dll
 # (cleanup and move files)
 Remove-Item $Path/Tomlet.dll
 Remove-Item $Path/mcs.dll

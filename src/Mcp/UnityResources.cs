@@ -4,10 +4,12 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
+#if INTEROP
 using System.Threading.Tasks;
 using HarmonyLib;
 using UnityExplorer.CSConsole;
 using UnityExplorer.Hooks;
+#endif
 
 #nullable enable
 

@@ -21,7 +21,7 @@ This plan merges the original scope, the current implementation snapshot, and th
   - Time-scale widget and keybinds (lock/pause/speed change)
   - Settings, Clipboard, etc.
 - MCP clients (IDEs, agents, inspector tools) connect over HTTP to inspect and, when allowed, control the running game.
-- Target: Windows first, CoreCLR IL2CPP builds. Mono/legacy targets are out‑of‑scope for MCP.
+- Target: Windows first, CoreCLR IL2CPP builds. Mono/legacy targets are out‑of‑scope for MCP. For MCP deployment we use `Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR` (and `Release/UnityExplorer.MelonLoader.IL2CPP` if needed); full build.ps1 legacy packages are optional.
 
 ---
 

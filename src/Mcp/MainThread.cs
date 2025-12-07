@@ -1,11 +1,14 @@
 using System;
 using System.Threading;
+#if INTEROP
 using System.Threading.Tasks;
+#endif
 
 #nullable enable
 
 namespace UnityExplorer.Mcp
 {
+#if INTEROP
     internal static class MainThread
     {
         private static SynchronizationContext? _context;
@@ -78,5 +81,15 @@ namespace UnityExplorer.Mcp
             return tcs.Task;
         }
     }
+#else
+    internal static class MainThread
+    {
+        public static void Capture() { }
+        public static bool IsCaptured => false;
+        public static void Run(Action action) { action(); }
+        public static T Run<T>(Func<T> func) => func();
+        public static void RunAsync(Action action) { action(); }
+    }
+#endif
 }
 

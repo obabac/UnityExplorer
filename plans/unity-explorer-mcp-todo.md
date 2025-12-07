@@ -18,8 +18,8 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 This section summarizes what still needs to be in place so that Unity Explorer MCP is fully exercised and “green” under `@modelcontextprotocol/inspector` plus the `UnityExplorer.Mcp.ContractTests` harness.
 
 - Schema & payload validation:
-  - [ ] Confirm `unity://status`, `unity://scenes`, and `unity://scene/{id}/objects` payloads match `.plans/mcp-interface-concept.md`, and adjust either DTOs or tests where they diverge.
-  - [ ] Ensure all DTOs used by inspector‑facing tools/resources are serializable without custom JSON options (no cycles, no Unity engine types leaking).
+  - [x] Confirm `unity://status`, `unity://scenes`, and `unity://scene/{id}/objects` payloads match `.plans/mcp-interface-concept.md`, and adjust either DTOs or tests where they diverge.
+  - [x] Ensure all DTOs used by inspector‑facing tools/resources are serializable without custom JSON options (no cycles, no Unity engine types leaking).
 - Tool behaviour & write safety:
   - [x] Add a focused contract test for `SelectObject` that asserts selection state changes as expected (round‑trip with `unity://selection`).
   - [ ] Add hook lifecycle tests in a dedicated “hook test” scene to validate `HookAdd` / `HookRemove` behaviour beyond permission errors.
@@ -64,7 +64,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 ## 2. Read‑Only Surface Parity (Core Explorer Features)
 
 - Status / Scenes / Objects (mostly done, needs validation polish):
-  - [ ] Confirm `unity://status`, `unity://scenes`, `unity://scene/{id}/objects` payloads align with the spec in `.plans/mcp-interface-concept.md`.
+  - [x] Confirm `unity://status`, `unity://scenes`, `unity://scene/{id}/objects` payloads align with the spec in `.plans/mcp-interface-concept.md`.
   - [x] Add contract tests for `unity://object/{id}` and `unity://object/{id}/components` via `/read`.
 - Search:
   - [x] Expose `unity://search?...` more fully (name/type/path/activeOnly) and add a contract test that exercises multiple filters.
@@ -138,7 +138,7 @@ Note: All writes remain behind `allowWrites` + confirmation.
 - [x] Add a tiny “smoke CLI” script (PowerShell/bash) that exercises `initialize`, `list_tools`, `GetStatus`, and `TailLogs` in one go (see `C:\codex-workspace\ue-mcp-headless\call-mcp.ps1` on Test-VM).
 - [x] Add a contract test that calls `MousePick` and verifies the result shape (even if `Hit=false`).
 - [x] Add a contract test that calls `TailLogs` via `call_tool` (not just `read_resource`).
-- [ ] Ensure all DTOs are serializable without extra JSON options (no cycles, no Unity types leaking through).
+- [x] Ensure all DTOs are serializable without extra JSON options (no cycles, no Unity types leaking through).
 - [x] Add a simple rate‑limit in `McpSimpleHttp` (e.g., max ~32 concurrent requests) and a test that overload returns a clear error with message `"Cannot have more than X parallel requests. Please slow down."`. (Code: `UnityExplorer/src/Mcp/McpSimpleHttp.cs`; Tests: `UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests/HttpContractTests.cs`.)
 - [x] Standardize structured error data for common cases (`NotReady`, `NotFound`, `PermissionDenied`, `RateLimited`) using the existing JSON‑RPC error envelope (`error.code`, `error.message`, `error.data.kind`, optional `error.data.hint`) and assert this shape in tests (including tool `ok=false` payloads). (Code: `McpSimpleHttp`, `UnityWriteTools`; Tests: JSON‑RPC + tool contract tests.)
 - [ ] Verify `stream_events` gracefully handles client disconnects (no unbounded dictionary growth); add a test that opens and closes multiple streams.

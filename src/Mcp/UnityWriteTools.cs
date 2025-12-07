@@ -2,11 +2,13 @@ using System;
 using System.ComponentModel;
 using System.Reflection;
 using System.Threading;
+#if INTEROP
 using System.Threading.Tasks;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+#endif
 using UnityExplorer;
 using UnityExplorer.CSConsole;
 using UnityExplorer.Hooks;

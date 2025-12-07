@@ -1,4 +1,5 @@
 using System;
+#if INTEROP
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO;
@@ -8,6 +9,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+#endif
 
 #nullable enable
 

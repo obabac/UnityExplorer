@@ -28,11 +28,11 @@
 ## Resources (Read‑Only)
 
 - `unity://status`
-  - Shape: `{ version, unityVersion, platform, runtime: "IL2CPP|Mono", explorerVersion, ready, scenesLoaded, selection: string[] }`
+  - Shape: `{ Version, UnityVersion, Platform, Runtime: "IL2CPP|Mono", ExplorerVersion, Ready, ScenesLoaded, Selection: string[] }`, with `Selection` coming from the current Inspector targets (`obj:<instanceId>`, active first when present).
 - `unity://scenes`
-  - Shape: `{ total, items: [{ id, name, index, isLoaded, rootCount }] }`
-- `unity://scene/{sceneId}/objects?limit&offset&depth`
-  - Shape: `{ total, items: [{ id, name, path, tag, layer, active, componentCount }] }`
+  - Shape: `{ Total, Items: [{ Id, Name, Index, IsLoaded, RootCount }] }`
+- `unity://scene/{sceneId}/objects?limit&offset`
+  - Shape: `{ Total, Items: [{ Id, Name, Path, Tag, Layer, Active, ComponentCount }] }`
 - `unity://object/{id}`
   - Shape: `{ id, name, path, active, tag, layer, transform: { pos, rot, scale }, components: [{ type, idHint }] }`
 - `unity://object/{id}/components`
@@ -189,24 +189,24 @@ Tool‑level failures that still return a JSON‑RPC `result` use a consistent p
 - `get_status()`
 ```json
 {
-  "version":"0.1.0",
-  "unityVersion":"2021.3.34f1",
-  "platform":"Windows",
-  "runtime":"IL2CPP",
-  "explorerVersion":"4.12.8",
-  "ready":true,
-  "scenesLoaded":2,
-  "selection":["scn:Main:obj:12345"]
+  "Version":"0.1.0",
+  "UnityVersion":"2021.3.34f1",
+  "Platform":"Windows",
+  "Runtime":"IL2CPP",
+  "ExplorerVersion":"4.12.8",
+  "Ready":true,
+  "ScenesLoaded":2,
+  "Selection":["obj:12345"]
 }
 ```
 
 - `list_objects(sceneId, limit=2)`
 ```json
 {
-  "total": 1287,
-  "items": [
-    {"id":"scn:Main:obj:12345","name":"Player","path":"/Main/Player","tag":"Player","layer":0,"active":true,"componentCount":7},
-    {"id":"scn:Main:obj:67890","name":"Camera","path":"/Main/Camera","tag":"MainCamera","layer":0,"active":true,"componentCount":3}
+  "Total": 1287,
+  "Items": [
+    {"Id":"scn:Main:obj:12345","Name":"Player","Path":"/Main/Player","Tag":"Player","Layer":0,"Active":true,"ComponentCount":7},
+    {"Id":"scn:Main:obj:67890","Name":"Camera","Path":"/Main/Camera","Tag":"MainCamera","Layer":0,"Active":true,"ComponentCount":3}
   ]
 }
 ```

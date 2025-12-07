@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading;
+#if INTEROP
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UniverseLib.Input;
+#endif
 
 #nullable enable
 
@@ -25,16 +27,17 @@ namespace UnityExplorer.Mcp
                 var scenesLoaded = SceneManager.sceneCount;
                 var platform = Application.platform.ToString();
                 var runtime = Universe.Context.ToString();
-                var selection = Array.Empty<string>(); // placeholder until selection wired
+                var ready = scenesLoaded > 0;
+                var (_, selectionItems) = SnapshotSelection();
                 return new StatusDto(
                     Version: "0.1.0",
                     UnityVersion: Application.unityVersion,
                     Platform: platform,
                     Runtime: runtime,
                     ExplorerVersion: ExplorerCore.VERSION,
-                    Ready: true,
+                    Ready: ready,
                     ScenesLoaded: scenesLoaded,
-                    Selection: selection
+                    Selection: selectionItems
                 );
             });
         }
@@ -357,21 +360,33 @@ namespace UnityExplorer.Mcp
         {
             return await MainThread.Run(() =>
             {
-                string? active = null;
-                var items = new List<string>();
-                try
-                {
-                    if (InspectorManager.ActiveInspector?.Target is GameObject ago)
-                        active = $"obj:{ago.GetInstanceID()}";
-                    foreach (var ins in InspectorManager.Inspectors)
-                    {
-                        if (ins.Target is GameObject go)
-                            items.Add($"obj:{go.GetInstanceID()}");
-                    }
-                }
-                catch { }
+                var (active, items) = SnapshotSelection();
                 return new SelectionDto(active, items);
             });
+        }
+
+        private static (string? ActiveId, List<string> Items) SnapshotSelection()
+        {
+            string? active = null;
+            var items = new List<string>();
+            try
+            {
+                if (InspectorManager.ActiveInspector?.Target is GameObject ago)
+                    active = $"obj:{ago.GetInstanceID()}";
+                foreach (var ins in InspectorManager.Inspectors)
+                {
+                    if (ins.Target is GameObject go)
+                    {
+                        var id = $"obj:{go.GetInstanceID()}";
+                        if (!items.Contains(id))
+                            items.Add(id);
+                    }
+                }
+            }
+            catch { }
+            if (active != null && !items.Contains(active))
+                items.Insert(0, active);
+            return (active, items);
         }
     }
 #endif

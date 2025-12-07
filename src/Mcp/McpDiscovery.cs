@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+#if INTEROP
 using System.Text.Json;
+#endif
 
 #nullable enable
 
