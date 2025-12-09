@@ -1,30 +1,31 @@
-# Iteration Instructions (2025-12-09 — Iteration 5 of 5)
+# Iteration Instructions (2025-12-09 — Next)
 
-High-level goal for this iteration: validate the MCP inspector and Space Shooter harness against freecam/mouse/camera flows using the updated call-mcp script; capture real payloads and keep docs/tests aligned.
+High-level goal for next iteration: validate the MCP inspector + Space Shooter harness on a live MCP host (with Freecam/mouse/camera flows), capture real payloads, and keep docs/tests/DTOs aligned.
 
-## Tasks for this worker
+## Tasks
 
-1) Inspector + smoke validation
-- Run `@modelcontextprotocol/inspector` against a running MCP build; verify `list_tools` inputSchema renders; exercise `initialize` → `notifications/initialized` → `list_tools` → `call_tool`/`read_resource` → `stream_events` and fix code/docs/tests if issues appear.
-- Run `pwsh ./tools/Invoke-McpSmoke.ps1` (with `-BaseUrl` or discovery) and ensure the summary/output/exit code stay correct.
+1) Bring up MCP host + smoke
+- Start Space Shooter on the Test-VM with UnityExplorer MCP enabled; ensure discovery file exists (`%TEMP%/unity-explorer-mcp.json`).
+- Run `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://<vm>:51477` (or discovery) and keep summary/output; fix failures or record why (e.g., connection/refused) and update docs.
 
-2) Freecam camera validation
-- Toggle UE Freecam in-game and call `GetCameraInfo`; confirm `IsFreecam=true` and values follow the freecam (or reused game camera when "Use Game Camera" is on). Update `plans/mcp-interface-concept.md` / `README-mcp.md` / tests if the live payload differs.
+2) Inspector validation
+- Run `npx @modelcontextprotocol/inspector --transport http --server-url http://<vm>:51477`.
+- Exercise `initialize` → `notifications/initialized` → `list_tools` (verify inputSchema renders) → `call_tool` (Status/Logs/Camera/MousePick) → `read_resource` → `stream_events`.
+- If schemas/payloads differ, update DTOs/tests and sync `plans/mcp-interface-concept.md` + `README-mcp.md`.
 
-3) Space Shooter harness runs
-- On the Test-VM use `C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario ...` (`search|camera|mouse-world|mouse-ui|status|logs|selection|initialize|list_tools|events`, default discovery/127.0.0.1; `-Scenario custom` reads `req.json`). Run:
-  - `SearchObjects` (name+type), `GetCameraInfo`, `MousePick` world (normalized center), `MousePick` UI (normalized; run `SpawnTestUi` under allowWrites+confirm), and a `stream_events` check.
-  - Capture observed payloads/notes in `plans/space-shooter-test-plan.md`; keep writes guarded and reset config after `SpawnTestUi`/`SetActive`/`SelectObject`.
+3) Space Shooter harness + Freecam
+- On the Test-VM run `C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario search|camera|mouse-world|mouse-ui|events|status|logs|selection` (or `custom` with `req.json`).
+- Toggle UE Freecam and re-run `GetCameraInfo` (expect `IsFreecam=true`); capture payloads for freecam + game camera, MousePick world/ui (with `SpawnTestUi`), and note results in `plans/space-shooter-test-plan.md` and `plans/unity-explorer-mcp-plan.md`.
+- Keep writes guarded; reset config after `SpawnTestUi`/`SetActive`/`SelectObject`.
 
 4) Tests
-- Run `pwsh ./tools/Run-McpContractTests.ps1` before handoff.
+- Run `pwsh ./tools/Run-McpContractTests.ps1` (Release) after changes; keep test output.
 
 ## Current state
-- `call-mcp.ps1` on the Test-VM now supports `-Scenario` presets (search/camera/mouse-world/mouse-ui/events/etc.), resolves BaseUrl from discovery/override, and reads `req.json` for custom bodies. Default `req.json` payload is `SearchObjects` (query `Player`, type `GameController`). Docs updated in `plans/space-shooter-test-plan.md` and `plans/unity-explorer-mcp-plan.md`.
-- MCP contract tests pass locally (Release); inspector schema work and live freecam validation are still outstanding.
+- Contract tests pass locally (Release); status tool/resource test skips when discovery is missing.
+- MCP runtime was not running locally; `Invoke-McpSmoke.ps1 -BaseUrl http://127.0.0.1:51477` failed with connection refused, so live inspector/harness validation is still outstanding.
 
-## Constraints & reminders
-- Keep `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/mcp-interface-concept.md` in sync with code/docs/tests.
-- Avoid game-specific assumptions beyond Space Shooter; writes stay guarded (`allowWrites=false`, `requireConfirm=true`).
-- Use streamable HTTP only; prefer PowerShell one-liners for tooling. Reset configs after enabling writes.
+## Reminders
+- Keep `.plans/unity-explorer-mcp-plan.md`, `.plans/unity-explorer-mcp-todo.md`, and `plans/mcp-interface-concept.md` in sync with code/DTOs/tests.
+- Avoid game-specific assumptions beyond Space Shooter; writes stay guarded (`allowWrites=false`, `requireConfirm=true`) when finishing.
 - Update this file at end of iteration and commit changes.

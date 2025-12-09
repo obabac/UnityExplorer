@@ -6,6 +6,10 @@
 
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
+### Latest iteration snapshot (2025-12-09)
+- Contract tests (Release) pass locally; status tool/resource test skipped when discovery is missing.
+- MCP runtime not running locally; `Invoke-McpSmoke.ps1 -BaseUrl http://127.0.0.1:51477` failed with connection refused. Inspector/smoke/harness validation remains outstanding.
+
 ---
 
 ## 1) Context & Assumptions

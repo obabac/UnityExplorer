@@ -11,6 +11,8 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
+Status (2025-12-09): Contract tests (Release) pass locally; MCP runtime not running here, so smoke/inspector/harness validation is still pending.
+
 ---
 
 ## 0. Path to 100% MCP Inspector Validation
