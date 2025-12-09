@@ -1,27 +1,27 @@
 # Iteration Instructions (2025-12-09 — Next)
 
-High-level goal for next iteration: run the full MCP contract suite on the Space Shooter host (new typed `list_tools` schemas) without the game exiting, and validate inspector/harness flows end-to-end.
+High-level goal for next iteration: validate inspector/harness flows with typed schemas while keeping the Space Shooter MCP host stable and the contract suite green.
 
 ## Tasks
 
-1) Keep Space Shooter running + contract tests
-- Stop `SpaceShooter.exe` before deploying; start via `Start-Process "C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe"` (or win-dev start_process) and confirm MCP at `http://192.168.178.210:51477`.
-- Set `UE_MCP_DISCOVERY` to a discovery file that points to the Test-VM base URL (override `baseUrl` to `http://192.168.178.210:51477/`).
-- Run `pwsh ./tools/Run-McpContractTests.ps1 -Configuration Release`; if the game exits mid-run, grab `MelonLoader/Latest.log` and rerun the failing slice to stabilize.
+1) Inspector/harness validation
+- Connect `@modelcontextprotocol/inspector` (http) to `http://192.168.178.210:51477` and verify list_tools-rendered forms work for all tools (MousePick enum/defaults, required args, `additionalProperties=false`).
+- Run `call-mcp.ps1` scenarios (`initialize`, `list_tools`, `status`, `logs`, `camera`, `mouse-world`, `events`) and capture payloads/notes for docs.
 
-2) Inspector/harness validation with typed schemas
-- Use `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477` and `curl` to confirm `list_tools` schemas (MousePick enum, required fields, defaults, `additionalProperties=false`).
-- Exercise inspector/headless harness: `call-mcp.ps1 -Scenario initialize|list_tools|status|logs|camera|mouse-world|events` and capture payloads for docs.
+2) Keep Space Shooter running + contract tests green
+- Ensure `SpaceShooter.exe` is running or start with `Start-Process "C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe"`; base URL `http://192.168.178.210:51477`.
+- Run `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477 -LogCount 20` to confirm readiness, then `pwsh ./tools/Run-McpContractTests.ps1 -Configuration Release -BaseUrl http://192.168.178.210:51477` to keep the suite green (current result: 45 passed, 1 skipped placeholder `Status_Tool_And_Resource_Available`). Grab `MelonLoader/Latest.log` if failures.
 
-3) Deployment hygiene
-- Stop the game before `Update-Mod-Remote.ps1` to avoid SCP lock errors, then restart and verify via `Get-ML-Log.ps1` (look for MCP bind line).
+3) Hardening and game-agnostic checks
+- Review contract tests/docs for any Space Shooter-specific assumptions; adjust expectations so suite remains host-agnostic while validated on Space Shooter.
+- Track the UnityExplorer dropdown Il2Cpp cast crash fix; plan to remove the Test-VM `UeMcpHeadless.dll` workaround once upstreamed.
 
 ## Current state
-- New MCP build deployed to the Test-VM; smoke succeeds at `http://192.168.178.210:51477` with typed `list_tools` schemas.
-- Targeted contract tests (`ListTools_Includes_InputSchema_For_All_Tools`, `CallTool_GetStatus_JsonRpc_Response_If_Server_Available`) pass; the full suite failed previously because SpaceShooter exited mid-run (connection reset/refused).
-- SpaceShooter is currently running on the VM; writes remain disabled.
+- Space Shooter is running on the Test-VM; MCP reachable at `http://192.168.178.210:51477`; smoke run succeeds.
+- Full MCP contract suite (Release, BaseUrl `http://192.168.178.210:51477`) passed: 45 tests, 1 skipped placeholder; host remained stable during the run.
+- `list_tools` emits per-argument JSON Schemas (enums/defaults/required/`additionalProperties=false`) and was previously validated via curl/contract tests.
 
 ## Reminders
 - Keep `.plans/unity-explorer-mcp-plan.md`, `.plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` in sync with code/DTOs/tests.
-- Avoid game-specific assumptions; keep writes guarded and reset config after any write tests.
+- Avoid game-specific assumptions; writes stay guarded (`allowWrites` false by default). Stop the game before deploying via `Update-Mod-Remote.ps1`, then restart and tail via `Get-ML-Log.ps1`.
 - Update this file at the end of the iteration and commit changes.

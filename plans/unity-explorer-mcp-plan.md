@@ -9,7 +9,7 @@ This plan merges the original scope, the current implementation snapshot, and th
 ### Latest iteration snapshot (2025-12-09)
 - Deployed new MCP build to the Test-VM (Space Shooter) after stopping the game to avoid SCP lock errors; smoke run succeeds at `http://192.168.178.210:51477`.
 - `list_tools` now emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); verified via `curl` and contract test `ListTools_Includes_InputSchema_For_All_Tools`.
-- Targeted contract tests (`ListTools_Includes_InputSchema_For_All_Tools`, `CallTool_GetStatus_JsonRpc_Response_If_Server_Available`) pass against the Test-VM. A full contract test sweep needs a stable host (previous attempt saw SpaceShooter exit mid-run, leading to connection resets).
+- Full MCP contract suite (Release, BaseUrl `http://192.168.178.210:51477`) passes against the running Space Shooter host: 45 tests passed, 1 skipped placeholder (`Status_Tool_And_Resource_Available`); SpaceShooter remained stable for the run.
 
 ---
 
@@ -26,7 +26,7 @@ This plan merges the original scope, the current implementation snapshot, and th
   - Time-scale widget and keybinds (lock/pause/speed change)
   - Settings, Clipboard, etc.
 - MCP clients (IDEs, agents, inspector tools) connect over HTTP to inspect and, when allowed, control the running game.
-- Target: Windows first, CoreCLR IL2CPP builds. Mono/legacy targets are out‑of‑scope for MCP. For MCP deployment we use `Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR` (and `Release/UnityExplorer.MelonLoader.IL2CPP` if needed); full build.ps1 legacy packages are optional.
+- Target: Windows first, CoreCLR IL2CPP builds. Mono/legacy MelonLoader builds are now in scope as a follow‑up MCP phase and tracked as a priority in TODO section 11. For MCP deployment we use `Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR` (and `Release/UnityExplorer.MelonLoader.IL2CPP` if needed); full build.ps1 legacy packages are optional.
 
 ---
 
@@ -243,6 +243,8 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
 ## 6) Roadmap / Remaining Work
 
 Fine‑grained TODOs live in `.plans/unity-explorer-mcp-todo.md`. High‑level themes:
+
+- Mono / MelonLoader MCP host support (UnityExplorer.MelonLoader.Mono) is now a priority once IL2CPP/Test-VM validation is stable (see TODO section 11).
 
 1. **Transport & protocol polish**
    - Remove SSE leftovers, refine error codes, add light rate limiting.

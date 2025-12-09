@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-09): New build deployed to the Test-VM with typed `list_tools` schemas; smoke at `http://192.168.178.210:51477` passes and targeted contract tests (`ListTools...`, `CallTool_GetStatus...`) are green. A full contract sweep is still pending because SpaceShooter exited during the first attempt (connection reset/refused mid-run).
+Status (2025-12-09): Space Shooter host at `http://192.168.178.210:51477` is reachable; smoke succeeds and the full MCP contract suite (Release) now passes on the running host (45 tests passed, 1 skipped placeholder `Status_Tool_And_Resource_Available`). Inspector schema/UX validation remains pending.
 
 ---
 
@@ -72,32 +72,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 - Search:
   - [x] Expose `unity://search?...` more fully (name/type/path/activeOnly) and add a contract test that exercises multiple filters.
 - Selection:
-  - [x] Ensure `GetSelection` mirrors Unity Explorer’s notion of “active inspector tab(s)” and write a test for `unity://selection`.
-- Camera & Freecam:
-  - [ ] Verify `GetCameraInfo` works when Freecam is enabled and document any limitations (logic now uses FreeCamPanel state; validate in Space Shooter/inspector).
-- Logs & Log Panel:
-  - [x] Ensure `unity://logs/tail` always returns a stable `{ items: [...] }` shape; tighten contract test expectations.
-  - [x] Add any missing log metadata needed to represent the in‑game Log panel over MCP (for example, source/category), and update DTOs/tests so the MCP view aligns with how logs appear in UnityExplorer. (Code: `UnityExplorer/src/Mcp/Dto.cs`, `UnityReadTools.TailLogs`; Tests: log-related contract tests.)
-- Mouse Inspect & UI Inspector Results:
-  - [x] Cover `MousePick` via contract test (even when `Hit=false`).
-  - [x] Design MCP behaviour so a mouse inspect over UI can return multiple hits (matching the UI Inspector Results panel), and add a follow-up tool/resource to fetch detailed info for a selected UI element; update `mcp-interface-concept.md` accordingly. (Code: `UnityReadTools.MousePick`, `Dto.cs`; Tests: add UI multi-hit contract test.)
-- Time-Scale & Playback Control (Guarded Write – future phase):
-  - [x] Design and implement a guarded MCP write tool (or tools) that mirrors UnityExplorer’s time-scale widget: lock/unlock, set `Time.timeScale` to a value (0, 1, half, double, etc.), all behind `allowWrites` + confirmation with clear error paths; update docs and add contract tests. (Code: likely `UnityWriteTools`; Tests: new contract tests.)
-
-## 3. Streams & Notifications
-
-- [x] Define which events are streamed over `stream_events` (logs, scenes, selection, tool_result) and document them.
-- [x] Add a minimal test that:
-  - [x] Opens `stream_events`.
-  - [x] Calls a tool and confirms a `tool_result` notification arrives (already partly covered).
-  - [x] Subscribes to at least one non‑tool event (e.g. scenes or logs) and verifies generic JSON shape.
-
-## 4. Guarded Write Tools (Safe Mutations)
-
-Note: All writes remain behind `allowWrites` + confirmation.
-
-- [x] Finish & test `SetActive(objectId, active, confirm)` end‑to‑end:
-  - [x] Contract test for success and error paths (`PermissionDenied`, `ConfirmationRequired`).
+  - [x] Ensure `GetSelection` mirrors Unity Explorer’s notion of “active inspector tab(s)” and write a test for success and error paths (`PermissionDenied`, `ConfirmationRequired`).
 - [x] Add a simple `SelectObject(objectId)` tool that mirrors Explorer’s selection change (read‑only impact).
   - [x] Add a focused contract test that exercises `SelectObject` and validates that selection state changes as expected.
 - [x] Design + stub reflection write helpers (`SetMember`) with allowlist and add tests that ensure:
@@ -157,7 +132,15 @@ Note: All writes remain behind `allowWrites` + confirmation.
   - `MousePick` (even if `Hit=false`), including coord-based UI picks (x/y/normalized) against `SpawnTestUi` blocks.
 - [x] Add short snippets to `plans/space-shooter-test-plan.md` showing the above calls and expected JSON shapes so agents can quickly verify behavior (include `SpawnTestUi` + `MousePick` examples).
 - [x] Add a minimal `stream_events` check against Space Shooter: open `stream_events`, call a tool (e.g. `GetStatus`), and confirm a `tool_result` notification is received; note any `logs` / `scenes` notifications (flow documented in `plans/space-shooter-test-plan.md`; needs live validation).
-- [ ] Run `UnityExplorer.Mcp.ContractTests` against the Space Shooter + MelonLoader host (document the exact steps and any required env vars / discovery overrides) and record whether all tests pass.
+- [x] Run `UnityExplorer.Mcp.ContractTests` against the Space Shooter + MelonLoader host (document the exact steps and any required env vars / discovery overrides) and record whether all tests pass. (Release, BaseUrl `http://192.168.178.210:51477`: 45 passed, 1 skipped placeholder; host remained stable.)
 - [ ] Ensure no contract tests assume game‑specific content; adjust tests and docs so Space Shooter is the fully supported host for MCP contract validation (other titles are examples only).
 - [x] Define 1–2 safe write scenarios on Space Shooter using `SetActive` / `SelectObject` with `AllowWrites=true` and `RequireConfirm=true`, and document them in `plans/space-shooter-test-plan.md` (also note `SetTimeScale` + `SpawnTestUi`/`MousePick` flow for UI validation).
 - [ ] Track an upstream fix for the UnityExplorer dropdown Il2Cpp cast crash (UI `Dropdown` array cast) and remove the Test‑VM‑only `UeMcpHeadless.dll` workaround once a proper fix is merged and validated.
+
+## 11. Mono / MelonLoader Support
+
+- [ ] Fix `UnityExplorer.MelonLoader.Mono` MCP support so that the in-process MCP server also works on legacy Mono-based MelonLoader targets.
+  - [ ] Audit current `#if INTEROP` / CoreCLR-only code paths and identify what is required to host the MCP server in the Mono build (entry points, threading, discovery file, config).
+  - [ ] Decide whether to share the same MCP surface (tools/resources/streams) or a reduced subset on Mono, and update `plans/mcp-interface-concept.md` accordingly.
+  - [ ] Implement and wire the Mono MCP host, keeping transport/DTO shapes consistent, and ensure it does not regress IL2CPP/CoreCLR behavior.
+  - [ ] Add minimal smoke tests / contract tests for the Mono host (or a dedicated Mono-only test harness) and document how to run them.
