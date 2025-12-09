@@ -9,6 +9,7 @@ This plan merges the original scope, the current implementation snapshot, and th
 ### Latest iteration snapshot (2025-12-10)
 - Space Shooter MCP host reachable at `http://192.168.178.210:51477`; `Invoke-McpSmoke.ps1` succeeded (Ready=True, Scenes=1, logs returned).
 - Contract suite `Run-McpContractTests.ps1 -Configuration Release -BaseUrl http://192.168.178.210:51477` passed (45 tests, 0 failed, 1 skipped placeholder `Status_Tool_And_Resource_Available`).
+- Contract tests now derive sample scenes/objects from `unity://scenes` instead of assuming scene index 0, keeping the suite host-agnostic.
 - `list_tools` still emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); inspector UI validation remains pending.
 
 ---

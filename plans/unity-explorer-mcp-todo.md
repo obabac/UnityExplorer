@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-10): Space Shooter host at `http://192.168.178.210:51477` is reachable; `Invoke-McpSmoke.ps1` succeeds and the full MCP contract suite (Release) passes on the running host (45 passed, 1 skipped placeholder `Status_Tool_And_Resource_Available`). Inspector schema/UX validation remains pending.
+Status (2025-12-10): Space Shooter host at `http://192.168.178.210:51477` is reachable; `Invoke-McpSmoke.ps1` succeeds and the full MCP contract suite (Release) passes on the running host (45 passed, 1 skipped placeholder `Status_Tool_And_Resource_Available`). Contract tests now discover scenes/objects via `unity://scenes` (no scene-0 assumption); inspector schema/UX validation remains pending.
 
 ---
 
@@ -133,7 +133,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 - [x] Add short snippets to `plans/space-shooter-test-plan.md` showing the above calls and expected JSON shapes so agents can quickly verify behavior (include `SpawnTestUi` + `MousePick` examples).
 - [x] Add a minimal `stream_events` check against Space Shooter: open `stream_events`, call a tool (e.g. `GetStatus`), and confirm a `tool_result` notification is received; note any `logs` / `scenes` notifications (flow documented in `plans/space-shooter-test-plan.md`; needs live validation).
 - [x] Run `UnityExplorer.Mcp.ContractTests` against the Space Shooter + MelonLoader host (document the exact steps and any required env vars / discovery overrides) and record whether all tests pass. (Release, BaseUrl `http://192.168.178.210:51477`: 45 passed, 1 skipped placeholder; host remained stable.)
-- [ ] Ensure no contract tests assume game‑specific content; adjust tests and docs so Space Shooter is the fully supported host for MCP contract validation (other titles are examples only).
+- [x] Ensure no contract tests assume game‑specific content; adjust tests and docs so Space Shooter is the fully supported host for MCP contract validation (other titles are examples only).
 - [x] Define 1–2 safe write scenarios on Space Shooter using `SetActive` / `SelectObject` with `AllowWrites=true` and `RequireConfirm=true`, and document them in `plans/space-shooter-test-plan.md` (also note `SetTimeScale` + `SpawnTestUi`/`MousePick` flow for UI validation).
 - [ ] Track an upstream fix for the UnityExplorer dropdown Il2Cpp cast crash (UI `Dropdown` array cast) and remove the Test‑VM‑only `UeMcpHeadless.dll` workaround once a proper fix is merged and validated.
 

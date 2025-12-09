@@ -249,7 +249,7 @@ This matches the `stream_events` behavior and will print JSON‑RPC `notificatio
 3. In the inspector UI:
    - Call `initialize` and then `notifications/initialized`.
    - Use “List Tools” to discover `GetStatus`, `ListScenes`, `SearchObjects`, etc.
-   - Use “Read Resource” with URIs such as `unity://status`, `unity://scenes`, `unity://scene/0/objects?limit=10`, `unity://selection`, `unity://logs/tail?count=100`.
+   - Use “Read Resource” with URIs such as `unity://status`, `unity://scenes`, `unity://scene/{sceneId}/objects?limit=10` (take `Id` from `unity://scenes`), `unity://selection`, `unity://logs/tail?count=100`.
    - Open `stream_events` to watch `log`, `selection`, `scenes`, and `tool_result` notifications while you interact with the game.
 
 ## Smoke CLI (PowerShell)

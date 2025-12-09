@@ -1,6 +1,8 @@
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace UnityExplorer.Mcp.ContractTests;
 
@@ -19,9 +21,13 @@ public class ResourcesContractTests
         var http = TryCreateClient(out var ok);
         if (!ok || http == null) return;
 
-        var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString("unity://scene/0/objects?limit=5")}");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var sceneId = await McpTestHelpers.TryGetFirstSceneIdAsync(http, cts.Token);
+        if (string.IsNullOrWhiteSpace(sceneId)) return;
+
+        var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString($"unity://scene/{sceneId}/objects?limit=5")}", cts.Token);
         res.EnsureSuccessStatusCode();
-        var json = await res.Content.ReadAsStringAsync();
+        var json = await res.Content.ReadAsStringAsync(cts.Token);
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         root.TryGetProperty("Items", out var items).Should().BeTrue();
@@ -126,10 +132,15 @@ public class ResourcesContractTests
         var http = TryCreateClient(out var ok);
         if (!ok || http == null) return;
 
-        // First, fetch a small sample of objects from scene 0.
-        var seedRes = await http.GetAsync($"/read?uri={Uri.EscapeDataString("unity://scene/0/objects?limit=10")}");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var sceneId = await McpTestHelpers.TryGetFirstSceneIdAsync(http, cts.Token);
+        if (string.IsNullOrWhiteSpace(sceneId)) return;
+
+        // First, fetch a small sample of objects from the first available scene.
+        var seedUri = $"unity://scene/{sceneId}/objects?limit=10";
+        var seedRes = await http.GetAsync($"/read?uri={Uri.EscapeDataString(seedUri)}", cts.Token);
         seedRes.EnsureSuccessStatusCode();
-        var seedJson = await seedRes.Content.ReadAsStringAsync();
+        var seedJson = await seedRes.Content.ReadAsStringAsync(cts.Token);
         using var seedDoc = JsonDocument.Parse(seedJson);
         var seedRoot = seedDoc.RootElement;
         if (!seedRoot.TryGetProperty("Items", out var seedItems) || seedItems.GetArrayLength() == 0)
@@ -144,9 +155,9 @@ public class ResourcesContractTests
         // Use both name and a path fragment as filters.
         var pathFragment = path.Split('/').LastOrDefault(p => !string.IsNullOrWhiteSpace(p)) ?? path;
         var uri = $"unity://search?name={Uri.EscapeDataString(name)}&path={Uri.EscapeDataString(pathFragment)}&limit=10";
-        var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString(uri)}");
+        var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString(uri)}", cts.Token);
         res.EnsureSuccessStatusCode();
-        var json = await res.Content.ReadAsStringAsync();
+        var json = await res.Content.ReadAsStringAsync(cts.Token);
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         root.TryGetProperty("Items", out var items).Should().BeTrue();
@@ -214,10 +225,15 @@ public class ResourcesContractTests
         var http = TryCreateClient(out var ok);
         if (!ok || http == null) return;
 
-        // Discover a sample object from scene 0.
-        var sceneRes = await http.GetAsync($"/read?uri={Uri.EscapeDataString("unity://scene/0/objects?limit=1")}");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var sceneId = await McpTestHelpers.TryGetFirstSceneIdAsync(http, cts.Token);
+        if (string.IsNullOrWhiteSpace(sceneId)) return;
+
+        // Discover a sample object from the first available scene.
+        var sceneUri = $"unity://scene/{sceneId}/objects?limit=1";
+        var sceneRes = await http.GetAsync($"/read?uri={Uri.EscapeDataString(sceneUri)}", cts.Token);
         sceneRes.EnsureSuccessStatusCode();
-        var sceneJson = await sceneRes.Content.ReadAsStringAsync();
+        var sceneJson = await sceneRes.Content.ReadAsStringAsync(cts.Token);
         using var sceneDoc = JsonDocument.Parse(sceneJson);
         var sceneRoot = sceneDoc.RootElement;
         if (!sceneRoot.TryGetProperty("Items", out var sceneItems) || sceneItems.GetArrayLength() == 0)
@@ -230,9 +246,9 @@ public class ResourcesContractTests
 
         // Read the object card via /read.
         var objUri = $"unity://object/{id}";
-        var objRes = await http.GetAsync($"/read?uri={Uri.EscapeDataString(objUri)}");
+        var objRes = await http.GetAsync($"/read?uri={Uri.EscapeDataString(objUri)}", cts.Token);
         objRes.EnsureSuccessStatusCode();
-        var objJson = await objRes.Content.ReadAsStringAsync();
+        var objJson = await objRes.Content.ReadAsStringAsync(cts.Token);
         using var objDoc = JsonDocument.Parse(objJson);
         var objRoot = objDoc.RootElement;
         objRoot.TryGetProperty("Id", out _).Should().BeTrue();
@@ -242,9 +258,9 @@ public class ResourcesContractTests
 
         // Read the components page via /read.
         var compUri = $"unity://object/{id}/components?limit=8";
-        var compRes = await http.GetAsync($"/read?uri={Uri.EscapeDataString(compUri)}");
+        var compRes = await http.GetAsync($"/read?uri={Uri.EscapeDataString(compUri)}", cts.Token);
         compRes.EnsureSuccessStatusCode();
-        var compJson = await compRes.Content.ReadAsStringAsync();
+        var compJson = await compRes.Content.ReadAsStringAsync(cts.Token);
         using var compDoc = JsonDocument.Parse(compJson);
         var compRoot = compDoc.RootElement;
         compRoot.TryGetProperty("Items", out var comps).Should().BeTrue();

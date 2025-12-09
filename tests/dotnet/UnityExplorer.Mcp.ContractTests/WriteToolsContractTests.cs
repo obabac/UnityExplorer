@@ -2,6 +2,8 @@ using System;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace UnityExplorer.Mcp.ContractTests;
 
@@ -59,16 +61,8 @@ public class WriteToolsContractTests
 
     private static async Task<string?> GetFirstObjectIdAsync(HttpClient http, CancellationToken ct)
     {
-        var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString("unity://scene/0/objects?limit=1")}", ct);
-        res.EnsureSuccessStatusCode();
-        var json = await res.Content.ReadAsStringAsync(ct);
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        if (!root.TryGetProperty("Items", out var items) || items.GetArrayLength() == 0)
-            return null;
-        var first = items[0];
-        first.TryGetProperty("Id", out var idProp).Should().BeTrue();
-        return idProp.GetString();
+        var sceneId = await McpTestHelpers.TryGetFirstSceneIdAsync(http, ct);
+        return await McpTestHelpers.TryGetFirstObjectIdAsync(http, sceneId, ct);
     }
 
     [Fact]
@@ -142,15 +136,19 @@ public class WriteToolsContractTests
         if (!ok || http == null) return;
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
 
+        var sampleId = await GetFirstObjectIdAsync(http, cts.Token);
+        if (string.IsNullOrWhiteSpace(sampleId))
+            return;
+
         // Writes disabled => PermissionDenied.
         _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)false }, cts.Token);
-        var denied = await CallToolAsync(http, "SetMember", new { objectId = "obj:0", componentType = "UnityEngine.Light", member = "intensity", jsonValue = "1.0", confirm = true }, cts.Token);
+        var denied = await CallToolAsync(http, "SetMember", new { objectId = sampleId, componentType = "UnityEngine.Light", member = "intensity", jsonValue = "1.0", confirm = true }, cts.Token);
         if (denied is not null)
             AssertToolError(denied.Value, "PermissionDenied");
 
         // Writes enabled but no allowlist => Denied by allowlist.
         _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)true, reflectionAllowlistMembers = Array.Empty<string>() }, cts.Token);
-        var allowlistDenied = await CallToolAsync(http, "SetMember", new { objectId = "obj:0", componentType = "UnityEngine.Light", member = "intensity", jsonValue = "1.0", confirm = true }, cts.Token);
+        var allowlistDenied = await CallToolAsync(http, "SetMember", new { objectId = sampleId, componentType = "UnityEngine.Light", member = "intensity", jsonValue = "1.0", confirm = true }, cts.Token);
         if (allowlistDenied is not null)
             AssertToolError(allowlistDenied.Value, "PermissionDenied");
 
@@ -164,7 +162,7 @@ public class WriteToolsContractTests
             reflectionAllowlistMembers = new[] { "UnityEngine.Light.intensity" }
         }, cts.Token);
 
-        var success = await CallToolAsync(http, "SetMember", new { objectId = "obj:0", componentType = "UnityEngine.Light", member = "intensity", jsonValue = "1.0", confirm = true }, cts.Token);
+        var success = await CallToolAsync(http, "SetMember", new { objectId = sampleId, componentType = "UnityEngine.Light", member = "intensity", jsonValue = "1.0", confirm = true }, cts.Token);
         if (success is null)
             return;
 

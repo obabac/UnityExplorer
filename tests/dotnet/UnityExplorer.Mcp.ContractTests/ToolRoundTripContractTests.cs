@@ -1,6 +1,8 @@
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace UnityExplorer.Mcp.ContractTests;
 
@@ -47,9 +49,10 @@ public class ToolRoundTripContractTests
         return jsonEl;
     }
 
-    private static async Task<string?> GetSampleObjectIdAsync(HttpClient http, CancellationToken ct)
+    private static async Task<string?> GetSampleObjectIdAsync(HttpClient http, CancellationToken ct, string? sceneId)
     {
-        var uri = "unity://scene/0/objects?limit=1";
+        var sceneSegment = string.IsNullOrWhiteSpace(sceneId) ? "0" : sceneId!;
+        var uri = $"unity://scene/{sceneSegment}/objects?limit=1";
         var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString(uri)}", ct);
         res.EnsureSuccessStatusCode();
         var json = await res.Content.ReadAsStringAsync(ct);
@@ -131,6 +134,8 @@ public class ToolRoundTripContractTests
         if (!ok || http == null) return;
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
+        var sceneId = await McpTestHelpers.TryGetFirstSceneIdAsync(http, cts.Token);
+
         // GetStatus
         {
             var json = await CallToolAsync(http, "GetStatus", new { }, cts.Token);
@@ -151,10 +156,10 @@ public class ToolRoundTripContractTests
             }
         }
 
-        // ListObjects (scene 0)
+        // ListObjects (first scene)
         string? sampleId = null;
         {
-            var json = await CallToolAsync(http, "ListObjects", new { sceneId = "scn:0", limit = 5, offset = 0 }, cts.Token);
+            var json = await CallToolAsync(http, "ListObjects", new { sceneId, limit = 5, offset = 0 }, cts.Token);
             if (json.ValueKind != JsonValueKind.Undefined &&
                 json.TryGetProperty("Items", out var items) &&
                 items.ValueKind == JsonValueKind.Array &&
@@ -250,6 +255,8 @@ public class ToolRoundTripContractTests
         if (!ok || http == null) return;
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
+        var sceneId = await McpTestHelpers.TryGetFirstSceneIdAsync(http, cts.Token);
+
         // By default allowWrites is false; SetConfig can be used to toggle it.
         // We deliberately call a subset of write tools and assert that they
         // return well-formed error objects rather than crashing.
@@ -274,7 +281,9 @@ public class ToolRoundTripContractTests
 
         // A few representative write tools should return PermissionDenied (or similar)
         // when writes are disabled.
-        var sampleId = await GetSampleObjectIdAsync(http, cts.Token) ?? "obj:0";
+        var sampleId = await GetSampleObjectIdAsync(http, cts.Token, sceneId);
+        if (string.IsNullOrWhiteSpace(sampleId))
+            return;
 
         foreach (var toolName in new[] { "SetActive", "SelectObject", "AddComponent", "RemoveComponent", "ConsoleEval", "HookAdd", "HookRemove" })
         {
@@ -316,4 +325,3 @@ public class ToolRoundTripContractTests
         }
     }
 }
-
