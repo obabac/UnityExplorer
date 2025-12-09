@@ -84,10 +84,11 @@ Already implemented:
 - `unity://logs/tail?count=`  
   `LogTailDto`: `{ Items: [{ T, Level, Message }, …] }` from MCP log buffer.
 
-Planned (not fully wired yet):
+- `unity://console/scripts`  
+  `Page<ConsoleScriptDto>`: `{ Total, Items: [{ Name, Path }] }` pulled from the console scripts folder.
 
-- `unity://console/scripts` — list console startup scripts.  
-- `unity://hooks` — list active method hooks.
+- `unity://hooks`  
+  `Page<HookDto>`: `{ Total, Items: [{ Signature, Enabled }] }` using Harmony-style method signatures (e.g. `System.Void UnityEngine.GameObject::SetActive(System.Boolean)`).
 
 All payloads are DTO‑based (`Dto.cs`), aiming for compact, LLM‑friendly JSON.
 
@@ -209,7 +210,8 @@ Project: `UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests` — these 
   - `Read_Selection_If_Server_Available`
   - `Read_Camera_Active_If_Server_Available`
   - `Read_Logs_Tail_If_Server_Available`
-- `Read_Search_If_Server_Available`
+  - `Read_Search_If_Server_Available`
+  - `Hook_Lifecycle_Add_List_Remove_When_Flag_Enabled` (runs only when `UE_MCP_HOOK_TEST_ENABLED=1`; set `hookAllowlistSignatures` to include a safe type such as `UnityEngine.GameObject` and keep `requireConfirm=true`)
 
 These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-McpContractTests.ps1` (Release) locally/CI to run them after a CoreCLR build.
 
@@ -240,7 +242,7 @@ Fine‑grained TODOs live in `.plans/unity-explorer-mcp-todo.md`. High‑level t
 4. **Guarded write tools**
    - Solidify `SetActive`/`SetMember` and design next tier of safe mutations.
 5. **Console & hooks**
-   - Add `ConsoleEval`, `unity://hooks`, hook add/remove APIs.
+   - ConsoleEval and hook list/add/remove are implemented; hook lifecycle contract tests are gated by `UE_MCP_HOOK_TEST_ENABLED` and expect `hookAllowlistSignatures` entries.
 6. **Config**
    - MCP tools around `McpConfig` and recommended configs per environment.
 7. **Inspector & DX**

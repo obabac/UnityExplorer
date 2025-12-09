@@ -22,7 +22,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Ensure all DTOs used by inspector‑facing tools/resources are serializable without custom JSON options (no cycles, no Unity engine types leaking).
 - Tool behaviour & write safety:
   - [x] Add a focused contract test for `SelectObject` that asserts selection state changes as expected (round‑trip with `unity://selection`).
-  - [ ] Add hook lifecycle tests in a dedicated “hook test” scene to validate `HookAdd` / `HookRemove` behaviour beyond permission errors.
+  - [x] Add hook lifecycle tests in a dedicated “hook test” scene to validate `HookAdd` / `HookRemove` behaviour beyond permission errors (gated by `UE_MCP_HOOK_TEST_ENABLED=1` and `hookAllowlistSignatures` including a safe type such as `UnityEngine.GameObject`).
 - Streaming & error robustness:
   - [x] Verify `stream_events` correctly cleans up on client disconnect (no unbounded dictionary growth) and add a test that repeatedly opens/closes streams (cleanup loop + reconnect test added).
   - [x] Ensure current concurrency behaviour matches `RateLimit_Does_Not_Crash_Server_When_Many_Concurrent_Requests` and, if a 429 limit is enabled, returns a structured JSON error payload.
@@ -110,7 +110,7 @@ Note: All writes remain behind `allowWrites` + confirmation.
 - [x] Expose Hook Manager basics:
   - [x] `unity://hooks` resource for listing active hooks.
   - [x] Tools for `HookAdd` / `HookRemove` guarded behind allowlist + confirmation.
-- [ ] Add tests that only run in a special “hook test” scene to verify basic lifecycle without depending on game content.
+- [x] Add tests that only run in a special “hook test” scene to verify basic lifecycle without depending on game content (gated by `UE_MCP_HOOK_TEST_ENABLED=1` with `hookAllowlistSignatures` containing a safe type such as `UnityEngine.GameObject`).
 
 ## 6. Config Hardening
 

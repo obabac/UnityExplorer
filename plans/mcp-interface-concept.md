@@ -44,7 +44,7 @@
 - `unity://console/scripts`
   - Shape: `{ total, items: [{ name, path }] }`
 - `unity://hooks`
-  - Shape: `{ total, items: [{ id, target, method, kind, enabled }] }`
+  - Shape: `{ total, items: [{ Signature, Enabled }] }` where `Signature` is a Harmony-style description such as `System.Void UnityEngine.GameObject::SetActive(System.Boolean)`.
 - `unity://camera/active`
   - Shape: `{ camera: { name, fov, pos, rot, isFreecam }, freecam: { enabled } }`
 - `unity://logs/tail?count=200`
@@ -210,6 +210,21 @@ Tool‑level failures that still return a JSON‑RPC `result` use a consistent p
   ]
 }
 ```
+
+- `unity://hooks`
+```json
+{
+  "Total": 1,
+  "Items": [
+    {
+      "Signature": "System.Void UnityEngine.GameObject::SetActive(System.Boolean)",
+      "Enabled": true
+    }
+  ]
+}
+```
+
+Hook lifecycle contract tests run only when `UE_MCP_HOOK_TEST_ENABLED=1`; they expect `hookAllowlistSignatures` to include a safe type such as `UnityEngine.GameObject` and use `confirm=true` while `requireConfirm` is enabled.
 
 ---
 
