@@ -9,7 +9,7 @@ param(
   [Parameter(Mandatory=$false)][string]$Prompt,
   [string]$Profile,  # optional; example: "unattended" / "autopilot"
   [ValidateSet("read-only","workspace-write","danger-full-access")]
-  [string]$Sandbox = "workspace-write",
+  [string]$Sandbox = "danger-full-access",
   [switch]$CreateMissing  # create fallback $HOME/.codex if it doesn't exist
 )
 
@@ -21,9 +21,10 @@ You have ~60 minutes. Work autonomously:
 - Avoid asking questions; make reasonable assumptions and document them
 - Produce a concise summary at the end; no intermediate status reports
 - Keep "plans/unity-explorer-mcp-plan.md" and "plans/unity-explorer-mcp-todo.md" updated
+- Read instructions from INSTRUCTIONS.MD. When finishing turn: Write new instructions for the next iteration into INSTRUCTIONS.MD (replace old instructions) then GIT commit changes
 "@
 }
-Write-Host "Prompt: $Prompt"
+#Write-Host "Prompt: $Prompt"
 
 function Resolve-CodexHome {
   param(
@@ -80,7 +81,9 @@ if ($Profile) { $globalArgs += @("--profile", $Profile) }
 
 $subcmdArgs = @(
   "exec",
-  "--full-auto",
+  "-m", "gpt-5.1-codex-max",
+  "-c", "model_reasoning_effort=xhigh",
+  "--yolo",
   "--sandbox", $Sandbox,
   "--json",
   "--output-last-message", $finalMd
