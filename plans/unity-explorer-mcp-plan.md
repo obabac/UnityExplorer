@@ -1,6 +1,6 @@
 # Unity Explorer MCP Integration Plan (Updated)
 
-- Updated: 2025-11-17  
+- Updated: 2025-12-09  
 - Owner: Unity Explorer MCP (p-unity-explorer-mcp)  
 - Goal: Expose Unity Explorer’s runtime capabilities through an in‑process MCP server with **streamable HTTP** transport, making game state and safe controls available as MCP resources, tools, and streams.
 
@@ -137,6 +137,7 @@ All payloads are DTO‑based (`Dto.cs`), aiming for compact, LLM‑friendly JSON
   - Publishes:
     - `notification` events: `log`, `selection`, `scenes`, `scenes_diff`, `inspected_scene`, `tool_result`, etc.
     - Mirrored `result`/`error` payloads for other requests.
+  - Stream connections now watch for client disconnects and clean up their slots to avoid leaked streams; reconnect flow covered by contract tests.
 
 Legacy `/sse` endpoint has been removed from the active surface; new clients use only `stream_events`.
 

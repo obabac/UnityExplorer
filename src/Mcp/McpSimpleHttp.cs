@@ -332,6 +332,9 @@ namespace UnityExplorer.Mcp
                             if (string.Equals(methodName, "stream_events", StringComparison.OrdinalIgnoreCase))
                             {
                                 // Stream notifications over HTTP using chunked transfer encoding.
+                                stream.ReadTimeout = Timeout.Infinite;
+                                stream.WriteTimeout = Timeout.Infinite;
+
                                 var header = "HTTP/1.1 200 OK\r\n" +
                                              "Content-Type: application/json\r\n" +
                                              "Transfer-Encoding: chunked\r\n" +
@@ -342,14 +345,8 @@ namespace UnityExplorer.Mcp
 
                                 int id = Interlocked.Increment(ref _nextClientId);
                                 _httpStreams[id] = stream;
-                                try
-                                {
-                                    await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
-                                }
-                                catch
-                                {
-                                }
-                                _httpStreams.TryRemove(id, out _);
+
+                                await WaitForStreamDisconnectAsync(stream, id, ct).ConfigureAwait(false);
                                 return;
                             }
 
@@ -446,6 +443,42 @@ namespace UnityExplorer.Mcp
                 {
                     _httpStreams.TryRemove(kv.Key, out _);
                 }
+            }
+        }
+
+        private async Task WaitForStreamDisconnectAsync(Stream stream, int id, CancellationToken ct)
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(1);
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    int read;
+                    try
+                    {
+                        read = await stream.ReadAsync(buffer, 0, 1, ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (IOException)
+                    {
+                        break;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        break;
+                    }
+
+                    if (read == 0)
+                        break;
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+                _httpStreams.TryRemove(id, out _);
             }
         }
 

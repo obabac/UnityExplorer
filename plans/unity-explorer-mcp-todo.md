@@ -1,6 +1,6 @@
 # Unity Explorer MCP – High‑Level TODOs (Streamable HTTP Era)
 
-Date: 2025‑11‑17  
+Date: 2025‑12‑09  
 Scope: Remaining work to get close to UnityExplorer feature parity over MCP, with a stable streamable‑http surface.
 
 ### Definition of Done (100%)
@@ -24,7 +24,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Add a focused contract test for `SelectObject` that asserts selection state changes as expected (round‑trip with `unity://selection`).
   - [ ] Add hook lifecycle tests in a dedicated “hook test” scene to validate `HookAdd` / `HookRemove` behaviour beyond permission errors.
 - Streaming & error robustness:
-  - [ ] Verify `stream_events` correctly cleans up on client disconnect (no unbounded dictionary growth) and add a test that repeatedly opens/closes streams.
+  - [x] Verify `stream_events` correctly cleans up on client disconnect (no unbounded dictionary growth) and add a test that repeatedly opens/closes streams (cleanup loop + reconnect test added).
   - [ ] Ensure current concurrency behaviour matches `RateLimit_Does_Not_Crash_Server_When_Many_Concurrent_Requests` and, if a 429 limit is enabled, returns a structured JSON error payload.
   - [ ] Add structured error JSON tests for common cases (`NotReady`, `NotFound`, `PermissionDenied`) that align server responses with inspector expectations.
 - Inspector UX & dev‑experience:
@@ -141,7 +141,7 @@ Note: All writes remain behind `allowWrites` + confirmation.
 - [x] Ensure all DTOs are serializable without extra JSON options (no cycles, no Unity types leaking through).
 - [x] Add a simple rate‑limit in `McpSimpleHttp` (e.g., max ~32 concurrent requests) and a test that overload returns a clear error with message `"Cannot have more than X parallel requests. Please slow down."`. (Code: `UnityExplorer/src/Mcp/McpSimpleHttp.cs`; Tests: `UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests/HttpContractTests.cs`.)
 - [x] Standardize structured error data for common cases (`NotReady`, `NotFound`, `PermissionDenied`, `RateLimited`) using the existing JSON‑RPC error envelope (`error.code`, `error.message`, `error.data.kind`, optional `error.data.hint`) and assert this shape in tests (including tool `ok=false` payloads). (Code: `McpSimpleHttp`, `UnityWriteTools`; Tests: JSON‑RPC + tool contract tests.)
-- [ ] Verify `stream_events` gracefully handles client disconnects (no unbounded dictionary growth); add a test that opens and closes multiple streams.
+- [x] Verify `stream_events` gracefully handles client disconnects (no unbounded dictionary growth); add a test that opens and closes multiple streams.
 - [x] Add logging hooks for MCP errors into the MelonLoader log (short prefix, e.g. `[MCP]`), with a test that triggers at least one intentional error and reads it back via `logs/tail`.
 - [x] Add a small “version” resource or tool (e.g., `unity://status` already has version, but expose a dedicated `GetVersion` tool and test it).
 - [ ] Add a CI note/script to run the MCP contract tests as part of the normal UnityExplorer build pipeline.

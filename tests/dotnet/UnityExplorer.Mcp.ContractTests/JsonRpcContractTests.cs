@@ -390,6 +390,51 @@ public class JsonRpcContractTests
     }
 
     [Fact]
+    public async Task StreamEvents_Allows_Reconnect_After_Client_Close()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        for (int i = 0; i < 3; i++)
+        {
+            var payload = new
+            {
+                jsonrpc = "2.0",
+                id = $"stream-events-reconnect-{i}",
+                method = "stream_events",
+                @params = new { }
+            };
+
+            var json = JsonSerializer.Serialize(payload);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/message")
+            {
+                Content = content
+            };
+
+            using var res = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            res.EnsureSuccessStatusCode();
+            await using var stream = await res.Content.ReadAsStreamAsync(cts.Token);
+            // Drop the connection immediately to simulate an inspector disconnect.
+        }
+
+        var pingPayload = new
+        {
+            jsonrpc = "2.0",
+            id = "stream-events-reconnect-ping",
+            method = "ping",
+            @params = new { }
+        };
+        var pingJson = JsonSerializer.Serialize(pingPayload);
+        using var pingContent = new StringContent(pingJson, Encoding.UTF8, "application/json");
+        using var pingRes = await http.PostAsync("/message", pingContent, cts.Token);
+        pingRes.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
     public async Task StreamEvents_Emits_ToolResult_Notification_When_Tool_Called()
     {
         if (!Discovery.TryLoad(out var info))
