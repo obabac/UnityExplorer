@@ -71,7 +71,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 - Selection:
   - [x] Ensure `GetSelection` mirrors Unity Explorer’s notion of “active inspector tab(s)” and write a test for `unity://selection`.
 - Camera & Freecam:
-  - [ ] Verify `GetCameraInfo` works when Freecam is enabled and document any limitations.
+  - [ ] Verify `GetCameraInfo` works when Freecam is enabled and document any limitations (logic now uses FreeCamPanel state; validate in Space Shooter/inspector).
 - Logs & Log Panel:
   - [x] Ensure `unity://logs/tail` always returns a stable `{ items: [...] }` shape; tighten contract test expectations.
   - [x] Add any missing log metadata needed to represent the in‑game Log panel over MCP (for example, source/category), and update DTOs/tests so the MCP view aligns with how logs appear in UnityExplorer. (Code: `UnityExplorer/src/Mcp/Dto.cs`, `UnityReadTools.TailLogs`; Tests: log-related contract tests.)
@@ -148,13 +148,13 @@ Note: All writes remain behind `allowWrites` + confirmation.
 
 ## 10. Space Shooter IL2CPP – End‑to‑End Validation
 
-- [ ] Extend the Test‑VM PowerShell harness (`C:\codex-workspace\ue-mcp-headless\call-mcp.ps1` / `req.json`) to cover remaining read tools on Space Shooter:
+- [ ] Extend the Test‑VM PowerShell harness (`C:\codex-workspace\ue-mcp-headless\call-mcp.ps1` / `req.json`) to cover remaining read tools on Space Shooter (payloads now documented in `plans/space-shooter-test-plan.md`; update the VM script accordingly):
   - `SearchObjects` (by name and type),
   - `GetCameraInfo`,
   - `MousePick` (even if `Hit=false`), including coord-based UI picks (x/y/normalized) against `SpawnTestUi` blocks.
-- [ ] Add short snippets to `docs/space-shooter-test-plan.md` showing the above calls and expected JSON shapes so agents can quickly verify behavior (include `SpawnTestUi` + `MousePick` examples).
-- [ ] Add a minimal `stream_events` check against Space Shooter: open `stream_events`, call a tool (e.g. `GetStatus`), and confirm a `tool_result` notification is received; note any `logs` / `scenes` notifications.
+- [x] Add short snippets to `plans/space-shooter-test-plan.md` showing the above calls and expected JSON shapes so agents can quickly verify behavior (include `SpawnTestUi` + `MousePick` examples).
+- [ ] Add a minimal `stream_events` check against Space Shooter: open `stream_events`, call a tool (e.g. `GetStatus`), and confirm a `tool_result` notification is received; note any `logs` / `scenes` notifications (flow documented in `plans/space-shooter-test-plan.md`; needs live validation).
 - [ ] Run `UnityExplorer.Mcp.ContractTests` against the Space Shooter + MelonLoader host (document the exact steps and any required env vars / discovery overrides) and record whether all tests pass.
 - [ ] Ensure no contract tests assume game‑specific content; adjust tests and docs so Space Shooter is the fully supported host for MCP contract validation (other titles are examples only).
-- [ ] Define 1–2 safe write scenarios on Space Shooter using `SetActive` / `SelectObject` with `AllowWrites=true` and `RequireConfirm=true`, and document them in `docs/space-shooter-test-plan.md` (also note `SetTimeScale` + `SpawnTestUi`/`MousePick` flow for UI validation).
+- [x] Define 1–2 safe write scenarios on Space Shooter using `SetActive` / `SelectObject` with `AllowWrites=true` and `RequireConfirm=true`, and document them in `plans/space-shooter-test-plan.md` (also note `SetTimeScale` + `SpawnTestUi`/`MousePick` flow for UI validation).
 - [ ] Track an upstream fix for the UnityExplorer dropdown Il2Cpp cast crash (UI `Dropdown` array cast) and remove the Test‑VM‑only `UeMcpHeadless.dll` workaround once a proper fix is merged and validated.

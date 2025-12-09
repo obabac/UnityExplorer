@@ -72,3 +72,51 @@
   - `ListObjects` → 13 objects including Main Camera, GameController, UI canvas/text, Background.
   - `GetComponents` on `obj:<id>` → Transform/Camera/AudioListener, etc.
   - `TailLogs` → shows MCP bind line `MCP (streamable-http) listening on http://0.0.0.0:51477`.
+
+## MCP Harness Coverage (Space Shooter)
+- Harness path: `C:\codex-workspace\ue-mcp-headless\call-mcp.ps1` (reads JSON from `req.json` in the same folder and POSTs to `/message`).
+- Use the following `req.json` payloads to cover the MCP surface on Space Shooter (set `baseUrl` in the script or use discovery):
+
+SearchObjects (name + type):
+```json
+{"jsonrpc":"2.0","id":"search","method":"call_tool","params":{"name":"SearchObjects","arguments":{"query":"Player","type":"GameController","limit":5,"offset":0}}}
+```
+Expected: `Items` contains Player and GameController entries with stable `/Main/...` paths.
+
+GetCameraInfo (baseline + freecam):
+```json
+{"jsonrpc":"2.0","id":"camera","method":"call_tool","params":{"name":"GetCameraInfo","arguments":{}}}
+```
+Expected baseline: `IsFreecam=false`, `Name` "Main Camera", `Fov` ~60, position matches the main camera. Toggle UE Freecam in the UI and rerun to see `IsFreecam=true` with `Name` "UE_Freecam" (or `Main Camera` when "Use Game Camera" is on); position/rotation should match the freecam transform.
+
+MousePick world (center ray):
+```json
+{"jsonrpc":"2.0","id":"mouse-world","method":"call_tool","params":{"name":"MousePick","arguments":{"mode":"world","normalized":true,"x":0.5,"y":0.5}}}
+```
+Expected: `Mode="world"`, `Hit=true` with an `Id` near the player/camera forward path; when nothing is hit, `Hit=false` and `Id=null`.
+
+MousePick UI (normalized; requires SpawnTestUi):
+```json
+{"jsonrpc":"2.0","id":"mouse-ui","method":"call_tool","params":{"name":"MousePick","arguments":{"mode":"ui","normalized":true,"x":0.25,"y":0.25}}}
+```
+Preparation: enable writes (`SetConfig allowWrites=true requireConfirm=true`), call `SpawnTestUi` with `confirm=true`, then run the pick. Expected: `Items` contains `McpTestBlock_*` entries; `Id` equals the first item. Clean up with `DestroyTestUi` and reset config.
+
+stream_events sanity:
+```json
+{"jsonrpc":"2.0","id":"events","method":"stream_events","params":{}}
+```
+Run the stream in one terminal, then call `GetStatus`/`TailLogs` in another; expect a `tool_result` notification plus any `log`/`scenes` updates. Closing the stream should end cleanly without retries.
+
+## Safe Write Scenarios (Space Shooter)
+- Enable guarded writes briefly:
+```json
+{"jsonrpc":"2.0","id":"cfg-on","method":"call_tool","params":{"name":"SetConfig","arguments":{"allowWrites":true,"requireConfirm":true}}}
+```
+- Toggle a benign object and revert:
+```json
+{"jsonrpc":"2.0","id":"set-active","method":"call_tool","params":{"name":"SetActive","arguments":{"objectId":"obj:<id>","active":false,"confirm":true}}}
+```
+Use a harmless object (e.g., a debug helper) and set it back to `true` afterwards. Selection can be nudged with `SelectObject` the same way. Always finish by re-enabling defaults:
+```json
+{"jsonrpc":"2.0","id":"cfg-off","method":"call_tool","params":{"name":"SetConfig","arguments":{"allowWrites":false,"requireConfirm":true}}}
+```

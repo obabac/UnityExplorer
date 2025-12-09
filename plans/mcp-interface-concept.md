@@ -46,7 +46,8 @@
 - `unity://hooks`
   - Shape: `{ total, items: [{ Signature, Enabled }] }` where `Signature` is a Harmony-style description such as `System.Void UnityEngine.GameObject::SetActive(System.Boolean)`.
 - `unity://camera/active`
-  - Shape: `{ camera: { name, fov, pos, rot, isFreecam }, freecam: { enabled } }`
+  - Shape: `{ IsFreecam, Name, Fov, Pos: { X, Y, Z }, Rot: { X, Y, Z } }`
+  - Behavior: when the Unity Explorer Freecam is active, returns the freecam camera (or the reused game camera) with `IsFreecam=true`; otherwise falls back to `Camera.main` or the first available camera, and returns `<none>` with zero vectors when no camera exists.
 - `unity://logs/tail?count=200`
   - Shape: `{ items: [{ t, level, message, source, category? }] }`  
     - `level`: e.g. `info|warn|error|exception`  
@@ -210,6 +211,17 @@ Tool‑level failures that still return a JSON‑RPC `result` use a consistent p
     {"Id":"scn:Main:obj:12345","Name":"Player","Path":"/Main/Player","Tag":"Player","Layer":0,"Active":true,"ComponentCount":7},
     {"Id":"scn:Main:obj:67890","Name":"Camera","Path":"/Main/Camera","Tag":"MainCamera","Layer":0,"Active":true,"ComponentCount":3}
   ]
+}
+```
+
+- `unity://camera/active` (freecam enabled)
+```json
+{
+  "IsFreecam": true,
+  "Name": "UE_Freecam",
+  "Fov": 60.0,
+  "Pos": { "X": 0.0, "Y": 1.2, "Z": -5.0 },
+  "Rot": { "X": 10.0, "Y": 45.0, "Z": 0.0 }
 }
 ```
 

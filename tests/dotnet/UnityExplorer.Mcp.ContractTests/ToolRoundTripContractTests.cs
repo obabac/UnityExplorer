@@ -204,6 +204,8 @@ public class ToolRoundTripContractTests
                 json.TryGetProperty("Fov", out _).Should().BeTrue();
                 json.TryGetProperty("Pos", out _).Should().BeTrue();
                 json.TryGetProperty("Rot", out _).Should().BeTrue();
+                json.TryGetProperty("IsFreecam", out var freecam).Should().BeTrue();
+                freecam.ValueKind.Should().BeOneOf(JsonValueKind.True, JsonValueKind.False);
             }
         }
 

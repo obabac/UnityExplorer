@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using UnityExplorer.UI.Panels;
 using UniverseLib.Input;
 #endif
 
@@ -274,12 +275,24 @@ namespace UnityExplorer.Mcp
         {
             return await MainThread.Run(() =>
             {
-                Camera cam = Camera.main;
-                if (cam == null && Camera.allCamerasCount > 0) cam = Camera.allCameras[0];
+                var freecam = FreeCamPanel.inFreeCamMode;
+                Camera? cam = null;
+
+                if (freecam)
+                {
+                    cam = FreeCamPanel.ourCamera ?? FreeCamPanel.lastMainCamera ?? Camera.main;
+                }
+
+                cam ??= Camera.main;
+                if (cam == null && Camera.allCamerasCount > 0)
+                    cam = Camera.allCameras[0];
+
                 if (cam == null)
-                    return new CameraInfoDto(false, "<none>", 0f, new Vector3Dto(0, 0, 0), new Vector3Dto(0, 0, 0));
-                var pos = cam.transform.position; var rot = cam.transform.eulerAngles;
-                return new CameraInfoDto(false, cam.name, cam.fieldOfView,
+                    return new CameraInfoDto(freecam, "<none>", 0f, new Vector3Dto(0, 0, 0), new Vector3Dto(0, 0, 0));
+
+                var pos = cam.transform.position;
+                var rot = cam.transform.eulerAngles;
+                return new CameraInfoDto(freecam, cam.name, cam.fieldOfView,
                     new Vector3Dto(pos.x, pos.y, pos.z),
                     new Vector3Dto(rot.x, rot.y, rot.z));
             });

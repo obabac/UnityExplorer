@@ -79,7 +79,7 @@ Already implemented:
   `SelectionDto`: `{ ActiveId, Items[] }` from Inspector state.
 
 - `unity://camera/active`  
-  `CameraInfoDto`: `{ IsFreecam, Name, Fov, Pos, Rot }`.
+  `CameraInfoDto`: `{ IsFreecam, Name, Fov, Pos, Rot }`; honors the UE Freecam state (uses the freecam or reused game camera when active, falls back to `Camera.main`/first camera, `<none>` when missing).
 
 - `unity://logs/tail?count=`  
   `LogTailDto`: `{ Items: [{ T, Level, Message }, …] }` from MCP log buffer.
@@ -239,7 +239,7 @@ Fine‑grained TODOs live in `.plans/unity-explorer-mcp-todo.md`. High‑level t
 1. **Transport & protocol polish**
    - Remove SSE leftovers, refine error codes, add light rate limiting.
 2. **Read‑only parity**
-   - Finish any gaps between implemented DTOs and the conceptual spec in `mcp-interface-concept.md`.
+   - Finish any gaps between implemented DTOs and the conceptual spec in `mcp-interface-concept.md`, including live validation of Freecam camera info and harness coverage for SearchObjects/MousePick on Space Shooter.
 3. **Streams & notifications**
    - Document events, add tests for non‑tool notifications (logs, scenes, selection).
 4. **Guarded write tools**

@@ -80,7 +80,7 @@ Resources are addressed using `unity://` URIs (paged where noted):
 - `unity://object/{id}` — a single object plus key fields.
 - `unity://object/{id}/components` — components on an object (paged).
 - `unity://search?...` — search across objects (by name, type, path, activeOnly, etc.).
-- `unity://camera/active` — active camera and basic info.
+- `unity://camera/active` — active camera; reports `IsFreecam=true` when the UE Freecam is active (falls back to `Camera.main`/first camera, or `<none>` if absent).
 - `unity://selection` — current Unity selection.
 - `unity://logs/tail?count=200` — recent log lines (`{ T, Level, Message, Source, Category? }`).
 - `unity://console/scripts` — C# console scripts in the Explorer `Scripts` folder (when present).
