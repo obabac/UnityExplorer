@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -76,6 +77,44 @@ public class JsonRpcContractTests
 
             tool.TryGetProperty("inputSchema", out var schema).Should().BeTrue();
             schema.ValueKind.Should().Be(JsonValueKind.Object);
+        }
+
+        var toolMap = tools
+            .EnumerateArray()
+            .Where(t => t.TryGetProperty("name", out _))
+            .ToDictionary(t => t.GetProperty("name").GetString()!);
+
+        foreach (var schema in toolMap.Values.Select(t => t.GetProperty("inputSchema")))
+        {
+            schema.TryGetProperty("properties", out var props).Should().BeTrue();
+            props.ValueKind.Should().Be(JsonValueKind.Object);
+            schema.TryGetProperty("additionalProperties", out var additional).Should().BeTrue();
+            additional.GetBoolean().Should().BeFalse();
+        }
+
+        if (toolMap.TryGetValue("MousePick", out var mouseTool))
+        {
+            var schema = mouseTool.GetProperty("inputSchema");
+            var props = schema.GetProperty("properties");
+            props.TryGetProperty("mode", out var modeProp).Should().BeTrue();
+            modeProp.GetProperty("type").GetString().Should().Be("string");
+            modeProp.TryGetProperty("enum", out var enumProp).Should().BeTrue();
+            enumProp.EnumerateArray().Select(e => e.GetString()).Should().Contain(new[] { "world", "ui" });
+            props.TryGetProperty("normalized", out var normalized).Should().BeTrue();
+            normalized.GetProperty("type").GetString().Should().Be("boolean");
+        }
+
+        if (toolMap.TryGetValue("SetActive", out var setActive))
+        {
+            var schema = setActive.GetProperty("inputSchema");
+            schema.TryGetProperty("required", out var required).Should().BeTrue();
+            var requiredFields = required.EnumerateArray().Select(e => e.GetString()).ToArray();
+            requiredFields.Should().Contain(new[] { "objectId", "active" });
+            var props = schema.GetProperty("properties");
+            props.TryGetProperty("objectId", out var objectId).Should().BeTrue();
+            objectId.GetProperty("type").GetString().Should().Be("string");
+            props.TryGetProperty("confirm", out var confirm).Should().BeTrue();
+            confirm.GetProperty("type").GetString().Should().Be("boolean");
         }
     }
 

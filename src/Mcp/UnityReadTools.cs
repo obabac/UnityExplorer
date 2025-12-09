@@ -280,10 +280,22 @@ namespace UnityExplorer.Mcp
 
                 if (freecam)
                 {
-                    cam = FreeCamPanel.ourCamera ?? FreeCamPanel.lastMainCamera ?? Camera.main;
+                    if (FreeCamPanel.ourCamera != null)
+                    {
+                        cam = FreeCamPanel.ourCamera;
+                    }
+                    else if (FreeCamPanel.lastMainCamera != null)
+                    {
+                        cam = FreeCamPanel.lastMainCamera;
+                    }
+                    else if (Camera.main != null)
+                    {
+                        cam = Camera.main;
+                    }
                 }
 
-                cam ??= Camera.main;
+                if (cam == null && Camera.main != null)
+                    cam = Camera.main;
                 if (cam == null && Camera.allCamerasCount > 0)
                     cam = Camera.allCameras[0];
 

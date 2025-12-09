@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-09): Contract tests (Release) pass locally; MCP runtime not running here, so smoke/inspector/harness validation is still pending.
+Status (2025-12-09): New build deployed to the Test-VM with typed `list_tools` schemas; smoke at `http://192.168.178.210:51477` passes and targeted contract tests (`ListTools...`, `CallTool_GetStatus...`) are green. A full contract sweep is still pending because SpaceShooter exited during the first attempt (connection reset/refused mid-run).
 
 ---
 
@@ -54,6 +54,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 - Mouse UI multi-hit: UI mode should return a list of hits (`Items`) plus `primaryId`; follow-up via `GetObject`/`GetComponents` (or a UI detail tool) on the selected `Id`.
 - Logs: include `source`; if `category` exists, include it or document its absence.
 - Time-scale writes: single guarded tool; add tests and docs when implemented.
+- Stop SpaceShooter on the Test-VM before copying mods (`Update-Mod-Remote.ps1`) to avoid SCP file-lock failures; restart the game after deployment.
 
 ## 1. Transport & Protocol Polish
 

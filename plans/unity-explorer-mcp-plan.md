@@ -7,8 +7,9 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-09)
-- Contract tests (Release) pass locally; status tool/resource test skipped when discovery is missing.
-- MCP runtime not running locally; `Invoke-McpSmoke.ps1 -BaseUrl http://127.0.0.1:51477` failed with connection refused. Inspector/smoke/harness validation remains outstanding.
+- Deployed new MCP build to the Test-VM (Space Shooter) after stopping the game to avoid SCP lock errors; smoke run succeeds at `http://192.168.178.210:51477`.
+- `list_tools` now emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); verified via `curl` and contract test `ListTools_Includes_InputSchema_For_All_Tools`.
+- Targeted contract tests (`ListTools_Includes_InputSchema_For_All_Tools`, `CallTool_GetStatus_JsonRpc_Response_If_Server_Available`) pass against the Test-VM. A full contract test sweep needs a stable host (previous attempt saw SpaceShooter exit mid-run, leading to connection resets).
 
 ---
 
@@ -129,7 +130,7 @@ All payloads are DTO‑based (`Dto.cs`), aiming for compact, LLM‑friendly JSON
 
 - `list_tools`  
   - Returns `{ tools: [{ name, description, inputSchema }, …] }`.  
-  - `inputSchema` now describes each argument (string/integer/number/boolean/array) with `required` for non-optional params; `MousePick.mode` advertises `world|ui` so inspector call forms render without schema warnings.
+  - `inputSchema` is a JSON Schema per-tool and per-argument, including enums for constrained arguments such as `MousePick.mode`; inspector should be able to render call forms from this shape.
 
 - `call_tool`  
   - Dispatches to `UnityReadTools` / `UnityWriteTools` via `McpReflection.InvokeToolAsync` using reflection and argument coercion.
@@ -228,14 +229,14 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
 - Logs:
   - `pwsh ./tools/Get-ML-Log.ps1` (with `-Stream` for live tail).
 - Inspector:
-  - `npx @modelcontextprotocol/inspector --transport http --server-url http://<TestVM-IP>:51477`
+  - `npx @modelcontextprotocol/inspector --transport http --server-url http://192.168.178.210:51477`
   - Use “List Tools”, “Call Tool”, and “Read Resource” to smoke‑test the surface.
 - Smoke CLI:
-  - `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://<TestVM-IP>:51477 -LogCount 20`
+  - `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477 -LogCount 20`
   - Falls back to `%TEMP%/unity-explorer-mcp.json` or `UE_MCP_DISCOVERY` when `-BaseUrl` is omitted; runs initialize → notifications/initialized → list_tools → GetStatus/TailLogs → read status/scenes/logs and exits non-zero on errors.
 - Test-VM harness:
   - `pwsh C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario search|camera|mouse-world|mouse-ui|status|logs|selection|initialize|list_tools|events`
-  - `-Scenario custom` reads `req.json`; BaseUrl resolves from `-BaseUrl` or discovery (default `http://127.0.0.1:51477`); `-StreamLines` controls how many `stream_events` chunks are printed.
+  - `-Scenario custom` reads `req.json`; when run on the Test-VM, BaseUrl resolves from `-BaseUrl` or discovery (default `http://127.0.0.1:51477`); from the Linux dev machine, target `http://192.168.178.210:51477` instead; `-StreamLines` controls how many `stream_events` chunks are printed.
 
 ---
 

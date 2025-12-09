@@ -5,8 +5,10 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 #endif
@@ -602,6 +604,8 @@ namespace UnityExplorer.Mcp
 
     internal static class McpReflection
     {
+        private static readonly NullabilityInfoContext Nullability = new();
+
         public static System.Collections.Generic.Dictionary<string, string> ParseQuery(string query)
         {
             var dict = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -639,9 +643,9 @@ namespace UnityExplorer.Mcp
             return list.ToArray();
         }
 
-        private static object BuildInputSchema(System.Reflection.MethodInfo mi)
+        private static JsonSchema BuildInputSchema(System.Reflection.MethodInfo mi)
         {
-            var properties = new System.Collections.Generic.Dictionary<string, object?>();
+            var properties = new System.Collections.Generic.Dictionary<string, JsonSchemaProperty>(StringComparer.OrdinalIgnoreCase);
             var required = new System.Collections.Generic.List<string>();
             foreach (var p in mi.GetParameters())
             {
@@ -650,50 +654,54 @@ namespace UnityExplorer.Mcp
 
                 var schema = BuildParameterSchema(mi, p);
                 if (schema != null)
+                {
                     properties[p.Name!] = schema;
-
-                if (!IsOptionalParameter(p))
-                    required.Add(p.Name!);
+                    if (!IsOptionalParameter(p))
+                        required.Add(p.Name!);
+                }
             }
 
-            var input = new System.Collections.Generic.Dictionary<string, object?>
+            return new JsonSchema
             {
-                ["type"] = "object",
-                ["properties"] = properties,
-                ["additionalProperties"] = false
+                Type = "object",
+                Properties = properties,
+                Required = required.Count > 0 ? required.ToArray() : null,
+                AdditionalProperties = false
             };
-            if (required.Count > 0)
-                input["required"] = required.ToArray();
-            return input;
         }
 
-        private static object? BuildParameterSchema(System.Reflection.MethodInfo mi, System.Reflection.ParameterInfo p)
+        private static JsonSchemaProperty? BuildParameterSchema(System.Reflection.MethodInfo mi, System.Reflection.ParameterInfo p)
         {
-            var dict = new System.Collections.Generic.Dictionary<string, object?>();
             var paramType = p.ParameterType;
             var underlying = Nullable.GetUnderlyingType(paramType) ?? paramType;
+            var isArray = underlying.IsArray;
 
-            if (underlying.IsArray)
+            var typeName = isArray ? "array" : MapJsonType(underlying);
+            object? items = null;
+            if (isArray)
             {
                 var elementType = underlying.GetElementType() ?? typeof(object);
-                dict["type"] = "array";
-                dict["items"] = new { type = MapJsonType(elementType) };
-            }
-            else
-            {
-                dict["type"] = MapJsonType(underlying);
+                items = new { type = MapJsonType(elementType) };
             }
 
-            if (p.HasDefaultValue && p.DefaultValue != null)
-                dict["default"] = p.DefaultValue;
-
+            string[]? enumValues = null;
             if (string.Equals(mi.Name, "MousePick", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(p.Name, "mode", StringComparison.OrdinalIgnoreCase))
             {
-                dict["enum"] = new[] { "world", "ui" };
+                enumValues = new[] { "world", "ui" };
             }
 
-            return dict;
+            object? defaultValue = null;
+            if (p.HasDefaultValue)
+                defaultValue = p.DefaultValue;
+
+            return new JsonSchemaProperty
+            {
+                Type = typeName,
+                Items = items,
+                Enum = enumValues,
+                Default = defaultValue
+            };
         }
 
         private static bool IsOptionalParameter(System.Reflection.ParameterInfo p)
@@ -702,7 +710,15 @@ namespace UnityExplorer.Mcp
                 return true;
             if (Nullable.GetUnderlyingType(p.ParameterType) != null)
                 return true;
-            return p.HasDefaultValue;
+            if (p.HasDefaultValue)
+                return true;
+            if (!p.ParameterType.IsValueType)
+            {
+                var nullability = Nullability.Create(p);
+                if (nullability.ReadState == NullabilityState.Nullable || nullability.WriteState == NullabilityState.Nullable)
+                    return true;
+            }
+            return false;
         }
 
         private static string MapJsonType(Type type)
@@ -714,6 +730,40 @@ namespace UnityExplorer.Mcp
             if (type == typeof(float) || type == typeof(double) || type == typeof(decimal)) return "number";
             if (type.IsArray) return "array";
             return "object";
+        }
+
+        private sealed class JsonSchema
+        {
+            [JsonPropertyName("type")]
+            public string Type { get; init; } = "object";
+
+            [JsonPropertyName("properties")]
+            public System.Collections.Generic.Dictionary<string, JsonSchemaProperty> Properties { get; init; } = new(System.StringComparer.OrdinalIgnoreCase);
+
+            [JsonPropertyName("required")]
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public string[]? Required { get; init; }
+
+            [JsonPropertyName("additionalProperties")]
+            public bool AdditionalProperties { get; init; }
+        }
+
+        private sealed class JsonSchemaProperty
+        {
+            [JsonPropertyName("type")]
+            public string Type { get; init; } = "string";
+
+            [JsonPropertyName("items")]
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public object? Items { get; init; }
+
+            [JsonPropertyName("enum")]
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public string[]? Enum { get; init; }
+
+            [JsonPropertyName("default")]
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public object? Default { get; init; }
         }
 
         public static async Task<object?> InvokeToolAsync(string name, JsonElement args)

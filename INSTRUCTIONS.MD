@@ -1,31 +1,27 @@
 # Iteration Instructions (2025-12-09 — Next)
 
-High-level goal for next iteration: validate the MCP inspector + Space Shooter harness on a live MCP host (with Freecam/mouse/camera flows), capture real payloads, and keep docs/tests/DTOs aligned.
+High-level goal for next iteration: run the full MCP contract suite on the Space Shooter host (new typed `list_tools` schemas) without the game exiting, and validate inspector/harness flows end-to-end.
 
 ## Tasks
 
-1) Bring up MCP host + smoke
-- Start Space Shooter on the Test-VM with UnityExplorer MCP enabled; ensure discovery file exists (`%TEMP%/unity-explorer-mcp.json`).
-- Run `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://<vm>:51477` (or discovery) and keep summary/output; fix failures or record why (e.g., connection/refused) and update docs.
+1) Keep Space Shooter running + contract tests
+- Stop `SpaceShooter.exe` before deploying; start via `Start-Process "C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe"` (or win-dev start_process) and confirm MCP at `http://192.168.178.210:51477`.
+- Set `UE_MCP_DISCOVERY` to a discovery file that points to the Test-VM base URL (override `baseUrl` to `http://192.168.178.210:51477/`).
+- Run `pwsh ./tools/Run-McpContractTests.ps1 -Configuration Release`; if the game exits mid-run, grab `MelonLoader/Latest.log` and rerun the failing slice to stabilize.
 
-2) Inspector validation
-- Run `npx @modelcontextprotocol/inspector --transport http --server-url http://<vm>:51477`.
-- Exercise `initialize` → `notifications/initialized` → `list_tools` (verify inputSchema renders) → `call_tool` (Status/Logs/Camera/MousePick) → `read_resource` → `stream_events`.
-- If schemas/payloads differ, update DTOs/tests and sync `plans/mcp-interface-concept.md` + `README-mcp.md`.
+2) Inspector/harness validation with typed schemas
+- Use `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477` and `curl` to confirm `list_tools` schemas (MousePick enum, required fields, defaults, `additionalProperties=false`).
+- Exercise inspector/headless harness: `call-mcp.ps1 -Scenario initialize|list_tools|status|logs|camera|mouse-world|events` and capture payloads for docs.
 
-3) Space Shooter harness + Freecam
-- On the Test-VM run `C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario search|camera|mouse-world|mouse-ui|events|status|logs|selection` (or `custom` with `req.json`).
-- Toggle UE Freecam and re-run `GetCameraInfo` (expect `IsFreecam=true`); capture payloads for freecam + game camera, MousePick world/ui (with `SpawnTestUi`), and note results in `plans/space-shooter-test-plan.md` and `plans/unity-explorer-mcp-plan.md`.
-- Keep writes guarded; reset config after `SpawnTestUi`/`SetActive`/`SelectObject`.
-
-4) Tests
-- Run `pwsh ./tools/Run-McpContractTests.ps1` (Release) after changes; keep test output.
+3) Deployment hygiene
+- Stop the game before `Update-Mod-Remote.ps1` to avoid SCP lock errors, then restart and verify via `Get-ML-Log.ps1` (look for MCP bind line).
 
 ## Current state
-- Contract tests pass locally (Release); status tool/resource test skips when discovery is missing.
-- MCP runtime was not running locally; `Invoke-McpSmoke.ps1 -BaseUrl http://127.0.0.1:51477` failed with connection refused, so live inspector/harness validation is still outstanding.
+- New MCP build deployed to the Test-VM; smoke succeeds at `http://192.168.178.210:51477` with typed `list_tools` schemas.
+- Targeted contract tests (`ListTools_Includes_InputSchema_For_All_Tools`, `CallTool_GetStatus_JsonRpc_Response_If_Server_Available`) pass; the full suite failed previously because SpaceShooter exited mid-run (connection reset/refused).
+- SpaceShooter is currently running on the VM; writes remain disabled.
 
 ## Reminders
-- Keep `.plans/unity-explorer-mcp-plan.md`, `.plans/unity-explorer-mcp-todo.md`, and `plans/mcp-interface-concept.md` in sync with code/DTOs/tests.
-- Avoid game-specific assumptions beyond Space Shooter; writes stay guarded (`allowWrites=false`, `requireConfirm=true`) when finishing.
-- Update this file at end of iteration and commit changes.
+- Keep `.plans/unity-explorer-mcp-plan.md`, `.plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` in sync with code/DTOs/tests.
+- Avoid game-specific assumptions; keep writes guarded and reset config after any write tests.
+- Update this file at the end of the iteration and commit changes.

@@ -12,6 +12,7 @@
 - UE UI issue: dropdown Il2Cpp cast throws; mitigated with `Mods\UeMcpHeadless.dll` (small Melon patch that swallows InitUI exception) so MCP still starts. Keep it loaded until a real UE fix lands.
 - Discovery file: `%TEMP%\unity-explorer-mcp.json` (refresh by deleting before launch).
 - Launch: `Start-Process 'C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe' -ArgumentList '-seed=1234'`.
+- Deployment note: stop `SpaceShooter.exe` before `Update-Mod-Remote.ps1` (SCP fails on locked DLLs), then restart the game.
 
 ## Determinism Hardening
 - Frame pacing: `Application.targetFrameRate = 60`, vSync off, Fixed Timestep 0.02, Max Allowed Timestep 0.333.
@@ -73,14 +74,21 @@
   - `GetComponents` on `obj:<id>` → Transform/Camera/AudioListener, etc.
   - `TailLogs` → shows MCP bind line `MCP (streamable-http) listening on http://0.0.0.0:51477`.
 
+## Latest live payloads (2025-12-09)
+- `list_tools` now emits typed schemas (required arrays, defaults, `additionalProperties=false`, `MousePick.mode` enum `world|ui`).
+- `GetStatus` (call_tool): `{ Version="0.1.0", UnityVersion="2021.3.45f1", Platform="WindowsPlayer", Runtime="IL2CPP", ExplorerVersion="4.12.8", Ready=true, ScenesLoaded=1, Selection=[] }`.
+- `GetCameraInfo`: `{ IsFreecam=false, Name="Main Camera", Fov=60, Pos={X=0,Y=10,Z=5}, Rot={X=90,Y=0,Z=0} }`.
+- `MousePick` world (normalized center 0.5/0.5): `{ Mode="world", Hit=true, Id="obj:<id>", Items=null }`.
+- `TailLogs` count=5: UniverseLib init + MCP bind lines with `Source="unity"`, `Category=null`.
+
 ## MCP Harness Coverage (Space Shooter)
 - Harness path: `C:\codex-workspace\ue-mcp-headless\call-mcp.ps1` (reads JSON from `req.json` in the same folder and POSTs to `/message`).
-- The script now ships built-in scenarios: `-Scenario search|camera|mouse-world|mouse-ui|status|logs|selection|initialize|list_tools|events` (default `custom` reads `req.json`). It resolves BaseUrl from `-BaseUrl` or discovery (`UE_MCP_DISCOVERY` or `%TEMP%/unity-explorer-mcp.json`), falls back to `http://127.0.0.1:51477`, and applies the bearer token if set. Examples:
+- The script now ships built-in scenarios: `-Scenario search|camera|mouse-world|mouse-ui|status|logs|selection|initialize|list_tools|events` (default `custom` reads `req.json`). It resolves BaseUrl from `-BaseUrl` or discovery (`UE_MCP_DISCOVERY` or `%TEMP%/unity-explorer-mcp.json`); when run on the Test-VM it can fall back to `http://127.0.0.1:51477`, while from the Linux dev machine you must target `http://192.168.178.210:51477`. The script applies the bearer token if set. Examples:
   - `pwsh C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario search`
   - `pwsh C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario mouse-world`
   - `pwsh C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario mouse-ui -StreamLines 3` (after `SpawnTestUi`)
   - `pwsh C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario events -StreamLines 5`
-- Use the following `req.json` payloads to cover the MCP surface on Space Shooter (set `baseUrl` in the script or use discovery):
+- Use the following `req.json` payloads to cover the MCP surface on Space Shooter (set `baseUrl` in the script or use discovery / the Test-VM address `http://192.168.178.210:51477`):
 
 SearchObjects (name + type):
 ```json
