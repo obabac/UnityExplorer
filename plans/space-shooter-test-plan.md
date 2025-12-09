@@ -75,6 +75,11 @@
 
 ## MCP Harness Coverage (Space Shooter)
 - Harness path: `C:\codex-workspace\ue-mcp-headless\call-mcp.ps1` (reads JSON from `req.json` in the same folder and POSTs to `/message`).
+- The script now ships built-in scenarios: `-Scenario search|camera|mouse-world|mouse-ui|status|logs|selection|initialize|list_tools|events` (default `custom` reads `req.json`). It resolves BaseUrl from `-BaseUrl` or discovery (`UE_MCP_DISCOVERY` or `%TEMP%/unity-explorer-mcp.json`), falls back to `http://127.0.0.1:51477`, and applies the bearer token if set. Examples:
+  - `pwsh C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario search`
+  - `pwsh C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario mouse-world`
+  - `pwsh C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario mouse-ui -StreamLines 3` (after `SpawnTestUi`)
+  - `pwsh C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario events -StreamLines 5`
 - Use the following `req.json` payloads to cover the MCP surface on Space Shooter (set `baseUrl` in the script or use discovery):
 
 SearchObjects (name + type):

@@ -229,6 +229,9 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
 - Smoke CLI:
   - `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://<TestVM-IP>:51477 -LogCount 20`
   - Falls back to `%TEMP%/unity-explorer-mcp.json` or `UE_MCP_DISCOVERY` when `-BaseUrl` is omitted; runs initialize → notifications/initialized → list_tools → GetStatus/TailLogs → read status/scenes/logs and exits non-zero on errors.
+- Test-VM harness:
+  - `pwsh C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario search|camera|mouse-world|mouse-ui|status|logs|selection|initialize|list_tools|events`
+  - `-Scenario custom` reads `req.json`; BaseUrl resolves from `-BaseUrl` or discovery (default `http://127.0.0.1:51477`); `-StreamLines` controls how many `stream_events` chunks are printed.
 
 ---
 

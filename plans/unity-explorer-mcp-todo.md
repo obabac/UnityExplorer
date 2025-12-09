@@ -148,12 +148,12 @@ Note: All writes remain behind `allowWrites` + confirmation.
 
 ## 10. Space Shooter IL2CPP – End‑to‑End Validation
 
-- [ ] Extend the Test‑VM PowerShell harness (`C:\codex-workspace\ue-mcp-headless\call-mcp.ps1` / `req.json`) to cover remaining read tools on Space Shooter (payloads now documented in `plans/space-shooter-test-plan.md`; update the VM script accordingly):
+- [x] Extend the Test‑VM PowerShell harness (`C:\codex-workspace\ue-mcp-headless\call-mcp.ps1` / `req.json`) to cover remaining read tools on Space Shooter (payloads now documented in `plans/space-shooter-test-plan.md`; update the VM script accordingly):
   - `SearchObjects` (by name and type),
   - `GetCameraInfo`,
   - `MousePick` (even if `Hit=false`), including coord-based UI picks (x/y/normalized) against `SpawnTestUi` blocks.
 - [x] Add short snippets to `plans/space-shooter-test-plan.md` showing the above calls and expected JSON shapes so agents can quickly verify behavior (include `SpawnTestUi` + `MousePick` examples).
-- [ ] Add a minimal `stream_events` check against Space Shooter: open `stream_events`, call a tool (e.g. `GetStatus`), and confirm a `tool_result` notification is received; note any `logs` / `scenes` notifications (flow documented in `plans/space-shooter-test-plan.md`; needs live validation).
+- [x] Add a minimal `stream_events` check against Space Shooter: open `stream_events`, call a tool (e.g. `GetStatus`), and confirm a `tool_result` notification is received; note any `logs` / `scenes` notifications (flow documented in `plans/space-shooter-test-plan.md`; needs live validation).
 - [ ] Run `UnityExplorer.Mcp.ContractTests` against the Space Shooter + MelonLoader host (document the exact steps and any required env vars / discovery overrides) and record whether all tests pass.
 - [ ] Ensure no contract tests assume game‑specific content; adjust tests and docs so Space Shooter is the fully supported host for MCP contract validation (other titles are examples only).
 - [x] Define 1–2 safe write scenarios on Space Shooter using `SetActive` / `SelectObject` with `AllowWrites=true` and `RequireConfirm=true`, and document them in `plans/space-shooter-test-plan.md` (also note `SetTimeScale` + `SpawnTestUi`/`MousePick` flow for UI validation).
