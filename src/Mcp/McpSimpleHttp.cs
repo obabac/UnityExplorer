@@ -632,18 +632,88 @@ namespace UnityExplorer.Mcp
                     var name = mi.Name;
                     var desc = mi.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false);
                     string? d = (desc.Length > 0) ? ((System.ComponentModel.DescriptionAttribute)desc[0]).Description : null;
-                    // MCP inspector expects an inputSchema object; use a minimal JSON
-                    // schema describing an object with arbitrary properties.
-                    var inputSchema = new
-                    {
-                        type = "object",
-                        properties = new { },
-                        additionalProperties = true
-                    };
+                    var inputSchema = BuildInputSchema(mi);
                     list.Add(new { name, description = d, inputSchema });
                 }
             }
             return list.ToArray();
+        }
+
+        private static object BuildInputSchema(System.Reflection.MethodInfo mi)
+        {
+            var properties = new System.Collections.Generic.Dictionary<string, object?>();
+            var required = new System.Collections.Generic.List<string>();
+            foreach (var p in mi.GetParameters())
+            {
+                if (p.ParameterType == typeof(System.Threading.CancellationToken))
+                    continue;
+
+                var schema = BuildParameterSchema(mi, p);
+                if (schema != null)
+                    properties[p.Name!] = schema;
+
+                if (!IsOptionalParameter(p))
+                    required.Add(p.Name!);
+            }
+
+            var input = new System.Collections.Generic.Dictionary<string, object?>
+            {
+                ["type"] = "object",
+                ["properties"] = properties,
+                ["additionalProperties"] = false
+            };
+            if (required.Count > 0)
+                input["required"] = required.ToArray();
+            return input;
+        }
+
+        private static object? BuildParameterSchema(System.Reflection.MethodInfo mi, System.Reflection.ParameterInfo p)
+        {
+            var dict = new System.Collections.Generic.Dictionary<string, object?>();
+            var paramType = p.ParameterType;
+            var underlying = Nullable.GetUnderlyingType(paramType) ?? paramType;
+
+            if (underlying.IsArray)
+            {
+                var elementType = underlying.GetElementType() ?? typeof(object);
+                dict["type"] = "array";
+                dict["items"] = new { type = MapJsonType(elementType) };
+            }
+            else
+            {
+                dict["type"] = MapJsonType(underlying);
+            }
+
+            if (p.HasDefaultValue && p.DefaultValue != null)
+                dict["default"] = p.DefaultValue;
+
+            if (string.Equals(mi.Name, "MousePick", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(p.Name, "mode", StringComparison.OrdinalIgnoreCase))
+            {
+                dict["enum"] = new[] { "world", "ui" };
+            }
+
+            return dict;
+        }
+
+        private static bool IsOptionalParameter(System.Reflection.ParameterInfo p)
+        {
+            if (p.ParameterType == typeof(System.Threading.CancellationToken))
+                return true;
+            if (Nullable.GetUnderlyingType(p.ParameterType) != null)
+                return true;
+            return p.HasDefaultValue;
+        }
+
+        private static string MapJsonType(Type type)
+        {
+            if (type.IsEnum) return "string";
+            if (type == typeof(string)) return "string";
+            if (type == typeof(bool)) return "boolean";
+            if (type == typeof(int) || type == typeof(long) || type == typeof(short)) return "integer";
+            if (type == typeof(float) || type == typeof(double) || type == typeof(decimal)) return "number";
+            if (type.IsArray) return "array";
+            return "object";
         }
 
         public static async Task<object?> InvokeToolAsync(string name, JsonElement args)

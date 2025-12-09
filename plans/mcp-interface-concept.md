@@ -94,6 +94,8 @@ public static class UnityReadTools
 }
 ```
 
+`list_tools` returns an `inputSchema` per tool with JSON Schema primitives for each argument (string, integer, number, boolean, array) and marks non-optional parameters as `required`; `MousePick.mode` advertises an enum of `world|ui`. Cancellation tokens are omitted so inspector call forms stay clean.
+
 Phase‑later write tools exist but are disabled by default; they require allowlist + confirmations.
 
 ---

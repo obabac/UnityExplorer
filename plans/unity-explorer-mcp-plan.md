@@ -125,7 +125,7 @@ All payloads are DTO‑based (`Dto.cs`), aiming for compact, LLM‑friendly JSON
 
 - `list_tools`  
   - Returns `{ tools: [{ name, description, inputSchema }, …] }`.  
-  - `inputSchema` is a minimal JSON schema: `{ type: "object", properties: {}, additionalProperties: true }` so MCP inspector can render call forms.
+  - `inputSchema` now describes each argument (string/integer/number/boolean/array) with `required` for non-optional params; `MousePick.mode` advertises `world|ui` so inspector call forms render without schema warnings.
 
 - `call_tool`  
   - Dispatches to `UnityReadTools` / `UnityWriteTools` via `McpReflection.InvokeToolAsync` using reflection and argument coercion.
@@ -226,6 +226,9 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
 - Inspector:
   - `npx @modelcontextprotocol/inspector --transport http --server-url http://<TestVM-IP>:51477`
   - Use “List Tools”, “Call Tool”, and “Read Resource” to smoke‑test the surface.
+- Smoke CLI:
+  - `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://<TestVM-IP>:51477 -LogCount 20`
+  - Falls back to `%TEMP%/unity-explorer-mcp.json` or `UE_MCP_DISCOVERY` when `-BaseUrl` is omitted; runs initialize → notifications/initialized → list_tools → GetStatus/TailLogs → read status/scenes/logs and exits non-zero on errors.
 
 ---
 

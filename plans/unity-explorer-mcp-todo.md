@@ -28,9 +28,9 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Ensure current concurrency behaviour matches `RateLimit_Does_Not_Crash_Server_When_Many_Concurrent_Requests` and, if a 429 limit is enabled, returns a structured JSON error payload.
   - [x] Add structured error JSON tests for common cases (`NotReady`, `NotFound`, `PermissionDenied`) that align server responses with inspector expectations.
 - Inspector UX & dev‑experience:
-  - [ ] Verify that all tools and resources render without schema or validation errors in `@modelcontextprotocol/inspector` during typical flows (initialize → list_tools/read_resource → stream_events).
+  - [ ] Verify that all tools and resources render without schema or validation errors in `@modelcontextprotocol/inspector` during typical flows (initialize → list_tools/read_resource → stream_events); `list_tools` now ships per-argument schemas and needs a live inspector run to confirm.
   - [x] Extend `UnityExplorer/README-mcp.md` with the final tool/resource list and representative example payloads used by inspector.
-  - [ ] Add a small smoke CLI/PowerShell script that runs `initialize`, `list_tools`, `GetStatus`, and `TailLogs` against a running Unity Explorer MCP instance, mirroring the `inspector` script defaults.
+  - [x] Add a small smoke CLI/PowerShell script that runs `initialize`, `list_tools`, `GetStatus`, and `TailLogs` against a running Unity Explorer MCP instance, mirroring the `inspector` script defaults (see `tools/Invoke-McpSmoke.ps1`).
   - [x] Add a CI note/script to run `dotnet test UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests` (and optionally a scripted inspector run) as part of the UnityExplorer build/validation pipeline.
 
 ---
@@ -119,7 +119,7 @@ Note: All writes remain behind `allowWrites` + confirmation.
 
 ## 7. Inspector & DX Polish
 
-- [ ] Verify all tools and resources render cleanly in `@modelcontextprotocol/inspector` (no schema errors).
+- [ ] Verify all tools and resources render cleanly in `@modelcontextprotocol/inspector` (no schema errors); per-argument `inputSchema` is now emitted from `list_tools` but still needs UI validation.
 - [x] Add JSON‑RPC contract tests that exercise `tools/list`, `tools/call`, and `call_tool` for all read‑only tools (matching inspector CLI usage).
 - [x] Add a small “how to connect with inspector” section to `README-mcp.md`, including:
   - [x] Example `initialize`, `list_tools`, `call_tool` flows.
@@ -135,7 +135,7 @@ Note: All writes remain behind `allowWrites` + confirmation.
 
 ## 9. Additional Quality / Nice‑to‑Have TODOs
 
-- [x] Add a tiny “smoke CLI” script (PowerShell/bash) that exercises `initialize`, `list_tools`, `GetStatus`, and `TailLogs` in one go (see `C:\codex-workspace\ue-mcp-headless\call-mcp.ps1` on Test-VM).
+- [x] Add a tiny “smoke CLI” script (PowerShell/bash) that exercises `initialize`, `list_tools`, `GetStatus`, and `TailLogs` in one go (see `tools/Invoke-McpSmoke.ps1`; mirrors the Test-VM harness).
 - [x] Add a contract test that calls `MousePick` and verifies the result shape (even if `Hit=false`).
 - [x] Add a contract test that calls `TailLogs` via `call_tool` (not just `read_resource`).
 - [x] Ensure all DTOs are serializable without extra JSON options (no cycles, no Unity types leaking through).

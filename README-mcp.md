@@ -252,6 +252,13 @@ This matches the `stream_events` behavior and will print JSON‑RPC `notificatio
    - Use “Read Resource” with URIs such as `unity://status`, `unity://scenes`, `unity://scene/0/objects?limit=10`, `unity://selection`, `unity://logs/tail?count=100`.
    - Open `stream_events` to watch `log`, `selection`, `scenes`, and `tool_result` notifications while you interact with the game.
 
+## Smoke CLI (PowerShell)
+
+- Run `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://<host>:51477 -LogCount 20`.
+- If `-BaseUrl` is omitted, the script reads `$env:UE_MCP_DISCOVERY` or `%TEMP%/unity-explorer-mcp.json`.
+- Sequence: `initialize` → `notifications/initialized` → `list_tools` → `call_tool` (`GetStatus`, `TailLogs`) → `read_resource` (`unity://status`, `unity://scenes`, `unity://logs/tail?count=...`).
+- Emits a short summary and exits non-zero on failure; use it alongside the inspector for quick health checks.
+
 ## MCP Tests & CI
 
 - Local/CI command: `pwsh ./tools/Run-McpContractTests.ps1` (runs Release configuration).
