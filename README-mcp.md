@@ -1,6 +1,6 @@
 # Unity Explorer MCP (In‑Process) — Preview
 
-This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer DLL for CoreCLR (IL2CPP Interop) targets. The server exposes read‑only tools and resources over HTTP using the official C# SDK.
+This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer DLL for CoreCLR (IL2CPP Interop) targets. The server exposes read‑only tools and guarded writes over HTTP using the official C# SDK. DTO shapes and error envelopes live in `plans/mcp-interface-concept.md`; this README summarizes how to call the surface.
 
 ## Status
 
@@ -72,7 +72,7 @@ When connecting with a generic MCP client (including `@modelcontextprotocol/insp
 
 ## Resources
 
-Resources are addressed using `unity://` URIs:
+Resources are addressed using `unity://` URIs (paged where noted):
 
 - `unity://status` — global status (Unity version, scenes, selection summary, etc.).
 - `unity://scenes` — list of loaded scenes.
@@ -82,22 +82,40 @@ Resources are addressed using `unity://` URIs:
 - `unity://search?...` — search across objects (by name, type, path, activeOnly, etc.).
 - `unity://camera/active` — active camera and basic info.
 - `unity://selection` — current Unity selection.
-- `unity://logs/tail` — recent log lines (`{ t, level, message, source, category? }`).
- - `unity://console/scripts` — C# console scripts in the Explorer `Scripts` folder.
- - `unity://hooks` — currently active method hooks.
+- `unity://logs/tail?count=200` — recent log lines (`{ T, Level, Message, Source, Category? }`).
+- `unity://console/scripts` — C# console scripts in the Explorer `Scripts` folder (when present).
+- `unity://hooks` — currently active method hooks.
 
-IDs:
+### Example payloads (abbreviated)
 
-- Scene IDs: `scn:<index>`
-- Object IDs: `obj:<instanceId>`
+`unity://logs/tail`:
 
-Pagination:
+```json
+{
+  "Items": [
+    { "T": "2025-12-09T12:34:56.789Z", "Level": "info", "Message": "server started", "Source": "mcp" },
+    { "T": "2025-12-09T12:35:10.123Z", "Level": "warn", "Message": "camera missing", "Source": "unity", "Category": "Rendering" }
+  ]
+}
+```
 
-- Many list endpoints accept `limit` and `offset` query parameters (integers).
+`MousePick(mode="ui")` (multi-hit):
+
+```json
+{
+  "Mode": "ui",
+  "Hit": true,
+  "Id": "obj:12345",
+  "Items": [
+    { "Id": "obj:12345", "Name": "McpTestBlock_Left", "Path": "/McpTestCanvas/McpTestBlock_Left" },
+    { "Id": "obj:67890", "Name": "McpTestBlock_Right", "Path": "/McpTestCanvas/McpTestBlock_Right" }
+  ]
+}
+```
 
 ## Tools
 
-Read‑only tools (always available when the server is enabled):
+Read‑only tools (no `allowWrites` required):
 
 - `GetStatus`
 - `ListScenes`
@@ -105,46 +123,21 @@ Read‑only tools (always available when the server is enabled):
 - `GetObject`
 - `GetComponents`
 - `SearchObjects`
-- `MousePick` (mode `world` = top-most hit; mode `ui` = ordered `Items` + primary `Id`; optional `x`,`y` override the live mouse, `normalized=true` treats them as 0–1 screen coords)
+- `MousePick` (`world` = top-most hit; `ui` = ordered `Items` + primary `Id`; optional `x`,`y`, `normalized=true` override the live mouse)
 - `GetCameraInfo`
 - `GetSelection`
 - `TailLogs`
- - `GetVersion`
+- `GetVersion`
 
-Guarded write tools (require `allowWrites: true`; many also require confirm):
+Guarded / write-related tools (most require `allowWrites: true`; many also need `confirm=true` and allowlists):
 
-- UI test helpers (for UI pick validation):
-  - `SpawnTestUi(confirm)` — creates a simple overlay canvas with two raycastable blocks; ensure `allowWrites` and `confirm=true`.
-    - Example: `curl -s -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"call_tool","params":{"name":"SpawnTestUi","arguments":{"confirm":true}}}' http://<host>:51477/message`
-  - `MousePick(mode="ui", x=?, y=?, normalized=true)` to hit the blocks (e.g., left: x=0.35, right: x=0.65 at y=0.5).
-    - Example: `curl -s -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":2,"method":"call_tool","params":{"name":"MousePick","arguments":{"mode":"ui","x":0.35,"y":0.5,"normalized":true}}}' http://<host>:51477/message`
-  - `DestroyTestUi(confirm)` — removes the test canvas if present.
-    - Example: `curl -s -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":3,"method":"call_tool","params":{"name":"DestroyTestUi","arguments":{"confirm":true}}}' http://<host>:51477/message`
-
-- Object state:
-  - `SetActive(objId, bool)`
-  - `SelectObject(objId)`
-  - `SetName(objId, string)`
-  - `SetTag(objId, string)`
-  - `SetLayer(objId, int)`
-- Hierarchy / components:
-  - `Reparent(childId, parentId)`
-  - `DestroyObject(objId)`
-  - `AddComponent(objId, FullTypeName)` — requires component allowlist.
-  - `RemoveComponent(objId, typeOrIndex)` — requires allowlist or index.
-- Reflection:
-  - `SetMember(objId, CompType, Member, jsonValue)` — guarded by reflection allowlist (`Type.Member`).
-  - `CallMethod(objId, CompType, Method, jsonArrayArgs?)` — also allowlisted.
-- Time-scale:
-  - `GetTimeScale()` — read current `Time.timeScale` and lock state.
-  - `SetTimeScale(value, lock?, confirm?)` — clamped (0..4), requires `allowWrites` + confirmation.
-- Config:
-  - `SetConfig(allowWrites?, requireConfirm?, enableConsoleEval?, componentAllowlist?, reflectionAllowlistMembers?, hookAllowlistSignatures?, restart?)`
-  - `GetConfig()` — returns a sanitized view of the current config.
-- Selection / hooks / console:
-  - `SelectObject(objId)` — open a GameObject in the inspector.
-  - `ConsoleEval(code, confirm)` — evaluate a small C# snippet (requires `enableConsoleEval: true`).
-  - `HookAdd(typeFullName, method, confirm)` / `HookRemove(signature, confirm)` — guarded by `hookAllowlistSignatures`.
+- Config: `SetConfig`, `GetConfig` (sanitized view).
+- Object state: `SetActive`, `SelectObject`, `Reparent`, `DestroyObject`.
+- Reflection/component writes: `SetMember`, `CallMethod`, `AddComponent`, `RemoveComponent` (respect reflection/component allowlists).
+- Hooks: `HookAdd`, `HookRemove` (hook allowlist enforced).
+- Console: `ConsoleEval` (requires `enableConsoleEval` + writes + confirm).
+- Time scale: `GetTimeScale` (read), `SetTimeScale` (guarded; optional lock/unlock).
+- UI test helpers: `SpawnTestUi` / `DestroyTestUi` (for `MousePick` UI validation).
 
 ## Stream Events
 
@@ -244,20 +237,6 @@ class Program
 
 This matches the `stream_events` behavior and will print JSON‑RPC `notification`, `result`, and `error` objects as one JSON object per line.
 
-## Troubleshooting
-
-- No discovery file:
-  - Check `%TEMP%\unity-explorer-mcp.json` exists (or `UE_MCP_DISCOVERY` override).
-  - PowerShell:
-    - `Get-ChildItem $env:TEMP\unity-explorer-mcp.json`
-    - `Get-Content  $env:TEMP\unity-explorer-mcp.json | Write-Host`
-- Wrong base URL or port:
-  - Verify `baseUrl` and `port` values in the discovery file match what you expect.
- - No events on stream_events:
-  - Confirm `modeHints` includes `"streamable-http"` in the discovery file.
-  - Use the C# snippet above or `curl -N -H "Content-Type: application/json" -d '{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"stream_events\"}' http://<host>:<port>/message`.
-  - Trigger activity in the Unity game (logs, selection changes, scene changes, or tool calls) and verify JSON lines appear.
-
 ## Inspector Quick‑Start (`@modelcontextprotocol/inspector`)
 
 1. Start a CoreCLR Unity title with Unity Explorer and ensure the MCP server is enabled (`mcp.config.json: { "enabled": true }`).
@@ -273,8 +252,27 @@ This matches the `stream_events` behavior and will print JSON‑RPC `notificatio
    - Use “Read Resource” with URIs such as `unity://status`, `unity://scenes`, `unity://scene/0/objects?limit=10`, `unity://selection`, `unity://logs/tail?count=100`.
    - Open `stream_events` to watch `log`, `selection`, `scenes`, and `tool_result` notifications while you interact with the game.
 
+## MCP Tests & CI
+
+- Local/CI command: `pwsh ./tools/Run-McpContractTests.ps1` (runs Release configuration).
+- Run after building the CoreCLR IL2CPP target so the MCP server is present; CI should call this helper as part of the standard build pipeline.
+
+## Troubleshooting
+
+- No discovery file:
+  - Check `%TEMP%\unity-explorer-mcp.json` exists (or `UE_MCP_DISCOVERY` override).
+  - PowerShell:
+    - `Get-ChildItem $env:TEMP\unity-explorer-mcp.json`
+    - `Get-Content  $env:TEMP\unity-explorer-mcp.json | Write-Host`
+- Wrong base URL or port:
+  - Verify `baseUrl` and `port` values in the discovery file match what you expect.
+- No events on stream_events:
+  - Confirm `modeHints` includes `"streamable-http"` in the discovery file.
+  - Use the C# snippet above or `curl -N -H "Content-Type: application/json" -d '{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"stream_events\"}' http://<host>:<port>/message`.
+  - Trigger activity in the Unity game (logs, selection changes, scene changes, or tool calls) and verify JSON lines appear.
+
 ## Notes
 
-- Errors follow JSON-RPC envelope with `error.data.kind` (`InvalidArgument|NotFound|PermissionDenied|RateLimited|Internal|NotReady`) and optional `hint`. Tool failures return `{ ok:false, error:{ kind, message, hint? } }`.
+- Error envelopes follow JSON-RPC with `error.data.kind` (see `plans/mcp-interface-concept.md` for the exact shapes). Tool failures return `{ ok:false, error:{ kind, message, hint? } }`.
 - Non‑CoreCLR targets (Mono, Unhollower) do not host the MCP server.
 - All Unity API calls are marshalled to the main thread.

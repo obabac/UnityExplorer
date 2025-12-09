@@ -211,7 +211,7 @@ Project: `UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests` — these 
   - `Read_Logs_Tail_If_Server_Available`
 - `Read_Search_If_Server_Available`
 
-These tests must stay green whenever MCP code is changed.
+These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-McpContractTests.ps1` (Release) locally/CI to run them after a CoreCLR build.
 
 ### 5.2 Manual & MCP Inspector Flows
 

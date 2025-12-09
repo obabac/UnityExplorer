@@ -25,13 +25,13 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [ ] Add hook lifecycle tests in a dedicated “hook test” scene to validate `HookAdd` / `HookRemove` behaviour beyond permission errors.
 - Streaming & error robustness:
   - [x] Verify `stream_events` correctly cleans up on client disconnect (no unbounded dictionary growth) and add a test that repeatedly opens/closes streams (cleanup loop + reconnect test added).
-  - [ ] Ensure current concurrency behaviour matches `RateLimit_Does_Not_Crash_Server_When_Many_Concurrent_Requests` and, if a 429 limit is enabled, returns a structured JSON error payload.
-  - [ ] Add structured error JSON tests for common cases (`NotReady`, `NotFound`, `PermissionDenied`) that align server responses with inspector expectations.
+  - [x] Ensure current concurrency behaviour matches `RateLimit_Does_Not_Crash_Server_When_Many_Concurrent_Requests` and, if a 429 limit is enabled, returns a structured JSON error payload.
+  - [x] Add structured error JSON tests for common cases (`NotReady`, `NotFound`, `PermissionDenied`) that align server responses with inspector expectations.
 - Inspector UX & dev‑experience:
   - [ ] Verify that all tools and resources render without schema or validation errors in `@modelcontextprotocol/inspector` during typical flows (initialize → list_tools/read_resource → stream_events).
-  - [ ] Extend `UnityExplorer/README-mcp.md` with the final tool/resource list and representative example payloads used by inspector.
+  - [x] Extend `UnityExplorer/README-mcp.md` with the final tool/resource list and representative example payloads used by inspector.
   - [ ] Add a small smoke CLI/PowerShell script that runs `initialize`, `list_tools`, `GetStatus`, and `TailLogs` against a running Unity Explorer MCP instance, mirroring the `inspector` script defaults.
-  - [ ] Add a CI note/script to run `dotnet test UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests` (and optionally a scripted inspector run) as part of the UnityExplorer build/validation pipeline.
+  - [x] Add a CI note/script to run `dotnet test UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests` (and optionally a scripted inspector run) as part of the UnityExplorer build/validation pipeline.
 
 ---
 
@@ -127,7 +127,7 @@ Note: All writes remain behind `allowWrites` + confirmation.
 
 ## 8. Documentation & AGENTS.md Sync
 
-- [ ] Extend `UnityExplorer/README-mcp.md` to reflect the final tool/resource list and example payloads.
+- [x] Extend `UnityExplorer/README-mcp.md` to reflect the final tool/resource list and example payloads.
 - [x] Add `docs/unity-explorer-game-interaction.md` summarizing core UnityExplorer runtime capabilities (non-MCP).
 - [x] Update `UnityExplorer/AGENTS.md` with:
   - [x] A short “MCP quick‑start” section (build + launch + inspector connect).
@@ -144,7 +144,7 @@ Note: All writes remain behind `allowWrites` + confirmation.
 - [x] Verify `stream_events` gracefully handles client disconnects (no unbounded dictionary growth); add a test that opens and closes multiple streams.
 - [x] Add logging hooks for MCP errors into the MelonLoader log (short prefix, e.g. `[MCP]`), with a test that triggers at least one intentional error and reads it back via `logs/tail`.
 - [x] Add a small “version” resource or tool (e.g., `unity://status` already has version, but expose a dedicated `GetVersion` tool and test it).
-- [ ] Add a CI note/script to run the MCP contract tests as part of the normal UnityExplorer build pipeline.
+- [x] Add a CI note/script to run the MCP contract tests as part of the normal UnityExplorer build pipeline (see `tools/Run-McpContractTests.ps1`).
 
 ## 10. Space Shooter IL2CPP – End‑to‑End Validation
 
