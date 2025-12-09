@@ -1,6 +1,6 @@
 # Unity Explorer MCP – High‑Level TODOs (Streamable HTTP Era)
 
-Date: 2025‑12‑09  
+Date: 2025‑12‑10  
 Scope: Remaining work to get close to UnityExplorer feature parity over MCP, with a stable streamable‑http surface.
 
 ### Definition of Done (100%)
@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-09): Space Shooter host at `http://192.168.178.210:51477` is reachable; smoke succeeds and the full MCP contract suite (Release) now passes on the running host (45 tests passed, 1 skipped placeholder `Status_Tool_And_Resource_Available`). Inspector schema/UX validation remains pending.
+Status (2025-12-10): Space Shooter host at `http://192.168.178.210:51477` is reachable; `Invoke-McpSmoke.ps1` succeeds and the full MCP contract suite (Release) passes on the running host (45 passed, 1 skipped placeholder `Status_Tool_And_Resource_Available`). Inspector schema/UX validation remains pending.
 
 ---
 

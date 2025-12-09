@@ -1,15 +1,15 @@
 # Unity Explorer MCP Integration Plan (Updated)
 
-- Updated: 2025-12-09  
+- Updated: 2025-12-10  
 - Owner: Unity Explorer MCP (p-unity-explorer-mcp)  
 - Goal: Expose Unity Explorer’s runtime capabilities through an in‑process MCP server with **streamable HTTP** transport, making game state and safe controls available as MCP resources, tools, and streams.
 
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
-### Latest iteration snapshot (2025-12-09)
-- Deployed new MCP build to the Test-VM (Space Shooter) after stopping the game to avoid SCP lock errors; smoke run succeeds at `http://192.168.178.210:51477`.
-- `list_tools` now emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); verified via `curl` and contract test `ListTools_Includes_InputSchema_For_All_Tools`.
-- Full MCP contract suite (Release, BaseUrl `http://192.168.178.210:51477`) passes against the running Space Shooter host: 45 tests passed, 1 skipped placeholder (`Status_Tool_And_Resource_Available`); SpaceShooter remained stable for the run.
+### Latest iteration snapshot (2025-12-10)
+- Space Shooter MCP host reachable at `http://192.168.178.210:51477`; `Invoke-McpSmoke.ps1` succeeded (Ready=True, Scenes=1, logs returned).
+- Contract suite `Run-McpContractTests.ps1 -Configuration Release -BaseUrl http://192.168.178.210:51477` passed (45 tests, 0 failed, 1 skipped placeholder `Status_Tool_And_Resource_Available`).
+- `list_tools` still emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); inspector UI validation remains pending.
 
 ---
 
