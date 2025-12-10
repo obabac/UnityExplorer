@@ -7,7 +7,7 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-11)
-- ML_Mono now ships a lightweight MCP host (Newtonsoft.Json + TcpListener) that serves initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera; writes remain disabled. `stream_events` now streams log/selection/scene/tool_result notifications with cleanup + rate limits, and a discovery file is written from Mono builds. Config is persisted on Mono via `mcp.config.json`; main-thread marshaling uses the new `MainThread` sync-context helper.
+- ML_Mono now ships a lightweight MCP host (Newtonsoft.Json + TcpListener) that serves initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick; writes remain disabled. `stream_events` now streams log/selection/scene/tool_result notifications with cleanup + rate limits, and a discovery file is written from Mono builds. Config is persisted on Mono via `mcp.config.json`; main-thread marshaling uses the new `MainThread` sync-context helper.
 - CoreCLR/IL2CPP surface unchanged; last known Test-VM state: `Invoke-McpSmoke.ps1` + `Run-McpContractTests.ps1` (Release, BaseUrl `http://192.168.178.210:51477`) were green (45 passed, 0 failed, 1 skipped placeholder); not rerun this iteration.
 - `list_tools` still emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); inspector UI validation remains pending. Added Mono smoke harness `tools/Invoke-McpSmokeMono.ps1` (initialize → list_tools → call/read → stream_events) for local Mono validation.
 

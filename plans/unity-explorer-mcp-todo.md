@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-11): Space Shooter host unchanged; last contract runs were green (45 passed, 1 skipped placeholder). ML_Mono now includes a lightweight MCP host (Newtonsoft.Json + TcpListener) for initialize/list_tools/read_resource/call_tool on read-only surfaces; discovery is written on Mono, `stream_events` streams log/selection/scene/tool_result notifications; inspector schema/UX validation remains pending.
+Status (2025-12-11): Space Shooter host unchanged; last contract runs were green (45 passed, 1 skipped placeholder). ML_Mono now includes a lightweight MCP host (Newtonsoft.Json + TcpListener) for initialize/list_tools/read_resource/call_tool on read-only surfaces (now including MousePick world/ui); discovery is written on Mono, `stream_events` streams log/selection/scene/tool_result notifications; inspector schema/UX validation remains pending.
 
 ---
 
@@ -151,5 +151,5 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Add a Mono smoke harness (subset of contract tests) and doc how to run it.
 
 - [ ] Phase C — Parity + tests
-  - [ ] Expand Mono coverage toward CoreCLR parity (selection, MousePick, camera, guarded writes where safe) and log known gaps vs. IL2CPP/Test-VM.
+  - [ ] Expand Mono coverage toward CoreCLR parity (selection, MousePick, camera, guarded writes where safe) and log known gaps vs. IL2CPP/Test-VM. (MousePick world/ui now implemented; guarded writes still pending.)
   - [ ] Add Mono-specific contract/CI entry and validate on at least one Mono host; keep IL2CPP behavior unchanged.

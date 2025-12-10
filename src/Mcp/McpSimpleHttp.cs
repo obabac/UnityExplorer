@@ -27,6 +27,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityExplorer.ObjectExplorer;
 using UnityExplorer.UI.Panels;
+using UnityEngine.EventSystems;
 #endif
 
 #nullable enable
@@ -1417,6 +1418,18 @@ namespace UnityExplorer.Mcp
             list.Add(new { name = "GetComponents", description = "List component cards for an object.", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "limit", Integer() }, { "offset", Integer() } }, new[] { "objectId" }) });
             list.Add(new { name = "SearchObjects", description = "Search objects by name/type/path.", inputSchema = Schema(new Dictionary<string, object> { { "query", String() }, { "name", String() }, { "type", String() }, { "path", String() }, { "activeOnly", Bool() }, { "limit", Integer() }, { "offset", Integer() } }) });
             list.Add(new { name = "GetCameraInfo", description = "Get active camera info.", inputSchema = Schema(new Dictionary<string, object>()) });
+            list.Add(new
+            {
+                name = "MousePick",
+                description = "Raycast at current mouse position to pick a world or UI object.",
+                inputSchema = Schema(new Dictionary<string, object>
+                {
+                    { "mode", new { type = "string", @enum = new[] { "world", "ui" }, @default = "world" } },
+                    { "x", Number() },
+                    { "y", Number() },
+                    { "normalized", Bool(false) }
+                })
+            });
             list.Add(new { name = "TailLogs", description = "Tail recent logs.", inputSchema = Schema(new Dictionary<string, object> { { "count", Integer(200) } }) });
             list.Add(new { name = "GetSelection", description = "Current selection / inspected tabs.", inputSchema = Schema(new Dictionary<string, object>()) });
             return list.ToArray();
@@ -1447,6 +1460,8 @@ namespace UnityExplorer.Mcp
                     return _tools.SearchObjects(GetString(args, "query"), GetString(args, "name"), GetString(args, "type"), GetString(args, "path"), GetBool(args, "activeOnly"), GetInt(args, "limit"), GetInt(args, "offset"));
                 case "getcamerainfo":
                     return _tools.GetCameraInfo();
+                case "mousepick":
+                    return _tools.MousePick(GetString(args, "mode"), GetFloat(args, "x"), GetFloat(args, "y"), GetBool(args, "normalized") ?? false);
                 case "taillogs":
                     return _tools.TailLogs(GetInt(args, "count") ?? 200);
                 case "getselection":
@@ -1526,10 +1541,13 @@ namespace UnityExplorer.Mcp
 
         private static object String() => new { type = "string" };
         private static object Integer(object? defaultValue = null) => defaultValue == null ? new { type = "integer" } : new { type = "integer", @default = defaultValue };
+        private static object Number(object? defaultValue = null) => defaultValue == null ? new { type = "number" } : new { type = "number", @default = defaultValue };
         private static object Bool(object? defaultValue = null) => defaultValue == null ? new { type = "boolean" } : new { type = "boolean", @default = defaultValue };
 
         private static int? GetInt(JObject? args, string name)
             => args != null && args[name] != null && int.TryParse(args[name]!.ToString(), out var v) ? v : (int?)null;
+        private static float? GetFloat(JObject? args, string name)
+            => args != null && args[name] != null && float.TryParse(args[name]!.ToString(), out var v) ? v : (float?)null;
         private static bool? GetBool(JObject? args, string name)
             => args != null && args[name] != null && bool.TryParse(args[name]!.ToString(), out var v) ? v : (bool?)null;
         private static string? GetString(JObject? args, string name)
@@ -1919,6 +1937,68 @@ namespace UnityExplorer.Mcp
                     Pos = new Vector3Dto { X = pos.x, Y = pos.y, Z = pos.z },
                     Rot = new Vector3Dto { X = rot.x, Y = rot.y, Z = rot.z }
                 };
+            });
+        }
+
+        public PickResultDto MousePick(string? mode = "world", float? x = null, float? y = null, bool normalized = false)
+        {
+            return MainThread.Run(() =>
+            {
+                var normalizedMode = string.IsNullOrEmpty(mode) ? "world" : mode.ToLowerInvariant();
+                var pos = Input.mousePosition;
+
+                if (x.HasValue || y.HasValue)
+                {
+                    if (normalized)
+                    {
+                        var nx = Mathf.Clamp01(x ?? 0f);
+                        var ny = Mathf.Clamp01(y ?? 0f);
+                        pos = new Vector3(nx * Screen.width, ny * Screen.height, pos.z);
+                    }
+                    else
+                    {
+                        pos = new Vector3(x ?? pos.x, y ?? pos.y, pos.z);
+                    }
+                }
+
+                if (normalizedMode == "ui")
+                {
+                    var eventSystem = EventSystem.current;
+                    if (eventSystem == null)
+                        return new PickResultDto { Mode = "ui", Hit = false, Id = null, Items = new List<PickHit>() };
+
+                    var pointer = new PointerEventData(eventSystem)
+                    {
+                        position = new Vector2(pos.x, pos.y)
+                    };
+                    var raycastResults = new List<RaycastResult>();
+                    eventSystem.RaycastAll(pointer, raycastResults);
+                    var items = new List<PickHit>(raycastResults.Count);
+                    foreach (var rr in raycastResults)
+                    {
+                        var go = rr.gameObject;
+                        if (go == null) continue;
+                        items.Add(new PickHit { Id = "obj:" + go.GetInstanceID(), Name = go.name, Path = BuildPath(go.transform) });
+                    }
+
+                    var primaryId = items.Count > 0 ? items[0].Id : null;
+                    return new PickResultDto { Mode = "ui", Hit = items.Count > 0, Id = primaryId, Items = items };
+                }
+
+                Camera cam = Camera.main;
+                if (cam == null && Camera.allCamerasCount > 0) cam = Camera.allCameras[0];
+                if (cam == null) return new PickResultDto { Mode = "world", Hit = false, Id = null, Items = new List<PickHit>() };
+
+                var ray = cam.ScreenPointToRay(pos);
+                RaycastHit hit;
+                if (Physics.Raycast(ray, out hit))
+                {
+                    var go = hit.collider != null ? hit.collider.gameObject : null;
+                    var id = go != null ? "obj:" + go.GetInstanceID() : null;
+                    return new PickResultDto { Mode = "world", Hit = go != null, Id = id, Items = new List<PickHit>() };
+                }
+
+                return new PickResultDto { Mode = "world", Hit = false, Id = null, Items = new List<PickHit>() };
             });
         }
 
