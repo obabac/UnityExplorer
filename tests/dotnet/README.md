@@ -20,6 +20,16 @@ dotnet test
 
 If the server is not running, discovery tests will fail or be skipped.
 
+## Mono smoke entry (no Test-VM)
+
+For Mono/net35 hosts, use the lightweight smoke script instead of the full contract suite:
+
+```powershell
+pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3
+```
+
+Flow: `initialize` → `notifications/initialized` → `list_tools` → `call_tool` (`GetStatus`, `TailLogs`, `MousePick`) → `read_resource` (`unity://status`, `unity://scenes`, `unity://logs/tail`) → `stream_events` (expects a `tool_result` notification). This is suitable for Mono CI jobs where the host runs locally.
+
 ## Next steps
 
 - Add `ModelContextProtocol` client package and switch tests to real `HttpClientTransport` once the server exposes a full MCP surface.

@@ -15,7 +15,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 3. Discovery file is written to `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modeHints, startedAt }`.
 4. Connect a client via the MCP C# SDK using `HttpClientTransport` (AutoDetect mode), or talk directly to the HTTP endpoints described below.
 
-Mono/net35 builds: MCP host is available for read-only initialize/list_tools/read_resource/call_tool (status/scenes/objects/components/search/selection/logs/camera/mouse-pick) with `stream_events` (log/selection/scene/tool_result) and discovery (`unity-explorer-mcp.json`). Writes stay disabled; quick check: `pwsh ./tools/Invoke-McpSmokeMono.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3`.
+Mono/net35 builds: MCP host is available for read-only initialize/list_tools/read_resource/call_tool (status/scenes/objects/components/search/selection/logs/camera/mouse-pick) with `stream_events` (log/selection/scene/tool_result) and discovery (`unity-explorer-mcp.json`). Writes stay disabled; quick smoke/CI entry: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result check).
 
 ## Configuration
 
@@ -260,11 +260,13 @@ This matches the `stream_events` behavior and will print JSON‑RPC `notificatio
 - If `-BaseUrl` is omitted, the script reads `$env:UE_MCP_DISCOVERY` or `%TEMP%/unity-explorer-mcp.json`.
 - Sequence: `initialize` → `notifications/initialized` → `list_tools` → `call_tool` (`GetStatus`, `TailLogs`) → `read_resource` (`unity://status`, `unity://scenes`, `unity://logs/tail?count=...`).
 - Emits a short summary and exits non-zero on failure; use it alongside the inspector for quick health checks.
+- Mono host smoke/CI: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -StreamLines 3 -LogCount 10` (same flow as above but also calls `MousePick` and fails if `stream_events` lacks a `tool_result`).
 
 ## MCP Tests & CI
 
 - Local/CI command: `pwsh ./tools/Run-McpContractTests.ps1` (runs Release configuration).
 - Run after building the CoreCLR IL2CPP target so the MCP server is present; CI should call this helper as part of the standard build pipeline.
+- Mono smoke/CI entry (no Test-VM required): `pwsh ./tools/Run-McpMonoSmoke.ps1` against a locally running Mono host; wire this into Mono builds to ensure initialize/list_tools/read_resource/call_tool + `stream_events` keep working.
 
 ## Troubleshooting
 

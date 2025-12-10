@@ -9,7 +9,7 @@ This plan merges the original scope, the current implementation snapshot, and th
 ### Latest iteration snapshot (2025-12-11)
 - ML_Mono now ships a lightweight MCP host (Newtonsoft.Json + TcpListener) that serves initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick; writes remain disabled. `stream_events` now streams log/selection/scene/tool_result notifications with cleanup + rate limits, and a discovery file is written from Mono builds. Config is persisted on Mono via `mcp.config.json`; main-thread marshaling uses the new `MainThread` sync-context helper.
 - CoreCLR/IL2CPP surface unchanged; last known Test-VM state: `Invoke-McpSmoke.ps1` + `Run-McpContractTests.ps1` (Release, BaseUrl `http://192.168.178.210:51477`) were green (45 passed, 0 failed, 1 skipped placeholder); not rerun this iteration.
-- `list_tools` still emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); inspector UI validation remains pending. Added Mono smoke harness `tools/Invoke-McpSmokeMono.ps1` (initialize → list_tools → call/read → stream_events) for local Mono validation.
+- `list_tools` still emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); inspector UI validation remains pending. Mono smoke harness now uses `tools/Invoke-McpSmokeMono.ps1` with MousePick + tool_result stream verification and is wrapped by `tools/Run-McpMonoSmoke.ps1` for CI/local Mono jobs.
 
 ---
 
@@ -237,6 +237,10 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
 - Test-VM harness:
   - `pwsh C:\codex-workspace\ue-mcp-headless\call-mcp.ps1 -Scenario search|camera|mouse-world|mouse-ui|status|logs|selection|initialize|list_tools|events`
   - `-Scenario custom` reads `req.json`; when run on the Test-VM, BaseUrl resolves from `-BaseUrl` or discovery (default `http://127.0.0.1:51477`); from the Linux dev machine, target `http://192.168.178.210:51477` instead; `-StreamLines` controls how many `stream_events` chunks are printed.
+
+### 5.3 Mono smoke entry
+
+- `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3` for Mono/net35 hosts (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events; fails if `tool_result` is missing).
 
 ---
 

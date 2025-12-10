@@ -177,7 +177,7 @@ Tool‑level failures that still return a JSON‑RPC `result` use a consistent p
 - Server: `AddMcpServer().WithHttpTransport().WithTools<UnityReadTools>().WithResources<UnityResources>();` + `app.MapMcp()`.
 - Bind: `127.0.0.1:0` (ephemeral). Publish discovery file `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modes }`.
 - Client: `new HttpClientTransport(new() { Endpoint = baseUrl, Mode = AutoDetect })`.
-- Mono/net35 builds: MCP host uses a lightweight TcpListener + Newtonsoft.Json pipeline (no ASP.NET); discovery file is produced; `stream_events` replies with `NotReady`; writes remain disabled.
+- Mono/net35 builds: MCP host uses a lightweight TcpListener + Newtonsoft.Json pipeline (no ASP.NET); discovery file is produced; `stream_events` mirrors CoreCLR notifications (log/selection/scene/tool_result) with the same error envelope; writes remain disabled. Use `tools/Run-McpMonoSmoke.ps1` for smoke/CI (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result).
 
 ---
 

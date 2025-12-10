@@ -123,6 +123,7 @@ try {
 
     $statusTool = Invoke-McpRpc -Id "get-status" -Method "call_tool" -Params @{ name = "GetStatus"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
     $logsTool = Invoke-McpRpc -Id "tail-logs" -Method "call_tool" -Params @{ name = "TailLogs"; arguments = @{ count = $LogCount } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+    $mousePickTool = Invoke-McpRpc -Id "mouse-pick" -Method "call_tool" -Params @{ name = "MousePick"; arguments = @{ mode = "world" } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
 
     $readStatus = Invoke-McpRpc -Id "read-status" -Method "read_resource" -Params @{ uri = "unity://status" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
     $readScenes = Invoke-McpRpc -Id "read-scenes" -Method "read_resource" -Params @{ uri = "unity://scenes" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
@@ -143,16 +144,35 @@ try {
 
     $status = ($statusTool.result.content | Where-Object { $_.type -eq "json" })[0].json
     $logs = ($logsTool.result.content | Where-Object { $_.type -eq "json" })[0].json
+    $mousePick = ($mousePickTool.result.content | Where-Object { $_.type -eq "json" })[0].json
+    if (-not $mousePick) { throw "MousePick returned no payload" }
+    if (-not $mousePick.Mode) { throw "MousePick returned empty Mode" }
+
     $readStatusDoc = ($readStatus.result.contents[0].text | ConvertFrom-Json)
     $readScenesDoc = ($readScenes.result.contents[0].text | ConvertFrom-Json)
     $readLogsDoc = ($readLogs.result.contents[0].text | ConvertFrom-Json)
 
+    $toolResultEvent = $null
+    foreach ($chunk in $events) {
+        try {
+            $obj = $chunk | ConvertFrom-Json
+            if ($obj.method -eq "notification" -and $obj.params -and $obj.params.event -eq "tool_result") {
+                $toolResultEvent = $obj
+                break
+            }
+        } catch {
+            continue
+        }
+    }
+    if (-not $toolResultEvent) { throw "stream_events produced no tool_result notification" }
+
     Write-Host "Tools: $($tools.result.tools.Count) returned"
     Write-Host "Status: Ready=$($status.Ready) Scenes=$($status.ScenesLoaded)"
+    Write-Host "MousePick: Mode=$($mousePick.Mode) Hit=$($mousePick.Hit)"
     Write-Host "Scenes: $($readScenesDoc.Total) total"
     Write-Host "Logs (tool): $($logs.Items.Count) items (requested $LogCount)"
     Write-Host "Logs (read): $($readLogsDoc.Items.Count) items"
-    Write-Host "Stream events captured: $($events.Count)"
+    Write-Host "Stream events captured: $($events.Count) (tool_result observed=$($toolResultEvent -ne $null))"
 }
 catch {
     Write-Error $_
