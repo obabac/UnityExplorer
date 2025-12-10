@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-10): Space Shooter host at `http://192.168.178.210:51477` is reachable; `Invoke-McpSmoke.ps1` succeeds and the full MCP contract suite (Release) passes on the running host (45 passed, 1 skipped placeholder `Status_Tool_And_Resource_Available`). Contract tests now discover scenes/objects via `unity://scenes` (no scene-0 assumption); inspector schema/UX validation remains pending.
+Status (2025-12-10): Space Shooter host at `http://192.168.178.210:51477` is reachable; re-ran `Invoke-McpSmoke.ps1` and the full MCP contract suite (Release) passes on the running host (45 passed, 1 skipped placeholder `Status_Tool_And_Resource_Available`). Contract tests now discover scenes/objects via `unity://scenes` (no scene-0 assumption); inspector schema/UX validation remains pending.
 
 ---
 

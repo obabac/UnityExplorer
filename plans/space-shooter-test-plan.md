@@ -13,6 +13,7 @@
 - Discovery file: `%TEMP%\unity-explorer-mcp.json` (refresh by deleting before launch).
 - Launch: `Start-Process 'C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe' -ArgumentList '-seed=1234'`.
 - Deployment note: stop `SpaceShooter.exe` before `Update-Mod-Remote.ps1` (SCP fails on locked DLLs), then restart the game.
+- 2025-12-10: Re-ran `Invoke-McpSmoke.ps1` and `Run-McpContractTests.ps1 -Configuration Release -BaseUrl http://192.168.178.210:51477`; smoke and contract suite both green (45 passed, 1 skipped placeholder `Status_Tool_And_Resource_Available`).
 
 ## Determinism Hardening
 - Frame pacing: `Application.targetFrameRate = 60`, vSync off, Fixed Timestep 0.02, Max Allowed Timestep 0.333.
@@ -74,8 +75,8 @@
   - `GetComponents` on `obj:<id>` → Transform/Camera/AudioListener, etc.
   - `TailLogs` → shows MCP bind line `MCP (streamable-http) listening on http://0.0.0.0:51477`.
 
-## Latest live payloads (2025-12-09)
-- `list_tools` now emits typed schemas (required arrays, defaults, `additionalProperties=false`, `MousePick.mode` enum `world|ui`).
+## Latest live payloads (2025-12-10)
+- `list_tools` returns typed schemas with enums/defaults and currently lists: GetStatus, ListScenes, ListObjects, GetObject, GetComponents, GetVersion, SearchObjects, GetCameraInfo, MousePick, TailLogs, GetSelection, SetConfig, GetConfig, SetActive, ConsoleEval, SetMember, CallMethod, AddComponent, RemoveComponent, HookAdd, HookRemove, Reparent, DestroyObject, SelectObject, GetTimeScale, SetTimeScale, SpawnTestUi, DestroyTestUi.
 - `GetStatus` (call_tool): `{ Version="0.1.0", UnityVersion="2021.3.45f1", Platform="WindowsPlayer", Runtime="IL2CPP", ExplorerVersion="4.12.8", Ready=true, ScenesLoaded=1, Selection=[] }`.
 - `GetCameraInfo`: `{ IsFreecam=false, Name="Main Camera", Fov=60, Pos={X=0,Y=10,Z=5}, Rot={X=90,Y=0,Z=0} }`.
 - `MousePick` world (normalized center 0.5/0.5): `{ Mode="world", Hit=true, Id="obj:<id>", Items=null }`.
