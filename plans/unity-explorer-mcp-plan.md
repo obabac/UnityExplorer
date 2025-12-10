@@ -1,15 +1,15 @@
 # Unity Explorer MCP Integration Plan (Updated)
 
-- Updated: 2025-12-10  
+- Updated: 2025-12-11  
 - Owner: Unity Explorer MCP (p-unity-explorer-mcp)  
 - Goal: Expose Unity Explorer’s runtime capabilities through an in‑process MCP server with **streamable HTTP** transport, making game state and safe controls available as MCP resources, tools, and streams.
 
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
-### Latest iteration snapshot (2025-12-10)
-- Space Shooter MCP host reachable at `http://192.168.178.210:51477`; reran `Invoke-McpSmoke.ps1` and confirmed Ready=True, Scenes=1, logs returned.
-- Contract suite `Run-McpContractTests.ps1 -Configuration Release -BaseUrl http://192.168.178.210:51477` reran green (45 passed, 0 failed, 1 skipped placeholder `Status_Tool_And_Resource_Available`).
-- Contract tests now derive sample scenes/objects from `unity://scenes` instead of assuming scene index 0, keeping the suite host-agnostic.
+### Latest iteration snapshot (2025-12-11)
+- Doc-only Mono audit; no new runtime changes. Last known IL2CPP/Test-VM state: `Invoke-McpSmoke.ps1` + `Run-McpContractTests.ps1` (Release, BaseUrl `http://192.168.178.210:51477`) were green (45 passed, 0 failed, 1 skipped placeholder); not rerun this iteration.
+- ML_Mono target is `net35` with `DefineConstants=MONO,ML` and `IncludeMcpPackages=false` (no `INTEROP`). MCP files are wrapped in `#if INTEROP` while `ExplorerCore`/`OptionsPanel` reference `UnityExplorer.Mcp` unguarded, so ML_Mono currently fails to build (see `build.log`: missing `McpSimpleHttp`/namespace, downstream ILRepack failures because no assembly is produced).
+- MCP transport/DTOs rely on `System.Text.Json`, `Task`, and TcpListener APIs that are available on CoreCLR; Mono `net35` would need an alternate JSON/HTTP implementation before enabling the same surface.
 - `list_tools` still emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); inspector UI validation remains pending.
 
 ---
@@ -245,7 +245,7 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
 
 Fine‑grained TODOs live in `.plans/unity-explorer-mcp-todo.md`. High‑level themes:
 
-- Mono / MelonLoader MCP host support (UnityExplorer.MelonLoader.Mono) is now a priority once IL2CPP/Test-VM validation is stable (see TODO section 11).
+- Mono / MelonLoader MCP host support (UnityExplorer.MelonLoader.Mono) follows a three-phase path: (A) get ML_Mono compiling again with an MCP host stub and guard non-INTEROP callers, (B) bring up a minimal read-only Mono MCP surface with a lighter JSON/HTTP stack, (C) close parity gaps and add Mono-specific smoke/contract coverage. See TODO section 11 for the detailed checklist.
 
 1. **Transport & protocol polish**
    - Remove SSE leftovers, refine error codes, add light rate limiting.

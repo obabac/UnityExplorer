@@ -139,8 +139,16 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 
 ## 11. Mono / MelonLoader Support
 
-- [ ] Fix `UnityExplorer.MelonLoader.Mono` MCP support so that the in-process MCP server also works on legacy Mono-based MelonLoader targets.
-  - [ ] Audit current `#if INTEROP` / CoreCLR-only code paths and identify what is required to host the MCP server in the Mono build (entry points, threading, discovery file, config).
-  - [ ] Decide whether to share the same MCP surface (tools/resources/streams) or a reduced subset on Mono, and update `plans/mcp-interface-concept.md` accordingly.
-  - [ ] Implement and wire the Mono MCP host, keeping transport/DTO shapes consistent, and ensure it does not regress IL2CPP/CoreCLR behavior.
-  - [ ] Add minimal smoke tests / contract tests for the Mono host (or a dedicated Mono-only test harness) and document how to run them.
+- [ ] Phase A — Build + host skeleton
+  - [ ] Fix ML_Mono build (currently `DefineConstants=MONO,ML`, `IncludeMcpPackages=false`, `net35`) so `build.ps1` can produce `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll` again; guard `ExplorerCore`/`OptionsPanel`/other MCP call sites when `INTEROP` is absent or introduce a stub McpHost that compiles on Mono.
+  - [ ] Decide how `INTEROP` should apply to Mono (enable a minimal variant or keep it off with stubs) and ensure `McpConfig`/discovery file behavior is well-defined even if MCP is disabled.
+  - [ ] Document the build command + expected output paths for Mono in the plan/todo and capture any remaining blocking errors in `build.log`.
+
+- [ ] Phase B — Read-only MCP surface on Mono
+  - [ ] Select a Mono-friendly JSON/HTTP stack (e.g., `Newtonsoft.Json` + `HttpListener`/simplified TCP) that preserves the CoreCLR DTOs/error envelope; avoid heavy ASP.NET deps.
+  - [ ] Bring up minimal Mono MCP endpoints (`initialize`, `list_tools`, `read_resource` for status/scenes/objects/logs, `stream_events` if feasible) and keep shapes identical to CoreCLR; document any deltas in `plans/mcp-interface-concept.md`.
+  - [ ] Add a Mono smoke harness (subset of contract tests) and doc how to run it.
+
+- [ ] Phase C — Parity + tests
+  - [ ] Expand Mono coverage toward CoreCLR parity (selection, MousePick, camera, guarded writes where safe) and log known gaps vs. IL2CPP/Test-VM.
+  - [ ] Add Mono-specific contract/CI entry and validate on at least one Mono host; keep IL2CPP behavior unchanged.

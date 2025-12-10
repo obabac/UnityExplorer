@@ -4,7 +4,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 
 ## Status
 
-- Targets: CoreCLR builds only (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`).
+- Targets: CoreCLR builds only (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) is a planned/experimental host and not validated yet.
 - Transport: lightweight streamable HTTP over a local TCP listener.
 - Default mode: Read‑only (guarded writes must be explicitly enabled).
 

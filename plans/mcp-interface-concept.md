@@ -4,6 +4,7 @@
 - Mode: In‑process server (C# SDK), HTTP transport via `ModelContextProtocol.AspNetCore`
 - Client transport: `HttpClientTransport` with `HttpTransportMode.AutoDetect | StreamableHttp | Sse`
 - Default policy: Read‑only. Writes gated behind config + confirmation + allowlist.
+- Mono (MelonLoader, `net35`): planned follow-up; intent is to reuse these DTOs/error envelopes with a lighter JSON/HTTP stack and potentially a reduced write surface. Any Mono-only deviations must be documented here when implemented.
 
 ---
 
