@@ -12,6 +12,21 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 #endif
+#if MONO
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityExplorer.ObjectExplorer;
+using UnityExplorer.UI.Panels;
+#endif
 
 #nullable enable
 
@@ -395,15 +410,18 @@ namespace UnityExplorer.Mcp
             }
         }
 
-        private static string ReasonPhrase(int statusCode) => statusCode switch
+        private static string ReasonPhrase(int statusCode)
         {
-            400 => "Bad Request",
-            403 => "Forbidden",
-            404 => "Not Found",
-            429 => "Too Many Requests",
-            500 => "Internal Server Error",
-            _ => "OK"
-        };
+            switch (statusCode)
+            {
+                case 400: return "Bad Request";
+                case 403: return "Forbidden";
+                case 404: return "Not Found";
+                case 429: return "Too Many Requests";
+                case 500: return "Internal Server Error";
+                default: return "OK";
+            }
+        }
 
         private static async Task WriteResponseAsync(Stream stream, int code, string text, CancellationToken ct)
         {
@@ -882,10 +900,880 @@ namespace UnityExplorer.Mcp
         private static string? TryString(System.Collections.Generic.IDictionary<string, string> q, string key)
             => q.TryGetValue(key, out var s) && !string.IsNullOrWhiteSpace(s) ? s : null;
     }
+#elif MONO
+    internal sealed class McpSimpleHttp : IDisposable
+    {
+        public static McpSimpleHttp? Current { get; private set; }
+        private readonly TcpListener _listener;
+        private volatile bool _running;
+        private readonly MonoMcpHandlers _handlers = new MonoMcpHandlers();
+        private readonly int _concurrencyLimit = 16;
+        private int _active;
+        public int Port { get; private set; }
+
+        public McpSimpleHttp(string bindAddress, int port)
+        {
+            IPAddress ip = IPAddress.Any;
+            if (!string.IsNullOrEmpty(bindAddress) && IPAddress.TryParse(bindAddress, out var parsed))
+                ip = parsed;
+            _listener = new TcpListener(ip, port <= 0 ? 0 : port);
+        }
+
+        public void Start()
+        {
+            _listener.Start();
+            Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            _running = true;
+            Current = this;
+            try { _listener.BeginAcceptTcpClient(OnAccept, null); } catch { }
+        }
+
+        private void OnAccept(IAsyncResult ar)
+        {
+            if (!_running) return;
+            TcpClient client = null;
+            try { client = _listener.EndAcceptTcpClient(ar); }
+            catch { }
+            finally
+            {
+                if (_running)
+                {
+                    try { _listener.BeginAcceptTcpClient(OnAccept, null); } catch { }
+                }
+            }
+            if (client == null) return;
+            ThreadPool.QueueUserWorkItem(_ => HandleClient(client));
+        }
+
+        private void HandleClient(TcpClient client)
+        {
+            using (client)
+            using (var stream = client.GetStream())
+            using (var reader = new StreamReader(stream, Encoding.UTF8))
+            {
+                stream.ReadTimeout = 15000;
+                stream.WriteTimeout = 15000;
+
+                string? requestLine = reader.ReadLine();
+                if (string.IsNullOrEmpty(requestLine)) return;
+                var parts = requestLine.Split(' ');
+                if (parts.Length < 2) return;
+                var method = parts[0];
+                var target = parts[1];
+
+                string? line;
+                long contentLength = 0;
+                while (!string.IsNullOrEmpty(line = reader.ReadLine()))
+                {
+                    int idx = line.IndexOf(':');
+                    if (idx <= 0) continue;
+                    var name = line.Substring(0, idx).Trim();
+                    var val = line.Substring(idx + 1).Trim();
+                    if (name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)) long.TryParse(val, out contentLength);
+                }
+
+                string body = string.Empty;
+                if (method == "POST" && contentLength > 0)
+                {
+                    var buf = new char[contentLength];
+                    int read = reader.ReadBlock(buf, 0, (int)contentLength);
+                    body = new string(buf, 0, read);
+                }
+
+                if (method == "POST" && (target.StartsWith("/message") || target == "/" || target.StartsWith("/?")))
+                {
+                    ProcessJsonRpc(stream, body);
+                    return;
+                }
+
+                if (method == "GET" && target.StartsWith("/read"))
+                {
+                    HandleRead(stream, target);
+                    return;
+                }
+
+                WriteResponse(stream, 200, "ok", "text/plain");
+            }
+        }
+
+        private void ProcessJsonRpc(Stream stream, string body)
+        {
+            JObject root;
+            try
+            {
+                root = string.IsNullOrEmpty(body) ? new JObject() : JObject.Parse(body);
+            }
+            catch (Exception ex)
+            {
+                WriteJsonError(stream, null, -32700, "Parse error", "InvalidRequest", null, ex.Message, 400);
+                return;
+            }
+
+            var idToken = root["id"];
+            var methodName = root.Value<string>("method") ?? string.Empty;
+            if (string.IsNullOrEmpty(methodName))
+            {
+                WriteJsonError(stream, idToken, -32600, "Invalid request: 'method' is required.", "InvalidRequest", null, null, 400);
+                return;
+            }
+
+            if (string.Equals(methodName, "tools/list", StringComparison.OrdinalIgnoreCase)) methodName = "list_tools";
+            else if (string.Equals(methodName, "tools/call", StringComparison.OrdinalIgnoreCase)) methodName = "call_tool";
+            else if (string.Equals(methodName, "resources/read", StringComparison.OrdinalIgnoreCase)) methodName = "read_resource";
+
+            if (string.Equals(methodName, "notifications/initialized", StringComparison.OrdinalIgnoreCase))
+            {
+                WriteJsonResult(stream, idToken, new { ok = true });
+                return;
+            }
+
+            if (string.Equals(methodName, "ping", StringComparison.OrdinalIgnoreCase))
+            {
+                WriteJsonResult(stream, idToken, new { });
+                return;
+            }
+
+            if (string.Equals(methodName, "initialize", StringComparison.OrdinalIgnoreCase))
+            {
+                var result = _handlers.BuildInitializeResult();
+                WriteJsonResult(stream, idToken, result);
+                return;
+            }
+
+            if (string.Equals(methodName, "list_tools", StringComparison.OrdinalIgnoreCase))
+            {
+                WriteJsonResult(stream, idToken, new { tools = _handlers.ListTools() });
+                return;
+            }
+
+            if (string.Equals(methodName, "call_tool", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!CheckSlot(stream, idToken)) return;
+                try
+                {
+                    var args = root["params"]?["arguments"] as JObject;
+                    var name = (root["params"]?["name"] ?? root["params"]?["tool"] ?? string.Empty).ToString();
+                    if (string.IsNullOrEmpty(name))
+                        throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Invalid params: 'name' is required.");
+                    var result = _handlers.CallTool(name, args);
+                    WriteJsonResult(stream, idToken, new { content = new[] { new { type = "json", json = result } } });
+                }
+                catch (MonoMcpHandlers.McpError err)
+                {
+                    WriteJsonError(stream, idToken, err.Code, err.Message, err.Kind, err.Hint, err.Detail, err.HttpStatus);
+                }
+                catch (Exception ex)
+                {
+                    WriteJsonError(stream, idToken, -32603, "Internal error", "Internal", null, ex.Message, 500);
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref _active);
+                }
+                return;
+            }
+
+            if (string.Equals(methodName, "read_resource", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!CheckSlot(stream, idToken)) return;
+                try
+                {
+                    var uri = root["params"]?["uri"] != null ? root["params"]!["uri"]!.ToString() : null;
+                    if (string.IsNullOrEmpty(uri))
+                        throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Invalid params: 'uri' is required.");
+                    var result = _handlers.ReadResource(uri);
+                    var json = JsonConvert.SerializeObject(result);
+                    WriteJsonResult(stream, idToken, new { contents = new[] { new { uri, mimeType = "application/json", text = json } } });
+                }
+                catch (MonoMcpHandlers.McpError err)
+                {
+                    WriteJsonError(stream, idToken, err.Code, err.Message, err.Kind, err.Hint, err.Detail, err.HttpStatus);
+                }
+                catch (Exception ex)
+                {
+                    WriteJsonError(stream, idToken, -32603, "Internal error", "Internal", null, ex.Message, 500);
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref _active);
+                }
+                return;
+            }
+
+            if (string.Equals(methodName, "stream_events", StringComparison.OrdinalIgnoreCase))
+            {
+                WriteJsonError(stream, idToken, -32601, "stream_events is not available on Mono MCP yet.", "NotReady", "stream_events not supported on Mono", null, 400);
+                return;
+            }
+
+            WriteJsonError(stream, idToken, -32601, "Method not found: " + methodName, "MethodNotFound", null, null, 400);
+        }
+
+        private bool CheckSlot(Stream stream, JToken? idToken)
+        {
+            var active = Interlocked.Increment(ref _active);
+            if (active > _concurrencyLimit)
+            {
+                Interlocked.Decrement(ref _active);
+                var msg = $"Cannot have more than {_concurrencyLimit} parallel requests. Please slow down.";
+                WriteJsonError(stream, idToken, -32005, msg, "RateLimited", null, null, 429);
+                return false;
+            }
+            return true;
+        }
+
+        private void HandleRead(Stream stream, string target)
+        {
+            var query = MonoMcpHandlers.ParseQuery(target);
+            if (!query.TryGetValue("uri", out var uri) || string.IsNullOrEmpty(uri))
+            {
+                WriteResponse(stream, 400, "missing uri", "text/plain");
+                return;
+            }
+            try
+            {
+                var obj = _handlers.ReadResource(uri);
+                var json = JsonConvert.SerializeObject(obj);
+                WriteResponse(stream, 200, json, "application/json");
+            }
+            catch (Exception ex)
+            {
+                WriteResponse(stream, 400, ex.Message, "text/plain");
+            }
+        }
+
+        public void Dispose()
+        {
+            _running = false;
+            try { _listener.Stop(); } catch { }
+            Current = null;
+        }
+
+        private static void WriteResponse(Stream stream, int statusCode, string body, string contentType)
+        {
+            if (body == null) body = string.Empty;
+            var payload = Encoding.UTF8.GetBytes(body);
+            var header = "HTTP/1.1 " + statusCode + " " + ReasonPhrase(statusCode) + "\r\n"
+                         + "Content-Type: " + contentType + "\r\n"
+                         + "Content-Length: " + payload.Length + "\r\n"
+                         + "Connection: close\r\n\r\n";
+            var headerBytes = Encoding.UTF8.GetBytes(header);
+            stream.Write(headerBytes, 0, headerBytes.Length);
+            stream.Write(payload, 0, payload.Length);
+        }
+
+        private void WriteJsonResult(Stream stream, JToken? idToken, object result)
+        {
+            var payload = new JObject
+            {
+                { "jsonrpc", "2.0" },
+                { "id", idToken ?? JValue.CreateNull() },
+                { "result", result == null ? JValue.CreateNull() : JToken.FromObject(result) }
+            };
+            WriteResponse(stream, 200, payload.ToString(Formatting.None), "application/json");
+        }
+
+        private void WriteJsonError(Stream stream, JToken? idToken, int code, string message, string kind, string? hint, string? detail, int statusCode)
+        {
+            try { ExplorerCore.LogWarning($"[MCP] {code}: {message}"); LogBuffer.Add("error", message, "mcp", kind); } catch { }
+            var data = new JObject { { "kind", kind } };
+            if (!string.IsNullOrEmpty(hint)) data["hint"] = hint;
+            if (!string.IsNullOrEmpty(detail)) data["detail"] = detail;
+            var payload = new JObject
+            {
+                { "jsonrpc", "2.0" },
+                { "id", idToken ?? JValue.CreateNull() },
+                { "error", new JObject { { "code", code }, { "message", message }, { "data", data } } }
+            };
+            WriteResponse(stream, statusCode, payload.ToString(Formatting.None), "application/json");
+        }
+
+        private static string ReasonPhrase(int statusCode)
+        {
+            switch (statusCode)
+            {
+                case 400: return "Bad Request";
+                case 403: return "Forbidden";
+                case 404: return "Not Found";
+                case 429: return "Too Many Requests";
+                case 500: return "Internal Server Error";
+                default: return "OK";
+            }
+        }
+    }
+
+    internal sealed class MonoMcpHandlers
+    {
+        internal sealed class McpError : Exception
+        {
+            public int Code { get; }
+            public int HttpStatus { get; }
+            public string Kind { get; }
+            public string? Hint { get; }
+            public string? Detail { get; }
+
+            public McpError(int code, int httpStatus, string kind, string message, string? hint = null, string? detail = null)
+                : base(message)
+            {
+                Code = code;
+                HttpStatus = httpStatus;
+                Kind = kind;
+                Hint = hint;
+                Detail = detail;
+            }
+        }
+
+        private readonly MonoReadTools _tools = new MonoReadTools();
+
+        public object BuildInitializeResult()
+        {
+            var protocolVersion = "2024-11-05";
+            var serverInfo = new
+            {
+                name = "UnityExplorer.Mcp.Mono",
+                version = typeof(McpSimpleHttp).Assembly.GetName().Version?.ToString() ?? "0.0.0"
+            };
+            var capabilities = new
+            {
+                tools = new { listChanged = true },
+                resources = new { listChanged = true },
+                experimental = new { streamEvents = false }
+            };
+            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, and logs over streamable-http. Writes are disabled and stream_events is not yet available.";
+            return new { protocolVersion, capabilities, serverInfo, instructions };
+        }
+
+        public object[] ListTools()
+        {
+            var list = new List<object>();
+            list.Add(new { name = "GetStatus", description = "Status snapshot of Unity Explorer.", inputSchema = Schema(new Dictionary<string, object>()) });
+            list.Add(new { name = "ListScenes", description = "List scenes (paged).", inputSchema = Schema(new Dictionary<string, object> { { "limit", Integer() }, { "offset", Integer() } }) });
+            list.Add(new { name = "ListObjects", description = "List objects in a scene or all scenes.", inputSchema = Schema(new Dictionary<string, object> { { "sceneId", String() }, { "name", String() }, { "type", String() }, { "activeOnly", Bool() }, { "limit", Integer() }, { "offset", Integer() } }) });
+            list.Add(new { name = "GetObject", description = "Get object details by id.", inputSchema = Schema(new Dictionary<string, object> { { "id", String() } }, new[] { "id" }) });
+            list.Add(new { name = "GetComponents", description = "List component cards for an object.", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "limit", Integer() }, { "offset", Integer() } }, new[] { "objectId" }) });
+            list.Add(new { name = "SearchObjects", description = "Search objects by name/type/path.", inputSchema = Schema(new Dictionary<string, object> { { "query", String() }, { "name", String() }, { "type", String() }, { "path", String() }, { "activeOnly", Bool() }, { "limit", Integer() }, { "offset", Integer() } }) });
+            list.Add(new { name = "GetCameraInfo", description = "Get active camera info.", inputSchema = Schema(new Dictionary<string, object>()) });
+            list.Add(new { name = "TailLogs", description = "Tail recent logs.", inputSchema = Schema(new Dictionary<string, object> { { "count", Integer(200) } }) });
+            list.Add(new { name = "GetSelection", description = "Current selection / inspected tabs.", inputSchema = Schema(new Dictionary<string, object>()) });
+            return list.ToArray();
+        }
+
+        public object CallTool(string name, JObject? args)
+        {
+            var key = (name ?? string.Empty).ToLowerInvariant();
+            switch (key)
+            {
+                case "getstatus":
+                    return _tools.GetStatus();
+                case "listscenes":
+                    return _tools.ListScenes(GetInt(args, "limit"), GetInt(args, "offset"));
+                case "listobjects":
+                    return _tools.ListObjects(GetString(args, "sceneId"), GetString(args, "name"), GetString(args, "type"), GetBool(args, "activeOnly"), GetInt(args, "limit"), GetInt(args, "offset"));
+                case "getobject":
+                    {
+                        var id = RequireString(args, "id", "Invalid params: 'id' is required.");
+                        return _tools.GetObject(id);
+                    }
+                case "getcomponents":
+                    {
+                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
+                        return _tools.GetComponents(oid, GetInt(args, "limit"), GetInt(args, "offset"));
+                    }
+                case "searchobjects":
+                    return _tools.SearchObjects(GetString(args, "query"), GetString(args, "name"), GetString(args, "type"), GetString(args, "path"), GetBool(args, "activeOnly"), GetInt(args, "limit"), GetInt(args, "offset"));
+                case "getcamerainfo":
+                    return _tools.GetCameraInfo();
+                case "taillogs":
+                    return _tools.TailLogs(GetInt(args, "count") ?? 200);
+                case "getselection":
+                    return _tools.GetSelection();
+                default:
+                    throw new McpError(-32004, 404, "NotFound", "Tool not found: " + name);
+            }
+        }
+
+        public object ReadResource(string uri)
+        {
+            if (string.IsNullOrEmpty(uri))
+                throw new McpError(-32602, 400, "InvalidArgument", "uri required");
+
+            if (!Uri.TryCreate(uri, UriKind.Absolute, out var u))
+                throw new McpError(-32602, 400, "InvalidArgument", "invalid uri");
+
+            var path = u.AbsolutePath.Trim('/');
+            if (!string.IsNullOrEmpty(u.Host))
+                path = string.IsNullOrEmpty(path) ? u.Host : $"{u.Host}/{path}";
+            var query = ParseQuery(u.Query);
+
+            if (path.Equals("status", StringComparison.OrdinalIgnoreCase)) return _tools.GetStatus();
+            if (path.Equals("scenes", StringComparison.OrdinalIgnoreCase)) return _tools.ListScenes(TryInt(query, "limit"), TryInt(query, "offset"));
+            if (path.StartsWith("scene/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/objects", StringComparison.OrdinalIgnoreCase))
+            {
+                var sceneId = path.Substring(6, path.Length - 6 - "/objects".Length);
+                return _tools.ListObjects(sceneId, TryString(query, "name"), TryString(query, "type"), TryBool(query, "activeOnly"), TryInt(query, "limit"), TryInt(query, "offset"));
+            }
+            if (path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) && !path.EndsWith("/components", StringComparison.OrdinalIgnoreCase))
+            {
+                var id = path.Substring("object/".Length);
+                return _tools.GetObject(id);
+            }
+            if (path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/components", StringComparison.OrdinalIgnoreCase))
+            {
+                var id = path.Substring("object/".Length, path.Length - "object/".Length - "/components".Length);
+                return _tools.GetComponents(id, TryInt(query, "limit"), TryInt(query, "offset"));
+            }
+            if (path.Equals("search", StringComparison.OrdinalIgnoreCase))
+            {
+                return _tools.SearchObjects(TryString(query, "query"), TryString(query, "name"), TryString(query, "type"), TryString(query, "path"), TryBool(query, "activeOnly"), TryInt(query, "limit"), TryInt(query, "offset"));
+            }
+            if (path.Equals("camera/active", StringComparison.OrdinalIgnoreCase)) return _tools.GetCameraInfo();
+            if (path.Equals("selection", StringComparison.OrdinalIgnoreCase)) return _tools.GetSelection();
+            if (path.Equals("logs/tail", StringComparison.OrdinalIgnoreCase)) return _tools.TailLogs(TryInt(query, "count") ?? 200);
+
+            throw new McpError(-32004, 404, "NotFound", "resource not supported");
+        }
+
+        internal static Dictionary<string, string> ParseQuery(string query)
+        {
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(query)) return dict;
+            if (query.StartsWith("?")) query = query.Substring(1);
+            var pairs = query.Split(new[] { '&' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var p in pairs)
+            {
+                var kv = p.Split(new[] { '=' }, 2);
+                var k = Uri.UnescapeDataString(kv[0]);
+                var v = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : string.Empty;
+                dict[k] = v;
+            }
+            return dict;
+        }
+
+        private static object Schema(Dictionary<string, object> props, string[]? required = null)
+        {
+            return new
+            {
+                type = "object",
+                properties = props,
+                required = required != null && required.Length > 0 ? required : null,
+                additionalProperties = false
+            };
+        }
+
+        private static object String() => new { type = "string" };
+        private static object Integer(object? defaultValue = null) => defaultValue == null ? new { type = "integer" } : new { type = "integer", @default = defaultValue };
+        private static object Bool(object? defaultValue = null) => defaultValue == null ? new { type = "boolean" } : new { type = "boolean", @default = defaultValue };
+
+        private static int? GetInt(JObject? args, string name)
+            => args != null && args[name] != null && int.TryParse(args[name]!.ToString(), out var v) ? v : (int?)null;
+        private static bool? GetBool(JObject? args, string name)
+            => args != null && args[name] != null && bool.TryParse(args[name]!.ToString(), out var v) ? v : (bool?)null;
+        private static string? GetString(JObject? args, string name)
+            => args != null && args[name] != null ? args[name]!.ToString() : null;
+        private static string RequireString(JObject? args, string name, string message)
+        {
+            var s = GetString(args, name);
+            if (string.IsNullOrEmpty(s)) throw new McpError(-32602, 400, "InvalidArgument", message);
+            return s!;
+        }
+
+        private static int? TryInt(Dictionary<string, string> q, string key)
+            => q.TryGetValue(key, out var s) && int.TryParse(s, out var v) ? v : (int?)null;
+        private static bool? TryBool(Dictionary<string, string> q, string key)
+            => q.TryGetValue(key, out var s) && bool.TryParse(s, out var v) ? v : (bool?)null;
+        private static string? TryString(Dictionary<string, string> q, string key)
+            => q.TryGetValue(key, out var s) && !IsNullOrWhiteSpace(s) ? s : null;
+
+        private static bool IsNullOrWhiteSpace(string? value)
+        {
+            return string.IsNullOrEmpty(value) || value.Trim().Length == 0;
+        }
+    }
+
+    internal sealed class MonoReadTools
+    {
+        private sealed class TraversalEntry
+        {
+            public GameObject GameObject { get; }
+            public string Path { get; }
+
+            public TraversalEntry(GameObject go, string path)
+            {
+                GameObject = go;
+                Path = path;
+            }
+        }
+
+        private IEnumerable<TraversalEntry> Traverse(GameObject root)
+        {
+            var stack = new Stack<TraversalEntry>();
+            stack.Push(new TraversalEntry(root, "/" + root.name));
+            while (stack.Count > 0)
+            {
+                var entry = stack.Pop();
+                yield return entry;
+                var t = entry.GameObject.transform;
+                for (int i = t.childCount - 1; i >= 0; i--)
+                {
+                    var c = t.GetChild(i);
+                    stack.Push(new TraversalEntry(c.gameObject, entry.Path + "/" + c.name));
+                }
+            }
+        }
+
+        private GameObject? FindByInstanceId(int instanceId)
+        {
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var s = SceneManager.GetSceneAt(i);
+                foreach (var root in s.GetRootGameObjects())
+                {
+                    if (root.GetInstanceID() == instanceId)
+                        return root;
+                    foreach (var entry in Traverse(root))
+                    {
+                        if (entry.GameObject.GetInstanceID() == instanceId)
+                            return entry.GameObject;
+                    }
+                }
+            }
+            return null;
+        }
+
+        private string BuildPath(Transform t)
+        {
+            var names = new List<string>();
+            var cur = t;
+            while (cur != null)
+            {
+                names.Add(cur.name);
+                cur = cur.parent;
+            }
+            names.Reverse();
+            return "/" + string.Join("/", names.ToArray());
+        }
+
+        private sealed class SelectionSnapshot
+        {
+            public string? ActiveId { get; set; }
+            public List<string> Items { get; set; } = new List<string>();
+        }
+
+        private SelectionSnapshot CaptureSelection()
+        {
+            var snap = new SelectionSnapshot();
+            try
+            {
+                if (InspectorManager.ActiveInspector?.Target is GameObject ago)
+                    snap.ActiveId = "obj:" + ago.GetInstanceID();
+                foreach (var ins in InspectorManager.Inspectors)
+                {
+                    if (ins.Target is GameObject go)
+                    {
+                        var id = "obj:" + go.GetInstanceID();
+                        if (!snap.Items.Contains(id))
+                            snap.Items.Add(id);
+                    }
+                }
+            }
+            catch { }
+            if (snap.ActiveId != null && !snap.Items.Contains(snap.ActiveId))
+                snap.Items.Insert(0, snap.ActiveId);
+            return snap;
+        }
+
+        public StatusDto GetStatus()
+        {
+            return MainThread.Run(() =>
+            {
+                var scenesLoaded = SceneManager.sceneCount;
+                var platform = Application.platform.ToString();
+                var runtime = Universe.Context.ToString();
+                var selection = CaptureSelection().Items;
+                return new StatusDto
+                {
+                    Version = "0.1.0",
+                    UnityVersion = Application.unityVersion,
+                    Platform = platform,
+                    Runtime = runtime,
+                    ExplorerVersion = ExplorerCore.VERSION,
+                    Ready = scenesLoaded > 0,
+                    ScenesLoaded = scenesLoaded,
+                    Selection = selection
+                };
+            });
+        }
+
+        public Page<SceneDto> ListScenes(int? limit, int? offset)
+        {
+            int lim = Math.Max(1, limit ?? 100);
+            int off = Math.Max(0, offset ?? 0);
+            return MainThread.Run(() =>
+            {
+                var scenes = new List<SceneDto>();
+                var total = SceneManager.sceneCount;
+                for (int i = 0; i < total; i++)
+                {
+                    var s = SceneManager.GetSceneAt(i);
+                    scenes.Add(new SceneDto { Id = "scn:" + i, Name = s.name, Index = i, IsLoaded = s.isLoaded, RootCount = s.rootCount });
+                }
+                var items = scenes.Skip(off).Take(lim).ToList();
+                return new Page<SceneDto>(total, items);
+            });
+        }
+
+        public Page<ObjectCardDto> ListObjects(string? sceneId, string? name, string? type, bool? activeOnly, int? limit, int? offset)
+        {
+            int lim = Math.Max(1, limit ?? 100);
+            int off = Math.Max(0, offset ?? 0);
+            return MainThread.Run(() =>
+            {
+                var results = new List<ObjectCardDto>(lim);
+                int total = 0;
+
+                IEnumerable<GameObject> AllRoots()
+                {
+                    if (!string.IsNullOrEmpty(sceneId) && sceneId!.StartsWith("scn:"))
+                    {
+                        if (int.TryParse(sceneId.Substring(4), out var idx) && idx >= 0 && idx < SceneManager.sceneCount)
+                            return SceneManager.GetSceneAt(idx).GetRootGameObjects();
+                        return new GameObject[0];
+                    }
+                    var list = new List<GameObject>();
+                    for (int i = 0; i < SceneManager.sceneCount; i++)
+                        list.AddRange(SceneManager.GetSceneAt(i).GetRootGameObjects());
+                    return list;
+                }
+
+                foreach (var root in AllRoots())
+                {
+                    foreach (var entry in Traverse(root))
+                    {
+                        var go = entry.GameObject;
+                        var path = entry.Path;
+                        if (activeOnly == true && !go.activeInHierarchy) { total++; continue; }
+                        if (!string.IsNullOrEmpty(name) && (go.name == null || go.name.IndexOf(name!, StringComparison.OrdinalIgnoreCase) < 0)) { total++; continue; }
+                        if (!string.IsNullOrEmpty(type) && go.GetComponent(type!) == null) { total++; continue; }
+
+                        if (total >= off && results.Count < lim)
+                        {
+                            int compCount = 0;
+                            try { var comps = go.GetComponents<Component>(); compCount = comps != null ? comps.Length : 0; } catch { }
+                            results.Add(new ObjectCardDto
+                            {
+                                Id = "obj:" + go.GetInstanceID(),
+                                Name = go.name,
+                                Path = path,
+                                Tag = SafeTag(go),
+                                Layer = go.layer,
+                                Active = go.activeSelf,
+                                ComponentCount = compCount
+                            });
+                        }
+                        total++;
+                        if (results.Count >= lim) break;
+                    }
+                    if (results.Count >= lim) break;
+                }
+
+                return new Page<ObjectCardDto>(total, results);
+            });
+        }
+
+        private static string SafeTag(GameObject go)
+        {
+            try { return go.tag; } catch { return string.Empty; }
+        }
+
+        public ObjectCardDto GetObject(string id)
+        {
+            if (string.IsNullOrEmpty(id) || id.Trim().Length == 0 || !id.StartsWith("obj:"))
+                throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Invalid id; expected 'obj:<instanceId>'");
+
+            if (!int.TryParse(id.Substring(4), out var iid))
+                throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Invalid instance id");
+
+            return MainThread.Run(() =>
+            {
+                var go = FindByInstanceId(iid);
+                if (go == null) throw new MonoMcpHandlers.McpError(-32004, 404, "NotFound", "NotFound");
+                var path = BuildPath(go.transform);
+                int compCount = 0;
+                try { var comps2 = go.GetComponents<Component>(); compCount = comps2 != null ? comps2.Length : 0; } catch { }
+                return new ObjectCardDto
+                {
+                    Id = "obj:" + go.GetInstanceID(),
+                    Name = go.name,
+                    Path = path,
+                    Tag = SafeTag(go),
+                    Layer = go.layer,
+                    Active = go.activeSelf,
+                    ComponentCount = compCount
+                };
+            });
+        }
+
+        public Page<ComponentCardDto> GetComponents(string objectId, int? limit, int? offset)
+        {
+            if (string.IsNullOrEmpty(objectId) || objectId.Trim().Length == 0 || !objectId.StartsWith("obj:"))
+                throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Invalid objectId; expected 'obj:<instanceId>'");
+
+            if (!int.TryParse(objectId.Substring(4), out var iid))
+                throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Invalid instance id");
+
+            int lim = Math.Max(1, limit ?? 100);
+            int off = Math.Max(0, offset ?? 0);
+
+            return MainThread.Run(() =>
+            {
+                var go = FindByInstanceId(iid);
+                if (go == null) throw new MonoMcpHandlers.McpError(-32004, 404, "NotFound", "NotFound");
+                Component[] comps;
+                try { comps = go.GetComponents<Component>(); }
+                catch { comps = new Component[0]; }
+                var total = comps.Length;
+                var list = new List<ComponentCardDto>();
+                for (int i = off; i < Math.Min(total, off + lim); i++)
+                {
+                    var c = comps[i];
+                    string typeName;
+                    string summary;
+                    if (c == null)
+                    {
+                        typeName = "<null>";
+                        summary = "<null>";
+                    }
+                    else
+                    {
+                        var t = c.GetType();
+                        typeName = t != null ? (t.FullName ?? "<null>") : "<null>";
+                        var s = c.ToString();
+                        summary = string.IsNullOrEmpty(s) ? "<null>" : s;
+                    }
+                    list.Add(new ComponentCardDto { Type = typeName, Summary = summary });
+                }
+                return new Page<ComponentCardDto>(total, list);
+            });
+        }
+
+        public Page<ObjectCardDto> SearchObjects(string? query, string? name, string? type, string? path, bool? activeOnly, int? limit, int? offset)
+        {
+            int lim = Math.Max(1, limit ?? 100);
+            int off = Math.Max(0, offset ?? 0);
+
+            return MainThread.Run(() =>
+            {
+                var results = new List<ObjectCardDto>(lim);
+                int total = 0;
+                for (int i = 0; i < SceneManager.sceneCount; i++)
+                {
+                    var scene = SceneManager.GetSceneAt(i);
+                    foreach (var root in scene.GetRootGameObjects())
+                    {
+                        foreach (var entry in Traverse(root))
+                        {
+                            var go = entry.GameObject;
+                            var p = entry.Path;
+                            if (activeOnly == true && !go.activeInHierarchy) { total++; continue; }
+                            var nm = go.name ?? string.Empty;
+                            var match = true;
+                            if (!string.IsNullOrEmpty(query))
+                                match &= nm.IndexOf(query!, StringComparison.OrdinalIgnoreCase) >= 0 || p.IndexOf(query!, StringComparison.OrdinalIgnoreCase) >= 0;
+                            if (!string.IsNullOrEmpty(name))
+                                match &= nm.IndexOf(name!, StringComparison.OrdinalIgnoreCase) >= 0;
+                            if (!string.IsNullOrEmpty(type))
+                                match &= go.GetComponent(type!) != null;
+                            if (!string.IsNullOrEmpty(path))
+                                match &= p.IndexOf(path!, StringComparison.OrdinalIgnoreCase) >= 0;
+                            if (!match) { total++; continue; }
+
+                            if (total >= off && results.Count < lim)
+                            {
+                                int compCount = 0;
+                                try { var comps3 = go.GetComponents<Component>(); compCount = comps3 != null ? comps3.Length : 0; } catch { }
+                                results.Add(new ObjectCardDto
+                                {
+                                    Id = "obj:" + go.GetInstanceID(),
+                                    Name = nm,
+                                    Path = p,
+                                    Tag = SafeTag(go),
+                                    Layer = go.layer,
+                                    Active = go.activeSelf,
+                                    ComponentCount = compCount
+                                });
+                            }
+                            total++;
+                            if (results.Count >= lim) break;
+                        }
+                        if (results.Count >= lim) break;
+                    }
+                    if (results.Count >= lim) break;
+                }
+
+                return new Page<ObjectCardDto>(total, results);
+            });
+        }
+
+        public CameraInfoDto GetCameraInfo()
+        {
+            return MainThread.Run(() =>
+            {
+                var freecam = FreeCamPanel.inFreeCamMode;
+                Camera cam = null;
+
+                if (freecam)
+                {
+                    if (FreeCamPanel.ourCamera != null)
+                    {
+                        cam = FreeCamPanel.ourCamera;
+                    }
+                    else if (FreeCamPanel.lastMainCamera != null)
+                    {
+                        cam = FreeCamPanel.lastMainCamera;
+                    }
+                    else if (Camera.main != null)
+                    {
+                        cam = Camera.main;
+                    }
+                }
+
+                if (cam == null && Camera.main != null)
+                    cam = Camera.main;
+                if (cam == null && Camera.allCamerasCount > 0)
+                    cam = Camera.allCameras[0];
+
+                if (cam == null)
+                    return new CameraInfoDto { IsFreecam = freecam, Name = "<none>", Fov = 0f, Pos = new Vector3Dto(), Rot = new Vector3Dto() };
+
+                var pos = cam.transform.position;
+                var rot = cam.transform.eulerAngles;
+                return new CameraInfoDto
+                {
+                    IsFreecam = freecam,
+                    Name = cam.name,
+                    Fov = cam.fieldOfView,
+                    Pos = new Vector3Dto { X = pos.x, Y = pos.y, Z = pos.z },
+                    Rot = new Vector3Dto { X = rot.x, Y = rot.y, Z = rot.z }
+                };
+            });
+        }
+
+        public LogTailDto TailLogs(int count = 200)
+        {
+            return LogBuffer.Tail(count);
+        }
+
+        public SelectionDto GetSelection()
+        {
+            return MainThread.Run(() =>
+            {
+                var snap = CaptureSelection();
+                return new SelectionDto { ActiveId = snap.ActiveId, Items = snap.Items };
+            });
+        }
+    }
 #else
-    // Stub implementation for non-INTEROP targets (e.g., net35/net472) so that
-    // builds that reference UnityExplorer.Mcp.McpSimpleHttp still compile even
-    // though the full streaming HTTP server is only available for INTEROP targets.
+    // Stub implementation for non-INTEROP targets so that builds that reference UnityExplorer.Mcp.McpSimpleHttp still compile.
     internal sealed class McpSimpleHttp : IDisposable
     {
         public static McpSimpleHttp? Current { get; private set; }

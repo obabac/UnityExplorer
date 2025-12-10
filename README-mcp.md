@@ -4,7 +4,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 
 ## Status
 
-- Targets: CoreCLR builds only (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) compiles but ships with MCP disabled (no listener/discovery); use CoreCLR for MCP functionality.
+- Targets: CoreCLR builds (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) now hosts a lightweight read-only MCP (initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera) with discovery; `stream_events` is not yet available and writes remain disabled; prefer CoreCLR for full functionality.
 - Transport: lightweight streamable HTTP over a local TCP listener.
 - Default mode: Read‑only (guarded writes must be explicitly enabled).
 
@@ -15,7 +15,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 3. Discovery file is written to `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modeHints, startedAt }`.
 4. Connect a client via the MCP C# SDK using `HttpClientTransport` (AutoDetect mode), or talk directly to the HTTP endpoints described below.
 
-Mono/net35 builds: MCP host is disabled (no listener/discovery); the Options panel shows an MCP-disabled note on these targets.
+Mono/net35 builds: MCP host is available but limited to read-only initialize/list_tools/read_resource/call_tool; `stream_events` returns `NotReady`, and writes stay disabled. Discovery (`unity-explorer-mcp.json`) is still produced.
 
 ## Configuration
 
@@ -283,5 +283,5 @@ This matches the `stream_events` behavior and will print JSON‑RPC `notificatio
 ## Notes
 
 - Error envelopes follow JSON-RPC with `error.data.kind` (see `plans/mcp-interface-concept.md` for the exact shapes). Tool failures return `{ ok:false, error:{ kind, message, hint? } }`.
-- Non‑CoreCLR targets (Mono, Unhollower) do not host the MCP server.
+- Mono/net35 hosts a limited MCP (no `stream_events`, read-only only); Unhollower builds still do not host the MCP server.
 - All Unity API calls are marshalled to the main thread.

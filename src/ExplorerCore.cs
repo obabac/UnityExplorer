@@ -130,6 +130,16 @@ public static class ExplorerCore
         {
             LogWarning($"MCP bootstrap failed: {ex.Message}");
         }
+#elif MONO
+        try
+        {
+            Mcp.MainThread.Capture();
+            Mcp.McpHost.StartIfEnabled();
+        }
+        catch (Exception ex)
+        {
+            LogWarning($"MCP (Mono) bootstrap failed: {ex.Message}");
+        }
 #else
         // MCP disabled on this build (INTEROP not defined).
 #endif
@@ -173,14 +183,14 @@ public static class ExplorerCore
             case LogType.Assert:
             case LogType.Log:
                 Loader.OnLogMessage(log);
-#if INTEROP
+#if INTEROP || MONO
                 Mcp.LogBuffer.Add("info", log);
 #endif
                 break;
 
             case LogType.Warning:
                 Loader.OnLogWarning(log);
-#if INTEROP
+#if INTEROP || MONO
                 Mcp.LogBuffer.Add("warn", log);
 #endif
                 break;
@@ -188,7 +198,7 @@ public static class ExplorerCore
             case LogType.Error:
             case LogType.Exception:
                 Loader.OnLogError(log);
-#if INTEROP
+#if INTEROP || MONO
                 Mcp.LogBuffer.Add("error", log);
 #endif
                 break;

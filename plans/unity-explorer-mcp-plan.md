@@ -7,9 +7,8 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-11)
-- ML_Mono now builds with INTEROP disabled: `McpHost`/`McpConfig` stubs return a disabled server, the Options panel shows an MCP-disabled note on Mono/net35, and no discovery/HTTP listener is started. Build command validated: `dotnet build src/UnityExplorer.csproj -c ML_Mono` → `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll`.
+- ML_Mono now ships a lightweight MCP host (Newtonsoft.Json + TcpListener) that serves initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera; writes remain disabled, `stream_events` returns `NotReady`, and a discovery file is written from Mono builds. Config is persisted on Mono via `mcp.config.json`; main-thread marshaling uses the new `MainThread` sync-context helper.
 - CoreCLR/IL2CPP surface unchanged; last known Test-VM state: `Invoke-McpSmoke.ps1` + `Run-McpContractTests.ps1` (Release, BaseUrl `http://192.168.178.210:51477`) were green (45 passed, 0 failed, 1 skipped placeholder); not rerun this iteration.
-- Mono MCP remains stub-only; enabling a real Mono transport will require a lighter JSON/HTTP stack (e.g., Newtonsoft.Json + HttpListener) while keeping DTO/error shapes identical.
 - `list_tools` still emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); inspector UI validation remains pending.
 
 ---

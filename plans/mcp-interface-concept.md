@@ -4,7 +4,7 @@
 - Mode: In‑process server (C# SDK), HTTP transport via `ModelContextProtocol.AspNetCore`
 - Client transport: `HttpClientTransport` with `HttpTransportMode.AutoDetect | StreamableHttp | Sse`
 - Default policy: Read‑only. Writes gated behind config + confirmation + allowlist.
-- Mono (MelonLoader, `net35`): currently ships an INTEROP-disabled stub (no HTTP listener or discovery; Options panel shows MCP disabled). Follow-up work: choose a lighter JSON/HTTP stack (e.g., Newtonsoft.Json + HttpListener) that preserves these DTOs/error envelopes and document any Mono-only deviations.
+- Mono (MelonLoader, `net35`): now ships a lightweight in-process MCP host (Newtonsoft.Json + TcpListener) covering initialize/list_tools/read_resource/call_tool for read-only surfaces (status/scenes/objects/components/search/selection/logs/camera); `stream_events` not yet available; writes remain disabled. Discovery file is written from Mono builds.
 
 ---
 
@@ -177,7 +177,7 @@ Tool‑level failures that still return a JSON‑RPC `result` use a consistent p
 - Server: `AddMcpServer().WithHttpTransport().WithTools<UnityReadTools>().WithResources<UnityResources>();` + `app.MapMcp()`.
 - Bind: `127.0.0.1:0` (ephemeral). Publish discovery file `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modes }`.
 - Client: `new HttpClientTransport(new() { Endpoint = baseUrl, Mode = AutoDetect })`.
-- Mono/net35 builds: MCP host currently disabled (INTEROP off); no HTTP listener or discovery file is produced on these targets.
+- Mono/net35 builds: MCP host uses a lightweight TcpListener + Newtonsoft.Json pipeline (no ASP.NET); discovery file is produced; `stream_events` replies with `NotReady`; writes remain disabled.
 
 ---
 

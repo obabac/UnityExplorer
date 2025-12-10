@@ -1,23 +1,21 @@
-# Iteration Instructions (2025-12-11 — Mono Phase B: host bring-up)
+# Iteration Instructions (2025-12-11 — Mono Phase B follow-up)
 
-High-level goal: move Mono (ML_Mono) from an INTEROP-disabled stub to a minimal MCP read-only host without regressing CoreCLR behaviour.
+High-level goal: finish Mono MCP host parity (read-only) and validation.
 
 ## Tasks
-1) Design Mono transport plan
-- Choose a net35-friendly JSON/HTTP stack (e.g., Newtonsoft.Json + HttpListener/TcpListener) that preserves existing DTO/error shapes.
-- Decide discovery/config behaviour on Mono (bind/port defaults, enabled flag) and document it in `plans/mcp-interface-concept.md`.
-- Note any constraints (ThreadPool usage, Task substitutes) before coding.
+1) Mono stream/events + host polish
+- Decide if Mono should expose `stream_events`; either implement basic streaming or explicitly surface NotReady in capabilities/docs and inspector flows.
+- Clean up nullable warnings in Mono DTO/config/host; ensure discovery write has non-null defaults.
 
-2) Implement minimal Mono host
-- Add a Mono-safe MCP host that handles initialize/list_tools/read_resource (status/scenes/objects/logs/selection) with current DTOs/error envelope; keep writes disabled.
-- Wire McpConfig/McpHost/OptionsPanel so Mono builds start/stop the new host cleanly and still log "disabled" when it’s off.
-- Ensure non-INTEROP/CoreCLR code paths stay untouched; avoid breaking existing CoreCLR discovery.
+2) Mono validation harness
+- Add a Mono smoke harness (script/tests) for initialize → list_tools → read_resource/call_tool (status/scenes/objects/components/search/logs/selection/camera).
+- Document how to run the Mono harness and expected outputs.
 
-3) Tests/docs
-- Add or document a smoke path for Mono (manual or automated) and capture current limitations; update `.plans/unity-explorer-mcp-plan.md`, `.plans/unity-explorer-mcp-todo.md`, `plans/mcp-interface-concept.md`, `README-mcp.md` accordingly.
-- Record build/test commands used (e.g., `dotnet build src/UnityExplorer.csproj -c ML_Mono`, any harness steps) and outstanding issues.
+3) Docs/tests
+- Keep `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, `plans/mcp-interface-concept.md`, `README-mcp.md` in sync with Mono limitations (read-only, writes off, stream_events TBD).
+- Re-run `dotnet build src/UnityExplorer.csproj -c ML_Mono` and MCP contract/smoke tests when a host is available; record results.
 
 ## Reminders
-- Avoid large refactors; keep component boundaries intact.
+- Avoid refactors outside MCP; keep CoreCLR behaviour unchanged.
 - Prefer PowerShell one-liners when sharing commands.
-- Keep plans/todo in sync while working; commit with a clear Mono Phase B summary.
+- Keep plans/todo in sync as you work; commit with a clear Mono Phase B summary.

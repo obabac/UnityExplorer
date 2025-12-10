@@ -81,6 +81,70 @@ namespace UnityExplorer.Mcp
             return tcs.Task;
         }
     }
+#elif MONO
+    internal static class MainThread
+    {
+        private static SynchronizationContext? _context;
+
+        public static void Capture()
+        {
+            _context = SynchronizationContext.Current;
+        }
+
+        public static bool IsCaptured => _context != null;
+
+        public static void Run(Action action)
+        {
+            if (action == null) return;
+            if (_context == null)
+            {
+                action();
+                return;
+            }
+
+            Exception? ex = null;
+            using (var done = new ManualResetEvent(false))
+            {
+                _context.Post(_ =>
+                {
+                    try { action(); }
+                    catch (Exception e) { ex = e; }
+                    finally { done.Set(); }
+                }, null);
+                done.WaitOne();
+            }
+            if (ex != null) throw ex;
+        }
+
+        public static T Run<T>(Func<T> func)
+        {
+            if (func == null) return default!;
+            if (_context == null)
+            {
+                return func();
+            }
+
+            T result = default!;
+            Exception? ex = null;
+            using (var done = new ManualResetEvent(false))
+            {
+                _context.Post(_ =>
+                {
+                    try { result = func(); }
+                    catch (Exception e) { ex = e; }
+                    finally { done.Set(); }
+                }, null);
+                done.WaitOne();
+            }
+            if (ex != null) throw ex;
+            return result;
+        }
+
+        public static void RunAsync(Action action)
+        {
+            ThreadPool.QueueUserWorkItem(_ => Run(action));
+        }
+    }
 #else
     internal static class MainThread
     {
@@ -92,4 +156,3 @@ namespace UnityExplorer.Mcp
     }
 #endif
 }
-

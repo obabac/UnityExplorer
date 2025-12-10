@@ -42,5 +42,43 @@ namespace UnityExplorer.Mcp
             }
         }
     }
+#elif MONO
+    internal static class LogBuffer
+    {
+        private static readonly object Gate = new object();
+        private static readonly Queue<LogLine> Buffer = new Queue<LogLine>();
+        private const int MaxLines = 2000;
+
+        public static void Add(string level, string message, string source = "unity", string? category = null)
+        {
+            var line = new LogLine
+            {
+                T = DateTimeOffset.UtcNow,
+                Level = level,
+                Message = message,
+                Source = string.IsNullOrEmpty(source) ? "unity" : source,
+                Category = category
+            };
+
+            lock (Gate)
+            {
+                Buffer.Enqueue(line);
+                while (Buffer.Count > MaxLines)
+                    Buffer.Dequeue();
+            }
+        }
+
+        public static LogTailDto Tail(int count)
+        {
+            var dto = new LogTailDto();
+            lock (Gate)
+            {
+                var snapshot = Buffer.ToArray();
+                var skip = Math.Max(0, snapshot.Length - Math.Max(1, count));
+                dto.Items = new List<LogLine>(snapshot.Skip(skip));
+            }
+            return dto;
+        }
+    }
 #endif
 }
