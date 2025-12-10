@@ -4,7 +4,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 
 ## Status
 
-- Targets: CoreCLR builds (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) now hosts a lightweight read-only MCP (initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera) with discovery; `stream_events` is not yet available and writes remain disabled; prefer CoreCLR for full functionality.
+- Targets: CoreCLR builds (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) now hosts a lightweight read-only MCP (initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera) with discovery and `stream_events` (log/selection/scene/tool_result notifications); writes remain disabled, so prefer CoreCLR for guarded writes.
 - Transport: lightweight streamable HTTP over a local TCP listener.
 - Default mode: Read‑only (guarded writes must be explicitly enabled).
 
@@ -15,7 +15,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 3. Discovery file is written to `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modeHints, startedAt }`.
 4. Connect a client via the MCP C# SDK using `HttpClientTransport` (AutoDetect mode), or talk directly to the HTTP endpoints described below.
 
-Mono/net35 builds: MCP host is available but limited to read-only initialize/list_tools/read_resource/call_tool; `stream_events` returns `NotReady`, and writes stay disabled. Discovery (`unity-explorer-mcp.json`) is still produced.
+Mono/net35 builds: MCP host is available for read-only initialize/list_tools/read_resource/call_tool with `stream_events` (log/selection/scene/tool_result) and discovery (`unity-explorer-mcp.json`). Writes stay disabled; quick check: `pwsh ./tools/Invoke-McpSmokeMono.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3`.
 
 ## Configuration
 

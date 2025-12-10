@@ -20,6 +20,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -908,7 +909,12 @@ namespace UnityExplorer.Mcp
         private volatile bool _running;
         private readonly MonoMcpHandlers _handlers = new MonoMcpHandlers();
         private readonly int _concurrencyLimit = 16;
+        private readonly int _streamLimit = 16;
+        private readonly Dictionary<int, Stream> _streams = new Dictionary<int, Stream>();
+        private readonly object _streamGate = new object();
+        private readonly CancellationTokenSource _disposeCts = new CancellationTokenSource();
         private int _active;
+        private int _nextStreamId;
         public int Port { get; private set; }
 
         public McpSimpleHttp(string bindAddress, int port)
@@ -1057,14 +1063,27 @@ namespace UnityExplorer.Mcp
                         throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Invalid params: 'name' is required.");
                     var result = _handlers.CallTool(name, args);
                     WriteJsonResult(stream, idToken, new { content = new[] { new { type = "json", json = result } } });
+                    try { _ = BroadcastNotificationAsync("tool_result", new { name, ok = true, result }); } catch { }
                 }
                 catch (MonoMcpHandlers.McpError err)
                 {
                     WriteJsonError(stream, idToken, err.Code, err.Message, err.Kind, err.Hint, err.Detail, err.HttpStatus);
+                    try
+                    {
+                        var data = BuildErrorData(err.Kind, err.Hint, err.Detail);
+                        _ = BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = err.Code, message = err.Message, data } });
+                    }
+                    catch { }
                 }
                 catch (Exception ex)
                 {
                     WriteJsonError(stream, idToken, -32603, "Internal error", "Internal", null, ex.Message, 500);
+                    try
+                    {
+                        var data = BuildErrorData("Internal", null, ex.Message);
+                        _ = BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32603, message = "Internal error", data } });
+                    }
+                    catch { }
                 }
                 finally
                 {
@@ -1102,7 +1121,40 @@ namespace UnityExplorer.Mcp
 
             if (string.Equals(methodName, "stream_events", StringComparison.OrdinalIgnoreCase))
             {
-                WriteJsonError(stream, idToken, -32601, "stream_events is not available on Mono MCP yet.", "NotReady", "stream_events not supported on Mono", null, 400);
+                if (!_running)
+                {
+                    WriteJsonError(stream, idToken, -32002, "Not ready", "NotReady", null, null, 503);
+                    return;
+                }
+
+                lock (_streamGate)
+                {
+                    if (_streams.Count >= _streamLimit)
+                    {
+                        var msg = $"Cannot have more than {_streamLimit} parallel streams. Please slow down.";
+                        WriteJsonError(stream, idToken, -32005, msg, "RateLimited", null, null, 429);
+                        return;
+                    }
+                }
+
+                stream.ReadTimeout = Timeout.Infinite;
+                stream.WriteTimeout = Timeout.Infinite;
+
+                var header = "HTTP/1.1 200 OK\r\n" +
+                             "Content-Type: application/json\r\n" +
+                             "Transfer-Encoding: chunked\r\n" +
+                             "Connection: keep-alive\r\n\r\n";
+                var headerBytes = Encoding.UTF8.GetBytes(header);
+                stream.Write(headerBytes, 0, headerBytes.Length);
+                stream.Flush();
+
+                var id = Interlocked.Increment(ref _nextStreamId);
+                lock (_streamGate)
+                {
+                    _streams[id] = stream;
+                }
+
+                WaitForStreamDisconnect(stream, id);
                 return;
             }
 
@@ -1145,7 +1197,21 @@ namespace UnityExplorer.Mcp
         public void Dispose()
         {
             _running = false;
+            try { _disposeCts.Cancel(); } catch { }
+            try
+            {
+                lock (_streamGate)
+                {
+                    foreach (var kv in _streams)
+                    {
+                        try { kv.Value.Dispose(); } catch { }
+                    }
+                    _streams.Clear();
+                }
+            }
+            catch { }
             try { _listener.Stop(); } catch { }
+            try { _disposeCts.Dispose(); } catch { }
             Current = null;
         }
 
@@ -1162,29 +1228,127 @@ namespace UnityExplorer.Mcp
             stream.Write(payload, 0, payload.Length);
         }
 
-        private void WriteJsonResult(Stream stream, JToken? idToken, object result)
+        private void BroadcastPayload(JObject payload, CancellationToken ct)
         {
-            var payload = new JObject
+            if (_disposeCts.IsCancellationRequested)
+                return;
+
+            List<KeyValuePair<int, Stream>> snapshot;
+            lock (_streamGate)
+            {
+                snapshot = new List<KeyValuePair<int, Stream>>(_streams);
+            }
+
+            if (snapshot.Count == 0)
+                return;
+
+            var json = payload.ToString(Formatting.None) + "\n";
+            var data = Encoding.UTF8.GetBytes(json);
+            var prefix = Encoding.ASCII.GetBytes(data.Length.ToString("X") + "\r\n");
+            var suffix = Encoding.ASCII.GetBytes("\r\n");
+
+            foreach (var kv in snapshot)
+            {
+                if (ct.IsCancellationRequested || _disposeCts.IsCancellationRequested) break;
+                var s = kv.Value;
+                try
+                {
+                    s.Write(prefix, 0, prefix.Length);
+                    s.Write(data, 0, data.Length);
+                    s.Write(suffix, 0, suffix.Length);
+                    s.Flush();
+                }
+                catch
+                {
+                    RemoveStream(kv.Key);
+                }
+            }
+        }
+
+        public Task BroadcastNotificationAsync(string @event, object payload, CancellationToken ct = default)
+        {
+            var body = new JObject
+            {
+                { "jsonrpc", "2.0" },
+                { "method", "notification" },
+                { "params", new JObject { { "event", @event }, { "payload", payload == null ? JValue.CreateNull() : JToken.FromObject(payload) } } }
+            };
+            BroadcastPayload(body, ct);
+            return Task.CompletedTask;
+        }
+
+        private JObject BuildResultPayload(JToken? idToken, object result)
+        {
+            return new JObject
             {
                 { "jsonrpc", "2.0" },
                 { "id", idToken ?? JValue.CreateNull() },
                 { "result", result == null ? JValue.CreateNull() : JToken.FromObject(result) }
             };
+        }
+
+        private JObject BuildErrorPayload(JToken? idToken, int code, string message, string kind, string? hint, string? detail)
+        {
+            var data = BuildErrorData(kind, hint, detail);
+            return new JObject
+            {
+                { "jsonrpc", "2.0" },
+                { "id", idToken ?? JValue.CreateNull() },
+                { "error", new JObject { { "code", code }, { "message", message }, { "data", data } } }
+            };
+        }
+
+        private static JObject BuildErrorData(string kind, string? hint, string? detail)
+        {
+            var data = new JObject { { "kind", kind } };
+            if (!string.IsNullOrEmpty(hint)) data["hint"] = hint;
+            if (!string.IsNullOrEmpty(detail)) data["detail"] = detail;
+            return data;
+        }
+
+        private void RemoveStream(int id)
+        {
+            lock (_streamGate)
+            {
+                if (_streams.TryGetValue(id, out var s))
+                {
+                    try { s.Dispose(); } catch { }
+                    _streams.Remove(id);
+                }
+            }
+        }
+
+        private void WaitForStreamDisconnect(Stream stream, int id)
+        {
+            var buffer = new byte[1];
+            try
+            {
+                while (_running && !_disposeCts.IsCancellationRequested)
+                {
+                    int read;
+                    try { read = stream.Read(buffer, 0, 1); }
+                    catch { break; }
+                    if (read <= 0) break;
+                }
+            }
+            finally
+            {
+                RemoveStream(id);
+            }
+        }
+
+        private void WriteJsonResult(Stream stream, JToken? idToken, object result)
+        {
+            var payload = BuildResultPayload(idToken, result);
+            BroadcastPayload(payload, CancellationToken.None);
             WriteResponse(stream, 200, payload.ToString(Formatting.None), "application/json");
         }
 
         private void WriteJsonError(Stream stream, JToken? idToken, int code, string message, string kind, string? hint, string? detail, int statusCode)
         {
             try { ExplorerCore.LogWarning($"[MCP] {code}: {message}"); LogBuffer.Add("error", message, "mcp", kind); } catch { }
-            var data = new JObject { { "kind", kind } };
-            if (!string.IsNullOrEmpty(hint)) data["hint"] = hint;
-            if (!string.IsNullOrEmpty(detail)) data["detail"] = detail;
-            var payload = new JObject
-            {
-                { "jsonrpc", "2.0" },
-                { "id", idToken ?? JValue.CreateNull() },
-                { "error", new JObject { { "code", code }, { "message", message }, { "data", data } } }
-            };
+            var payload = BuildErrorPayload(idToken, code, message, kind, hint, detail);
+            BroadcastPayload(payload, CancellationToken.None);
             WriteResponse(stream, statusCode, payload.ToString(Formatting.None), "application/json");
         }
 
@@ -1237,9 +1401,9 @@ namespace UnityExplorer.Mcp
             {
                 tools = new { listChanged = true },
                 resources = new { listChanged = true },
-                experimental = new { streamEvents = false }
+                experimental = new { streamEvents = true }
             };
-            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, and logs over streamable-http. Writes are disabled and stream_events is not yet available.";
+            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, and logs over streamable-http. Writes are disabled; stream_events provides log/scene/selection/tool_result notifications.";
             return new { protocolVersion, capabilities, serverInfo, instructions };
         }
 

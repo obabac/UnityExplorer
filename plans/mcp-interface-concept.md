@@ -4,7 +4,7 @@
 - Mode: In‑process server (C# SDK), HTTP transport via `ModelContextProtocol.AspNetCore`
 - Client transport: `HttpClientTransport` with `HttpTransportMode.AutoDetect | StreamableHttp | Sse`
 - Default policy: Read‑only. Writes gated behind config + confirmation + allowlist.
-- Mono (MelonLoader, `net35`): now ships a lightweight in-process MCP host (Newtonsoft.Json + TcpListener) covering initialize/list_tools/read_resource/call_tool for read-only surfaces (status/scenes/objects/components/search/selection/logs/camera); `stream_events` not yet available; writes remain disabled. Discovery file is written from Mono builds.
+- Mono (MelonLoader, `net35`): now ships a lightweight in-process MCP host (Newtonsoft.Json + TcpListener) covering initialize/list_tools/read_resource/call_tool for read-only surfaces (status/scenes/objects/components/search/selection/logs/camera); `stream_events` streams log/selection/scene/tool_result notifications with cleanup + rate limits; writes remain disabled. Discovery file is written from Mono builds.
 
 ---
 

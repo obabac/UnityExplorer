@@ -1,21 +1,16 @@
-# Iteration Instructions (2025-12-11 — Mono Phase B follow-up)
+# Iteration Instructions (2025-12-11 — Mono Parity + Inspector Validation)
 
-High-level goal: finish Mono MCP host parity (read-only) and validation.
+High-level goal: tighten Mono MCP parity and validate inspector UX now that Mono `stream_events` and the smoke harness are available.
 
-## Tasks
-1) Mono stream/events + host polish
-- Decide if Mono should expose `stream_events`; either implement basic streaming or explicitly surface NotReady in capabilities/docs and inspector flows.
-- Clean up nullable warnings in Mono DTO/config/host; ensure discovery write has non-null defaults.
+## 1) Mono parity + tests
+- Extend Mono coverage toward CoreCLR (mouse pick, camera/freecam, selection streaming, guarded writes when safe) and add contract/CI hooks; reuse `tools/Invoke-McpSmokeMono.ps1` for quick checks.
+- Add Mono `stream_events` coverage (log/selection/scene/tool_result) in tests; ensure disconnect cleanup and error envelope stay aligned with CoreCLR.
 
-2) Mono validation harness
-- Add a Mono smoke harness (script/tests) for initialize → list_tools → read_resource/call_tool (status/scenes/objects/components/search/logs/selection/camera).
-- Document how to run the Mono harness and expected outputs.
+## 2) Inspector validation
+- Run `@modelcontextprotocol/inspector` against CoreCLR and Mono hosts; fix schema/UX issues and capture any deltas in `plans/mcp-interface-concept.md` and the TODO.
 
-3) Docs/tests
-- Keep `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, `plans/mcp-interface-concept.md`, `README-mcp.md` in sync with Mono limitations (read-only, writes off, stream_events TBD).
-- Re-run `dotnet build src/UnityExplorer.csproj -c ML_Mono` and MCP contract/smoke tests when a host is available; record results.
+## 3) Docs & plans
+- Keep `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, `plans/mcp-interface-concept.md`, and `README-mcp.md` in sync with code/tests.
+- Record smoke/contract test results (Test-VM BaseUrl `http://192.168.178.210:51477`) and update Definition of Done checkboxes.
 
-## Reminders
-- Avoid refactors outside MCP; keep CoreCLR behaviour unchanged.
-- Prefer PowerShell one-liners when sharing commands.
-- Keep plans/todo in sync as you work; commit with a clear Mono Phase B summary.
+Working style: prefer PowerShell helpers; keep commits focused; avoid touching `.codex` logs/history; continue using streamable HTTP transport.
