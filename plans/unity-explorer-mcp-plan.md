@@ -7,9 +7,9 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-11)
-- Doc-only Mono audit; no new runtime changes. Last known IL2CPP/Test-VM state: `Invoke-McpSmoke.ps1` + `Run-McpContractTests.ps1` (Release, BaseUrl `http://192.168.178.210:51477`) were green (45 passed, 0 failed, 1 skipped placeholder); not rerun this iteration.
-- ML_Mono target is `net35` with `DefineConstants=MONO,ML` and `IncludeMcpPackages=false` (no `INTEROP`). MCP files are wrapped in `#if INTEROP` while `ExplorerCore`/`OptionsPanel` reference `UnityExplorer.Mcp` unguarded, so ML_Mono currently fails to build (see `build.log`: missing `McpSimpleHttp`/namespace, downstream ILRepack failures because no assembly is produced).
-- MCP transport/DTOs rely on `System.Text.Json`, `Task`, and TcpListener APIs that are available on CoreCLR; Mono `net35` would need an alternate JSON/HTTP implementation before enabling the same surface.
+- ML_Mono now builds with INTEROP disabled: `McpHost`/`McpConfig` stubs return a disabled server, the Options panel shows an MCP-disabled note on Mono/net35, and no discovery/HTTP listener is started. Build command validated: `dotnet build src/UnityExplorer.csproj -c ML_Mono` → `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll`.
+- CoreCLR/IL2CPP surface unchanged; last known Test-VM state: `Invoke-McpSmoke.ps1` + `Run-McpContractTests.ps1` (Release, BaseUrl `http://192.168.178.210:51477`) were green (45 passed, 0 failed, 1 skipped placeholder); not rerun this iteration.
+- Mono MCP remains stub-only; enabling a real Mono transport will require a lighter JSON/HTTP stack (e.g., Newtonsoft.Json + HttpListener) while keeping DTO/error shapes identical.
 - `list_tools` still emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); inspector UI validation remains pending.
 
 ---

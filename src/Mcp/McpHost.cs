@@ -14,6 +14,7 @@ using System.Threading;
 
 namespace UnityExplorer.Mcp
 {
+#if INTEROP
     internal static class McpHost
     {
         private static readonly object _gate = new();
@@ -79,4 +80,17 @@ namespace UnityExplorer.Mcp
             }
         }
     }
+#else
+    internal static class McpHost
+    {
+        public static void StartIfEnabled()
+        {
+            ExplorerCore.Log("MCP server is disabled in this build (INTEROP not defined).");
+        }
+
+        public static void Stop()
+        {
+        }
+    }
+#endif
 }

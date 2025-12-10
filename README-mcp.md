@@ -4,7 +4,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 
 ## Status
 
-- Targets: CoreCLR builds only (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) is a planned/experimental host and not validated yet.
+- Targets: CoreCLR builds only (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) compiles but ships with MCP disabled (no listener/discovery); use CoreCLR for MCP functionality.
 - Transport: lightweight streamable HTTP over a local TCP listener.
 - Default mode: Read‑only (guarded writes must be explicitly enabled).
 
@@ -14,6 +14,8 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 2. The MCP server starts after Explorer initialization.
 3. Discovery file is written to `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modeHints, startedAt }`.
 4. Connect a client via the MCP C# SDK using `HttpClientTransport` (AutoDetect mode), or talk directly to the HTTP endpoints described below.
+
+Mono/net35 builds: MCP host is disabled (no listener/discovery); the Options panel shows an MCP-disabled note on these targets.
 
 ## Configuration
 

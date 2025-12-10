@@ -8,6 +8,7 @@ using System.Text.Json;
 
 namespace UnityExplorer.Mcp
 {
+#if INTEROP
     internal sealed class McpConfig
     {
         public bool Enabled { get; set; } = true;
@@ -80,4 +81,25 @@ namespace UnityExplorer.Mcp
             catch { }
         }
     }
+#else
+    internal sealed class McpConfig
+    {
+        public bool Enabled { get; set; } = false;
+        public string BindAddress { get; set; } = "0.0.0.0";
+        public int Port { get; set; } = 51477;
+        public string TransportPreference { get; set; } = "disabled";
+        public bool AllowWrites { get; set; } = false;
+        public bool RequireConfirm { get; set; } = true;
+        public string? ReflectionAllowlistPath { get; set; }
+        public string[]? ReflectionAllowlistMembers { get; set; }
+        public string? ExportRoot { get; set; }
+        public string LogLevel { get; set; } = "Information";
+        public string[]? ComponentAllowlist { get; set; }
+        public bool EnableConsoleEval { get; set; } = false;
+        public string[]? HookAllowlistSignatures { get; set; }
+
+        public static McpConfig Load() => new();
+        public static void Save(McpConfig cfg) { }
+    }
+#endif
 }

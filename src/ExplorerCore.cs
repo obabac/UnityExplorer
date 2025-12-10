@@ -73,6 +73,7 @@ public static class ExplorerCore
 
         Log($"{NAME} {VERSION} ({Universe.Context}) initialized.");
 
+#if INTEROP
         // Capture Unity main thread context and start MCP server (CoreCLR targets only)
         try
         {
@@ -129,6 +130,9 @@ public static class ExplorerCore
         {
             LogWarning($"MCP bootstrap failed: {ex.Message}");
         }
+#else
+        // MCP disabled on this build (INTEROP not defined).
+#endif
 
         // InspectorManager.Inspect(typeof(Tests.TestClass));
     }

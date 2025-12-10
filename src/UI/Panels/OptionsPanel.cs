@@ -74,6 +74,7 @@ namespace UnityExplorer.UI.Panels
             saveBtn.OnClick += ConfigManager.Handler.SaveConfig;
 
             // MCP section
+#if INTEROP
             UIFactory.CreateLabel(this.ContentRoot, "McpHeader", "MCP Server", TextAnchor.MiddleLeft, Color.white, true);
 
             var cfg = McpConfig.Load();
@@ -267,6 +268,12 @@ namespace UnityExplorer.UI.Panels
                     statusLabel.color = Color.green;
                 }
             });
+
+#else
+            UIFactory.CreateLabel(this.ContentRoot, "McpHeader", "MCP Server", TextAnchor.MiddleLeft, Color.white, true);
+            UIFactory.CreateLabel(this.ContentRoot, "McpUnavailable", "MCP is disabled in this build (INTEROP not defined).", TextAnchor.MiddleLeft, Color.gray, false, 12);
+            UIFactory.CreateLabel(this.ContentRoot, "McpUnavailableHint", "Use a CoreCLR/INTEROP target for MCP hosting.", TextAnchor.MiddleLeft, Color.gray, false, 11);
+#endif
 
             // Config entries
 

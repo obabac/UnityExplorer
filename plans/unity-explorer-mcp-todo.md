@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-10): Space Shooter host at `http://192.168.178.210:51477` is reachable; re-ran `Invoke-McpSmoke.ps1` and the full MCP contract suite (Release) passes on the running host (45 passed, 1 skipped placeholder `Status_Tool_And_Resource_Available`). Contract tests now discover scenes/objects via `unity://scenes` (no scene-0 assumption); inspector schema/UX validation remains pending.
+Status (2025-12-11): Space Shooter host unchanged; last contract runs were green (45 passed, 1 skipped placeholder). ML_Mono now builds again with an INTEROP-disabled stub (no MCP listener/discovery on Mono); inspector schema/UX validation remains pending.
 
 ---
 
@@ -139,10 +139,10 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 
 ## 11. Mono / MelonLoader Support
 
-- [ ] Phase A — Build + host skeleton
-  - [ ] Fix ML_Mono build (currently `DefineConstants=MONO,ML`, `IncludeMcpPackages=false`, `net35`) so `build.ps1` can produce `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll` again; guard `ExplorerCore`/`OptionsPanel`/other MCP call sites when `INTEROP` is absent or introduce a stub McpHost that compiles on Mono.
-  - [ ] Decide how `INTEROP` should apply to Mono (enable a minimal variant or keep it off with stubs) and ensure `McpConfig`/discovery file behavior is well-defined even if MCP is disabled.
-  - [ ] Document the build command + expected output paths for Mono in the plan/todo and capture any remaining blocking errors in `build.log`.
+- [x] Phase A — Build + host skeleton
+  - [x] Fix ML_Mono build (currently `DefineConstants=MONO,ML`, `IncludeMcpPackages=false`, `net35`) so `build.ps1` can produce `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll` again; guard `ExplorerCore`/`OptionsPanel`/other MCP call sites when `INTEROP` is absent or introduce a stub McpHost that compiles on Mono. (Done: INTEROP-disabled stubs + MCP UI note; no listener/discovery on Mono.)
+  - [x] Decide how `INTEROP` should apply to Mono (enable a minimal variant or keep it off with stubs) and ensure `McpConfig`/discovery file behavior is well-defined even if MCP is disabled. (Decision: keep INTEROP off; McpHost/Config return disabled defaults, Options panel shows disabled status.)
+  - [x] Document the build command + expected output paths for Mono in the plan/todo and capture any remaining blocking errors in `build.log`. (Command: `dotnet build src/UnityExplorer.csproj -c ML_Mono` → `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll`; none blocking.)
 
 - [ ] Phase B — Read-only MCP surface on Mono
   - [ ] Select a Mono-friendly JSON/HTTP stack (e.g., `Newtonsoft.Json` + `HttpListener`/simplified TCP) that preserves the CoreCLR DTOs/error envelope; avoid heavy ASP.NET deps.
