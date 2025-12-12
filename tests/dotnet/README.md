@@ -22,7 +22,7 @@ If the server is not running, discovery tests will fail or be skipped.
 
 ## Mono smoke entry (no Test-VM)
 
-For Mono/net35 hosts, use the lightweight smoke script instead of the full contract suite:
+For Mono/net35 hosts, first follow the Mono host validation checklist in `README-mcp.md`, then use the lightweight smoke script instead of the full contract suite:
 
 ```powershell
 pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3

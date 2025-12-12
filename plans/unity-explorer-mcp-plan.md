@@ -7,7 +7,8 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-12)
-- ML_Mono broadcast notifications now compile on net35 (void `BroadcastNotificationAsync` calls no longer use discards); `dotnet build src/UnityExplorer.csproj -c ML_Mono` succeeds (nullable warnings only). Mono MCP host remains read-only; deployment to the Test-VM Mono build is still pending.
+- ML_Mono build verified locally: `dotnet build src/UnityExplorer.csproj -c ML_Mono` succeeds (nullable warnings in `McpSimpleHttp`); output `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll` produced. Mono MCP host stays read-only; Mono game build/deployment is still pending.
+- Test-VM Unity Editor present at `C:\Program Files\Unity 2021.3.45f1` (2021.3.45f1_0da89fac8e79). Only `SpaceShooter_IL2CPP` exists under `C:\codex-workspace\space-shooter-build`; `SpaceShooter_Mono` has not been created yet.
 - CoreCLR/IL2CPP surface unchanged; last known Test-VM state: `Invoke-McpSmoke.ps1` + `Run-McpContractTests.ps1` (Release, BaseUrl `http://192.168.178.210:51477`) were green (45 passed, 0 failed, 1 skipped placeholder); not rerun this iteration.
 - `list_tools` still emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); inspector UI validation remains pending. Mono smoke harness now uses `tools/Invoke-McpSmokeMono.ps1` with MousePick + tool_result stream verification and is wrapped by `tools/Run-McpMonoSmoke.ps1` for CI/local Mono jobs.
 

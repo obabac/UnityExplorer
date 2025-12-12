@@ -363,6 +363,7 @@ MigrationBackup/
 .npm/
 .local/
 .codex/*sessions
+.codex/exec-logs/*
 .codex/logs
 .codex/log
 .nuget/

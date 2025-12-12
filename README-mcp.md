@@ -4,7 +4,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 
 ## Status
 
-- Targets: CoreCLR builds (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) now hosts a lightweight read-only MCP (initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick) with discovery and `stream_events` (log/selection/scene/tool_result notifications); writes remain disabled, so prefer CoreCLR for guarded writes.
+- Targets: CoreCLR builds (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) now hosts a lightweight read-only MCP (initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion) with discovery and `stream_events` (log/selection/scene/tool_result notifications that include `source` + optional `category`); writes remain disabled, so prefer CoreCLR for guarded writes. Console/scripts + hooks resources stay disabled on Mono until validated.
 - Transport: lightweight streamable HTTP over a local TCP listener.
 - Default mode: Read‑only (guarded writes must be explicitly enabled).
 
@@ -15,7 +15,52 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 3. Discovery file is written to `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modeHints, startedAt }`.
 4. Connect a client via the MCP C# SDK using `HttpClientTransport` (AutoDetect mode), or talk directly to the HTTP endpoints described below.
 
-Mono/net35 builds: MCP host is available for read-only initialize/list_tools/read_resource/call_tool (status/scenes/objects/components/search/selection/logs/camera/mouse-pick) with `stream_events` (log/selection/scene/tool_result) and discovery (`unity-explorer-mcp.json`). Writes stay disabled; quick smoke/CI entry: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result check).
+Mono/net35 builds: MCP host is available for read-only initialize/list_tools/read_resource/call_tool (status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion) with `stream_events` (log/selection/scene/tool_result; payloads include `source` + optional `category`) and discovery (`unity-explorer-mcp.json`). Console scripts and hooks resources remain disabled on Mono. Writes stay disabled; quick smoke/CI entry: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result check).
+
+## Mono Host Validation Checklist
+
+Use this when you have a Mono (non‑IL2CPP) Unity game with MelonLoader.
+
+1. Build the Mono DLL:
+
+   ```powershell
+   cd UnityExplorer
+   dotnet build src/UnityExplorer.csproj -c ML_Mono
+   ```
+
+   Output: `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll`.
+
+2. Install into a Mono Unity game:
+   - Ensure MelonLoader is installed for that game.
+   - Copy `UnityExplorer.ML.Mono.dll` into the game’s `Mods/` folder.
+
+3. Enable MCP in UnityExplorer:
+   - In the game’s UnityExplorer folder (usually `sinai-dev-UnityExplorer/`), create/edit `mcp.config.json` and set:
+
+     ```json
+     { "enabled": true, "port": 51477, "bindAddress": "127.0.0.1" }
+     ```
+
+4. Start the game and wait for UnityExplorer to load.
+   - Verify discovery file exists and note `baseUrl`/`port`:
+
+     ```powershell
+     Get-Content "$env:TEMP\unity-explorer-mcp.json"
+     ```
+
+5. Run the Mono smoke script from this repo:
+
+   ```powershell
+   pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3
+   ```
+
+   Expect PASS. If you see “Connection refused”, MCP is not enabled or the port differs.
+
+6. (Optional) Inspector check:
+
+   ```bash
+   npx @modelcontextprotocol/inspector --transport http --server-url http://127.0.0.1:51477
+   ```
 
 ## Configuration
 

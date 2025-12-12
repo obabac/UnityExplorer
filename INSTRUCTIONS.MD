@@ -1,31 +1,26 @@
-# Iteration Instructions (Mono MCP host bring-up)
+# Iteration Instructions (Mono SpaceShooter MCP bring-up)
 
-High-level goal: bring up a Mono Space Shooter MCP host on the Test-VM and validate the MCP smoke.
+Goal: create a Mono build of Space Shooter on the Test-VM, install UnityExplorer Mono + MCP, and run the Mono smoke script.
 
-## 1) Build + deploy Mono host on Test-VM
-- On the Windows VM open `C:\codex-workspace\space-shooter` in Unity 2021.3.45f1.
-- Switch scripting backend to Mono (Windows x86_64, .NET 4.x); keep other player settings identical to the IL2CPP build.
-- Build to `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` (do not overwrite IL2CPP).
-- Install MelonLoader (same line as IL2CPP) into the Mono build.
+## 1) Local sanity
+- Run `dotnet build src/UnityExplorer.csproj -c ML_Mono` (nullable warnings in `McpSimpleHttp` are known); fix any new regressions.
 
-## 2) Deploy UnityExplorer Mono MCP
-- From repo root: `dotnet build src/UnityExplorer.csproj -c ML_Mono` (already passes; reuse the fresh output if present).
-- Copy `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll` to `Mods\` in the Mono build.
-- Add/update `Mods\sinai-dev-UnityExplorer\mcp.config.json` with `enabled=true`, `bindAddress=0.0.0.0`, `port=51478` (or another free port), writes disabled.
-- Ensure `%TEMP%\unity-explorer-mcp.json` is written on launch; pick a port that does not conflict with the IL2CPP host (51477).
+## 2) Build Mono SpaceShooter on Test-VM
+- Unity Editor lives at `C:\Program Files\Unity 2021.3.45f1`.
+- Open `C:\codex-workspace\space-shooter` in Unity; set Scripting Backend to Mono, Target Platform Windows x86_64, .NET 4.x.
+- Build to `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` (do not overwrite `SpaceShooter_IL2CPP`).
+- Install MelonLoader (match IL2CPP host version) into the Mono build.
+- Copy `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll` into the Mono build `Mods/` folder.
+- Create/update `Mods\sinai-dev-UnityExplorer\mcp.config.json` with `enabled=true`, `bindAddress=0.0.0.0`, and a port not clashing with IL2CPP (use 51478 if 51477 is busy); keep writes disabled by default.
 
 ## 3) Validate Mono MCP
-- Start the Mono build (`C:\codex-workspace\space-shooter-build\SpaceShooter_Mono\SpaceShooter.exe`) and wait for the discovery file.
-- Run `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:<port> -LogCount 10 -StreamLines 3` from this repo (or on the VM if bound to localhost).
-- Capture results: pass/fail, log snippets, endpoint URL/port, Unity version.
+- Launch the Mono build `SpaceShooter.exe`; wait for UnityExplorer to load and confirm `%TEMP%\unity-explorer-mcp.json` exists.
+- Run `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:<port> -LogCount 10 -StreamLines 3` (from Linux if bindAddress is 0.0.0.0, else run on the VM). Capture PASS/FAIL and errors.
+- If MCP is unreachable, collect `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono\MelonLoader\Latest.log` and note blockers.
 
-## 4) Docs + plans
-- Update `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` with Mono host path/port/smoke result and any gaps.
-- Keep `plans/mcp-interface-concept.md` consistent if shapes change (none expected).
-- Keep `README-mcp.md` user-facing notes in sync if steps change.
+## 4) Docs & plan sync
+- Update `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` with Mono build path, port, MelonLoader version, and smoke result.
+- Touch `README-mcp.md` / `plans/mcp-interface-concept.md` only if DTO or config shapes change.
 
-## 5) Working style
-- Keep responses concise; avoid questions unless blocked.
-- Keep plan/todo files in sync with code/docs; do not revert unrelated work.
-- Preserve IL2CPP host defaults; avoid enabling writes unless needed for smoke.
-- Commit changes at the end of the iteration.
+## 5) Commit
+- Commit all changes from this iteration with a clear message.

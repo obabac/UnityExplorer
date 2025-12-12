@@ -4,7 +4,7 @@
 - Mode: In‑process server (C# SDK), HTTP transport via `ModelContextProtocol.AspNetCore`
 - Client transport: `HttpClientTransport` with `HttpTransportMode.AutoDetect | StreamableHttp | Sse`
 - Default policy: Read‑only. Writes gated behind config + confirmation + allowlist.
-- Mono (MelonLoader, `net35`): now ships a lightweight in-process MCP host (Newtonsoft.Json + TcpListener) covering initialize/list_tools/read_resource/call_tool for read-only surfaces (status/scenes/objects/components/search/selection/logs/camera/mouse-pick); `stream_events` streams log/selection/scene/tool_result notifications with cleanup + rate limits; writes remain disabled. Discovery file is written from Mono builds.
+- Mono (MelonLoader, `net35`): now ships a lightweight in-process MCP host (Newtonsoft.Json + TcpListener) covering initialize/list_tools/read_resource/call_tool for read-only surfaces (status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion); `stream_events` streams log/selection/scene/tool_result notifications with cleanup + rate limits; writes remain disabled. Discovery file is written from Mono builds.
 
 ---
 
@@ -80,6 +80,9 @@ public static class UnityReadTools
     [McpServerTool, Description("Get components for object.")]
     public static Task<Page<ComponentCardDto>> GetComponents(string objectId, int? limit, int? offset, CancellationToken ct);
 
+    [McpServerTool, Description("Version info (Explorer/MCP/Unity/runtime).")]
+    public static Task<VersionInfoDto> GetVersion(CancellationToken ct);
+
     [McpServerTool, Description("Search objects by name/type/path.")]
     public static Task<Page<SearchResultDto>> SearchObjects(
         string? query, string? name, string? type, string? path, bool? activeOnly,
@@ -97,6 +100,8 @@ public static class UnityReadTools
 ```
 
 `list_tools` returns an `inputSchema` per tool with JSON Schema primitives for each argument (string, integer, number, boolean, array) and marks non-optional parameters as `required`; `MousePick.mode` advertises an enum of `world|ui`. Cancellation tokens are omitted so inspector call forms stay clean.
+
+- `GetVersion` returns `VersionInfoDto { ExplorerVersion, McpVersion, UnityVersion, Runtime }` on both CoreCLR and Mono hosts.
 
 Phase‑later write tools exist but are disabled by default; they require allowlist + confirmations.
 
