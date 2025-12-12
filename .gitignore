@@ -364,6 +364,10 @@ MigrationBackup/
 .local/
 .codex/*sessions
 .codex/exec-logs/*
+.codex/history.jsonl
+.codex/config.toml
+.codex/version.json
+.codex/auth.json
 .codex/logs
 .codex/log
 .nuget/
