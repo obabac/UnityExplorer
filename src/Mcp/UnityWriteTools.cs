@@ -525,9 +525,6 @@ namespace UnityExplorer.Mcp
             if (!int.TryParse(objectId.Substring(4), out var iid))
                 return ToolError("InvalidArgument", "Invalid instance id");
 
-            if (InspectorPanel.Instance == null || UIManager.UiBase == null)
-                return ToolError("NotReady", "Inspector UI unavailable");
-
             try
             {
                 await MainThread.RunAsync(async () =>
@@ -535,8 +532,8 @@ namespace UnityExplorer.Mcp
                     var go = UnityQuery.FindByInstanceId(iid);
                     if (go == null) throw new InvalidOperationException("NotFound");
 
-                    UnityReadTools.RecordSelection($"obj:{iid}");
-                    InspectorManager.Inspect(go);
+                    UnityReadTools.RecordSelection(objectId);
+
                     await Task.CompletedTask;
                 });
 

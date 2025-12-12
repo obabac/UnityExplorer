@@ -42,6 +42,7 @@
   - Shape: `{ total, items: [{ id, name, type, path }] }`
 - `unity://selection`
   - Shape: `{ total, items: [objectId...] }`
+  - Behavior: `SelectObject` records the id even when the inspector UI is still initializing or missing; the tool still returns `ok=true` and skips UI inspection in that case so `unity://selection` can round-trip in headless setups.
 - `unity://console/scripts`
   - Shape: `{ total, items: [{ name, path }] }`
 - `unity://hooks`

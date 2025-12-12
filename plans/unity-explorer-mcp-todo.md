@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-12): IL2CPP Space Shooter host rebuilt/deployed and smoke on `http://192.168.178.210:51477` passes after restart, but `UnityExplorer.Mcp.ContractTests` now fail: `WriteToolsContractTests` trigger connection reset/`SpaceShooter.exe` exit; `SelectObject` calls currently hang the server even with writes disabled, and TimeScale reports `value=0` after setting to 1. Mono host not rerun this cycle (last known green at `http://192.168.178.210:51478` via `tools/Run-McpMonoSmoke.ps1`). Inspector schema/UX validation remains pending; console scripts/hooks still disabled on Mono until validated.
+Status (2025-12-12): IL2CPP Space Shooter host rebuilt/deployed with headless-safe `SelectObject` + JSON-RPC error logging through `LogBuffer`; smoke and full contract suite now pass on `http://192.168.178.210:51477` (`Run-McpContractTests.ps1 -Configuration Release`). Mono host not rerun this cycle (last known green at `http://192.168.178.210:51478` via `tools/Run-McpMonoSmoke.ps1`). Inspector schema/UX validation remains pending; console scripts/hooks still disabled on Mono until validated.
 
 ---
 

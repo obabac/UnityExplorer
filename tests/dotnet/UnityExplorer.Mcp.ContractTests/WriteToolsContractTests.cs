@@ -187,8 +187,6 @@ public class WriteToolsContractTests
         select.Should().NotBeNull();
         var selectJson = select!.Value;
         selectJson.TryGetProperty("ok", out var okProp).Should().BeTrue();
-        if (okProp.ValueKind == JsonValueKind.False && selectJson.TryGetProperty("error", out var err) && err.TryGetProperty("kind", out var kind) && string.Equals(kind.GetString(), "NotReady", StringComparison.OrdinalIgnoreCase))
-            return;
         okProp.ValueKind.Should().Be(JsonValueKind.True);
 
         await Task.Delay(50, cts.Token);

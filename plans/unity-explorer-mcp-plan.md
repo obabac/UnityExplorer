@@ -7,8 +7,8 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-12)
-- IL2CPP Space Shooter host rebuilt/deployed (UnityExplorer 4.12.8, SetTimeScale value reporting fix + test helpers cloning JsonElement) and smoke (`pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477`) passes after restart.
-- Contract tests now failing on IL2CPP: `UnityExplorer.Mcp.ContractTests` abort mid-run with connection reset/`SpaceShooter.exe` exit during `WriteToolsContractTests` (SelectObject call currently hangs the server; SetActive/SetTimeScale exercised before failure). TimeScale tool still reports `value=0` after setting to 1; host becomes unresponsive when the suite runs end-to-end. Needs investigation before DoD is met.
+- IL2CPP Space Shooter host rebuilt/deployed with headless-safe `SelectObject` (records selection without touching the inspector UI) and JSON-RPC error logging routed through `LogBuffer`; smoke (`pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477`) and full contract suite (`pwsh ./tools/Run-McpContractTests.ps1 -Configuration Release`) now pass against `http://192.168.178.210:51477`.
+- Invalid JSON-RPC requests now log `[MCP] error ...` without calling `ExplorerCore.LogWarning` off the main thread, fixing the crash triggered by the log-tail contract test; `SelectObject` contract test updated to expect `ok=true` instead of tolerating `NotReady`.
 - Mono host not rerun this iteration; previous Mono smoke status unchanged (last known green at `http://192.168.178.210:51478`). Inspector UI validation still pending; `list_tools` continues to emit per-argument schemas.
 
 ---

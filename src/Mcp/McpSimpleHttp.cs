@@ -527,7 +527,8 @@ namespace UnityExplorer.Mcp
             {
                 try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
             }
-            try { ExplorerCore.LogWarning($"[MCP] error {code}: {message}"); LogBuffer.Add("error", message, "mcp", kind); } catch { }
+            var logMessage = $"[MCP] error {code}: {message}";
+            try { LogBuffer.Add("error", logMessage, "mcp", kind); } catch { }
             var payload = JsonSerializer.Serialize(new
             {
                 jsonrpc = "2.0",
@@ -539,7 +540,8 @@ namespace UnityExplorer.Mcp
 
         private async Task SendJsonRpcErrorAsync(int code, string message, string kind, string? hint, string? detail, CancellationToken ct)
         {
-            try { ExplorerCore.LogWarning($"[MCP] error {code}: {message}"); LogBuffer.Add("error", message, "mcp", kind); } catch { }
+            var logMessage = $"[MCP] error {code}: {message}";
+            try { LogBuffer.Add("error", logMessage, "mcp", kind); } catch { }
             var payload = JsonSerializer.Serialize(new
             {
                 jsonrpc = "2.0",

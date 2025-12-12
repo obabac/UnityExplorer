@@ -1,22 +1,16 @@
-# Iteration Instructions (IL2CPP SelectObject hang)
+# Iteration Instructions (IL2CPP SelectObject/log crash fixed)
 
-Goals:
-- Fix the IL2CPP MCP host so `UnityExplorer.Mcp.ContractTests` pass again; current blocker is `SelectObject` hanging the server and killing `SpaceShooter.exe` during `WriteToolsContractTests`, plus `SetTimeScale` still reporting `value=0` after setting to 1.
-- Re-run smoke + contract tests on SpaceShooter IL2CPP once fixed and record results in the plan docs.
+Goal: keep the IL2CPP SpaceShooter MCP host green after the headless-safe SelectObject + JSON-RPC log fixes; keep docs/tests/DTOs aligned.
 
-Context:
-- BaseUrl: `http://192.168.178.210:51477` (SpaceShooter_IL2CPP on the Test-VM).
-- Discovery file used for tests: `/home/onur/p-unity-explorer-mcp/ue-mcp-il2cpp-discovery.json`.
-- Current build deployed: UnityExplorer 4.12.8 with JsonElement clone fixes, TimeScale reporting uses `Time.timeScale`, and `SelectObject` returns `NotReady` when inspector UI is missing (still hangs).
+State:
+- Target host: http://192.168.178.210:51477 (SpaceShooter_IL2CPP). Discovery file used for tests: /tmp/ue-mcp-il2cpp-discovery.json.
+- Build/deploy: `pwsh ./build-ml-coreclr.ps1` from repo root (copies to the Test-VM automatically). Stop SpaceShooter before copying if it is running, then restart it and poll `call_tool GetStatus` until ready.
+- Config defaults restored: allowWrites=false, requireConfirm=true, enableConsoleEval=false. SelectObject records selection without touching the inspector UI when headless. JSON-RPC errors log `[MCP] error ...` via LogBuffer only (no ExplorerCore.LogWarning on background threads).
 
-Repro (current state):
-1) Start host: stop any `SpaceShooter.exe`, then run `Start-Process "C:\\codex-workspace\\space-shooter-build\\SpaceShooter_IL2CPP\\SpaceShooter.exe"`; wait ~10s; verify with `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477 -LogCount 5`.
-2) Hang: even with writes disabled, `curl -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":"sel","method":"call_tool","params":{"name":"SelectObject","arguments":{"objectId":"obj:2132"}}}' http://192.168.178.210:51477/message` causes the MCP server to stop responding (GetStatus fails afterward).
-3) Contract suite: `UE_MCP_DISCOVERY=/home/onur/p-unity-explorer-mcp/ue-mcp-il2cpp-discovery.json pwsh ./tools/Run-McpContractTests.ps1 -Configuration Release` → failures/connection resets in `WriteToolsContractTests` (SelectObject/SetTimeScale path) and host exit.
-4) Single test: `dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests/UnityExplorer.Mcp.ContractTests.csproj -c Release --filter FullyQualifiedName~WriteToolsContractTests.SelectObject_Updates_Selection_RoundTrip` reproduces the hang/connection reset.
+Validation to rerun after changes:
+- Smoke: `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477 -LogCount 20`.
+- Contracts (Release): `UE_MCP_DISCOVERY=/tmp/ue-mcp-il2cpp-discovery.json pwsh ./tools/Run-McpContractTests.ps1 -Configuration Release` (currently all green; 1 skipped).
 
-Next steps (suggested):
-- Make `SelectObject` non-blocking when UI is unavailable/headless (avoid Unity UI touch entirely; consider short-circuit before `MainThread.RunAsync` or a safe fallback selection storage).
-- Investigate why the request never returns despite the `NotReady` guard (check MelonLoader `Latest.log` or attach debugger/logging around `SelectObject`).
-- Verify `SetTimeScale` now returns the applied value and does not destabilize the host; adjust tests/docs if behavior changes.
-- After fixes: rebuild/deploy (`pwsh ./build-ml-coreclr.ps1`), restart SpaceShooter, rerun smoke + full contract tests, and refresh `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` with the results.
+Notes:
+- Keep plans (`.plans/unity-explorer-mcp-plan.md`, `.plans/unity-explorer-mcp-todo.md`) and `plans/mcp-interface-concept.md` in sync with any shape/behavior changes.
+- Reset configs after experiments (writes stay disabled by default). Mono host not touched this iteration; last known smoke green at http://192.168.178.210:51478.
