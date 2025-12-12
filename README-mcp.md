@@ -15,7 +15,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 3. Discovery file is written to `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modeHints, startedAt }`.
 4. Connect a client via the MCP C# SDK using `HttpClientTransport` (AutoDetect mode), or talk directly to the HTTP endpoints described below.
 
-Mono/net35 builds: MCP host is available for read-only initialize/list_tools/read_resource/call_tool (status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion) with `stream_events` (log/selection/scene/tool_result; payloads include `source` + optional `category`) and discovery (`unity-explorer-mcp.json`). Console scripts and hooks resources remain disabled on Mono. Writes stay disabled; quick smoke/CI entry: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result check).
+Mono/net35 builds: MCP host is available for read-only initialize/list_tools/read_resource/call_tool (status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion) with `stream_events` (log/selection/scene/tool_result; payloads include `source` + optional `category`) and discovery (`unity-explorer-mcp.json`). Console scripts and hooks resources remain disabled on Mono. Writes stay disabled; quick smoke/CI entry: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result check). Test-VM Mono host base URL: `http://192.168.178.210:51478`.
 
 ## Mono Host Validation Checklist
 

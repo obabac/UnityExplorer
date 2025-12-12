@@ -6,10 +6,10 @@
 - Scene baseline (Main): Main Camera, Directional Light, Player (with Boundary box), Background, GameController, UI Canvas (score/restart/help), Audio.
 
 ## Current Test-VM Setup (validated)
-- **Testing environment ownership:** Agents maintain the Space Shooter MCP host on the Test‑VM (IL2CPP/CoreCLR; Mono build pending) so E2E tests stay runnable.
+- **Testing environment ownership:** Agents maintain the Space Shooter MCP hosts on the Test‑VM (IL2CPP/CoreCLR and Mono) so E2E tests stay runnable.
 - Game source project: `C:\codex-workspace\space-shooter` (Unity project on Test‑VM).
 - Game build (IL2CPP/CoreCLR host): `C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP` (Unity 2021.3.45f1, IL2CPP, x86_64).
-- Mono build status: Unity batch run failed (`executeMethod BuildCommands.BuildWindows64Mono could not be found` in `C:\codex-workspace\space-shooter\build.log`); `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` is absent.
+- Mono host: `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` running at `http://192.168.178.210:51478`; `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3` passes (2 streamed lines including `tool_result`) after switching the harness to a PowerShell HttpClient line reader.
 - Unity Editor installed at `C:\Program Files\Unity 2021.3.45f1` (product version `2021.3.45f1_0da89fac8e79`).
 - Loader/Mods: MelonLoader 0.7.2-ci (nightly) + `Mods\UnityExplorer.ML.IL2CPP.CoreCLR.dll` 4.12.8.
 - MCP config: `Mods\sinai-dev-UnityExplorer\mcp.config.json` (`Enabled=true`, `BindAddress=0.0.0.0`, `Port=51477`, `AuthToken=changeme`, writes disabled).

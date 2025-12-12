@@ -48,20 +48,12 @@ function Invoke-McpRpc {
 }
 
 function Read-Chunk {
-    param([System.IO.StreamReader]$Reader)
-    $lenLine = $Reader.ReadLine()
-    if ([string]::IsNullOrWhiteSpace($lenLine)) { return $null }
-    $len = 0
-    if (-not [int]::TryParse($lenLine, [System.Globalization.NumberStyles]::HexNumber, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$len)) {
-        return $null
-    }
-    if ($len -le 0) { return $null }
-    $buffer = New-Object char[] $len
-    $read = $Reader.ReadBlock($buffer, 0, $len)
-    if ($read -le 0) { return $null }
-    $json = -join $buffer[0..($read - 1)]
-    $Reader.ReadLine() | Out-Null
-    return $json
+    param([System.IO.StreamReader]$Reader, [int]$TimeoutMs = 5000)
+    $lineTask = $Reader.ReadLineAsync()
+    if (-not $lineTask.Wait($TimeoutMs)) { return $null }
+    $line = $lineTask.Result
+    if ([string]::IsNullOrWhiteSpace($line)) { return $null }
+    return $line
 }
 
 function Open-StreamEvents {
@@ -97,9 +89,9 @@ function Read-StreamEvents {
     )
     $events = @()
     for ($i = 0; $i -lt $Lines; $i++) {
-        if ($Reader.EndOfStream) { break }
-        $chunk = Read-Chunk -Reader $Reader
-        if (-not $chunk) { break }
+        Write-Host "[mono-smoke] waiting for event $i"
+        try { $chunk = Read-Chunk -Reader $Reader } catch { Write-Host "[mono-smoke] stream read error: $_"; break }
+        if (-not $chunk) { Write-Host "[mono-smoke] no chunk"; break }
         $events += $chunk
         Write-Host "[event] $chunk"
     }
@@ -129,18 +121,24 @@ try {
     $readScenes = Invoke-McpRpc -Id "read-scenes" -Method "read_resource" -Params @{ uri = "unity://scenes" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
     $readLogs = Invoke-McpRpc -Id "read-logs" -Method "read_resource" -Params @{ uri = "unity://logs/tail?count=$LogCount" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
 
+    Write-Host "[mono-smoke] RPCs completed"
+
     $streamHandle = $null
     $events = @()
     try {
         $streamHandle = Open-StreamEvents -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
-        Invoke-McpRpc -Id "event-probe" -Method "call_tool" -Params @{ name = "GetStatus"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+        Invoke-McpRpc -Id "probe-stream" -Method "call_tool" -Params @{ name = "GetStatus"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
         $events = Read-StreamEvents -Reader $streamHandle.Reader -Lines $StreamLines
     }
     finally {
-        if ($streamHandle -and $streamHandle.Reader) { $streamHandle.Reader.Dispose() }
-        if ($streamHandle -and $streamHandle.Response) { $streamHandle.Response.Dispose() }
-        if ($streamHandle -and $streamHandle.Client) { $streamHandle.Client.Dispose() }
+        if ($streamHandle) {
+            try { $streamHandle.Reader.Dispose() } catch { }
+            try { $streamHandle.Response.Dispose() } catch { }
+            try { $streamHandle.Client.Dispose() } catch { }
+        }
     }
+
+    Write-Host "[mono-smoke] Stream events captured: $($events.Count)"
 
     $status = ($statusTool.result.content | Where-Object { $_.type -eq "json" })[0].json
     $logs = ($logsTool.result.content | Where-Object { $_.type -eq "json" })[0].json
@@ -166,6 +164,7 @@ try {
     }
     if (-not $toolResultEvent) { throw "stream_events produced no tool_result notification" }
 
+    Write-Host "[mono-smoke] Summary"
     Write-Host "Tools: $($tools.result.tools.Count) returned"
     Write-Host "Status: Ready=$($status.Ready) Scenes=$($status.ScenesLoaded)"
     Write-Host "MousePick: Mode=$($mousePick.Mode) Hit=$($mousePick.Hit)"
@@ -173,6 +172,7 @@ try {
     Write-Host "Logs (tool): $($logs.Items.Count) items (requested $LogCount)"
     Write-Host "Logs (read): $($readLogsDoc.Items.Count) items"
     Write-Host "Stream events captured: $($events.Count) (tool_result observed=$($toolResultEvent -ne $null))"
+    Write-Host "[mono-smoke] Done"
 }
 catch {
     Write-Error $_
