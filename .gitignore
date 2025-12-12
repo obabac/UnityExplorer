@@ -373,6 +373,9 @@ MigrationBackup/
 .nuget/
 .templateengine/
 
+# Local MCP discovery helpers
+ue-mcp-*-discovery.json
+
 
 # Build results
 [Dd]ebug/
