@@ -49,7 +49,7 @@ public class HooksContractTests
 
         var first = contentArr[0];
         first.TryGetProperty("json", out var jsonEl).Should().BeTrue();
-        return jsonEl;
+        return jsonEl.Clone();
     }
 
     private static async Task<JsonElement?> ReadHooksAsync(HttpClient http, CancellationToken ct)

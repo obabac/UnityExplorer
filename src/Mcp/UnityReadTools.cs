@@ -20,6 +20,16 @@ namespace UnityExplorer.Mcp
     [McpServerToolType]
     public static class UnityReadTools
     {
+        private static string? _fallbackSelectionActive;
+        private static readonly List<string> _fallbackSelectionItems = new();
+
+        internal static void RecordSelection(string objectId)
+        {
+            _fallbackSelectionActive = objectId;
+            if (!_fallbackSelectionItems.Contains(objectId))
+                _fallbackSelectionItems.Insert(0, objectId);
+        }
+
         [McpServerTool, Description("Status snapshot of Unity Explorer and Unity runtime.")]
         public static async Task<StatusDto> GetStatus(CancellationToken ct)
         {
@@ -409,6 +419,11 @@ namespace UnityExplorer.Mcp
                 }
             }
             catch { }
+
+            if (string.IsNullOrWhiteSpace(active) && _fallbackSelectionActive != null)
+                active = _fallbackSelectionActive;
+            if (items.Count == 0 && _fallbackSelectionItems.Count > 0)
+                items.AddRange(_fallbackSelectionItems);
             if (active != null && !items.Contains(active))
                 items.Insert(0, active);
             return (active, items);

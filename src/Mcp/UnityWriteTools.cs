@@ -12,6 +12,8 @@ using UnityEngine.UI;
 using UnityExplorer;
 using UnityExplorer.CSConsole;
 using UnityExplorer.Hooks;
+using UnityExplorer.UI;
+using UnityExplorer.UI.Panels;
 using UnityExplorer.UI.Widgets;
 
 #nullable enable
@@ -523,15 +525,21 @@ namespace UnityExplorer.Mcp
             if (!int.TryParse(objectId.Substring(4), out var iid))
                 return ToolError("InvalidArgument", "Invalid instance id");
 
+            if (InspectorPanel.Instance == null || UIManager.UiBase == null)
+                return ToolError("NotReady", "Inspector UI unavailable");
+
             try
             {
                 await MainThread.RunAsync(async () =>
                 {
                     var go = UnityQuery.FindByInstanceId(iid);
                     if (go == null) throw new InvalidOperationException("NotFound");
+
+                    UnityReadTools.RecordSelection($"obj:{iid}");
                     InspectorManager.Inspect(go);
                     await Task.CompletedTask;
                 });
+
                 return new { ok = true };
             }
             catch (Exception ex)
@@ -613,7 +621,6 @@ namespace UnityExplorer.Mcp
                 var lockedField = typeof(TimeScaleWidget).GetField("locked", BindingFlags.NonPublic | BindingFlags.Instance);
                 var lockedVal = lockedField?.GetValue(widget);
                 if (lockedVal is bool b) locked = b;
-                value = widget.DesiredTime;
             }
             catch { }
         }

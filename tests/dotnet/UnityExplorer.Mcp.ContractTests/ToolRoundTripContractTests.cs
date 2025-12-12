@@ -46,7 +46,7 @@ public class ToolRoundTripContractTests
 
         var first = contentArr[0];
         first.TryGetProperty("json", out var jsonEl).Should().BeTrue();
-        return jsonEl;
+        return jsonEl.Clone();
     }
 
     private static async Task<string?> GetSampleObjectIdAsync(HttpClient http, CancellationToken ct, string? sceneId)

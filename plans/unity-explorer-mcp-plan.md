@@ -7,10 +7,9 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-12)
-- Mono Space Shooter host is running at `http://192.168.178.210:51478` (`C:\codex-workspace\space-shooter-build\SpaceShooter_Mono`). `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3` now passes and observes `tool_result` after switching the harness to a PowerShell HttpClient line reader.
-- Mono stream_events are chunked JSON lines; the prior Python `requests` snippet was removed to avoid read timeouts while waiting for a fixed number of lines.
-- CoreCLR/IL2CPP surface unchanged; last known Test-VM state: `Invoke-McpSmoke.ps1` + `Run-McpContractTests.ps1` (Release, BaseUrl `http://192.168.178.210:51477`) were green (45 passed, 0 failed, 1 skipped placeholder); not rerun this iteration. Unity Editor remains at `C:\Program Files\Unity 2021.3.45f1` on the Test-VM.
-- `list_tools` still emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); inspector UI validation remains pending. Mono smoke harness now uses `tools/Invoke-McpSmokeMono.ps1` with MousePick + tool_result stream verification and is wrapped by `tools/Run-McpMonoSmoke.ps1` for CI/local Mono jobs.
+- IL2CPP Space Shooter host rebuilt/deployed (UnityExplorer 4.12.8, SetTimeScale value reporting fix + test helpers cloning JsonElement) and smoke (`pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477`) passes after restart.
+- Contract tests now failing on IL2CPP: `UnityExplorer.Mcp.ContractTests` abort mid-run with connection reset/`SpaceShooter.exe` exit during `WriteToolsContractTests` (SelectObject call currently hangs the server; SetActive/SetTimeScale exercised before failure). TimeScale tool still reports `value=0` after setting to 1; host becomes unresponsive when the suite runs end-to-end. Needs investigation before DoD is met.
+- Mono host not rerun this iteration; previous Mono smoke status unchanged (last known green at `http://192.168.178.210:51478`). Inspector UI validation still pending; `list_tools` continues to emit per-argument schemas.
 
 ---
 
