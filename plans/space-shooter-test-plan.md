@@ -9,7 +9,8 @@
 - **Testing environment ownership:** Agents maintain the Space Shooter MCP host on the Test‑VM (IL2CPP/CoreCLR; Mono build pending) so E2E tests stay runnable.
 - Game source project: `C:\codex-workspace\space-shooter` (Unity project on Test‑VM).
 - Game build (IL2CPP/CoreCLR host): `C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP` (Unity 2021.3.45f1, IL2CPP, x86_64).
-- Unity Editor installed at `C:\Program Files\Unity 2021.3.45f1` (product version `2021.3.45f1_0da89fac8e79`); Mono target folder `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` not created yet.
+- Mono build status: Unity batch run failed (`executeMethod BuildCommands.BuildWindows64Mono could not be found` in `C:\codex-workspace\space-shooter\build.log`); `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` is absent.
+- Unity Editor installed at `C:\Program Files\Unity 2021.3.45f1` (product version `2021.3.45f1_0da89fac8e79`).
 - Loader/Mods: MelonLoader 0.7.2-ci (nightly) + `Mods\UnityExplorer.ML.IL2CPP.CoreCLR.dll` 4.12.8.
 - MCP config: `Mods\sinai-dev-UnityExplorer\mcp.config.json` (`Enabled=true`, `BindAddress=0.0.0.0`, `Port=51477`, `AuthToken=changeme`, writes disabled).
 - UE UI issue: dropdown Il2Cpp cast throws; mitigated with `Mods\UeMcpHeadless.dll` (small Melon patch that swallows InitUI exception) so MCP still starts. Keep it loaded until a real UE fix lands.

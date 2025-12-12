@@ -1,26 +1,26 @@
-# Iteration Instructions (Mono SpaceShooter MCP bring-up)
+# Iteration Instructions (Fix Mono build + host)
 
-Goal: create a Mono build of Space Shooter on the Test-VM, install UnityExplorer Mono + MCP, and run the Mono smoke script.
+Goal: create the SpaceShooter_Mono build on the Test-VM and bring up the Mono MCP host.
 
-## 1) Local sanity
-- Run `dotnet build src/UnityExplorer.csproj -c ML_Mono` (nullable warnings in `McpSimpleHttp` are known); fix any new regressions.
+## 1) Repair the Mono build on the Test-VM
+- Inspect `C:\codex-workspace\space-shooter\unity-space-shooter-2019` build scripts; add/restore `BuildCommands.BuildWindows64Mono` (or adjust the batch command) so the CLI build works.
+- Retry the Unity batch build that writes `C:\codex-workspace\space-shooter\build.log`, targeting `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono`.
 
-## 2) Build Mono SpaceShooter on Test-VM
-- Unity Editor lives at `C:\Program Files\Unity 2021.3.45f1`.
-- Open `C:\codex-workspace\space-shooter` in Unity; set Scripting Backend to Mono, Target Platform Windows x86_64, .NET 4.x.
-- Build to `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` (do not overwrite `SpaceShooter_IL2CPP`).
-- Install MelonLoader (match IL2CPP host version) into the Mono build.
-- Copy `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll` into the Mono build `Mods/` folder.
-- Create/update `Mods\sinai-dev-UnityExplorer\mcp.config.json` with `enabled=true`, `bindAddress=0.0.0.0`, and a port not clashing with IL2CPP (use 51478 if 51477 is busy); keep writes disabled by default.
+## 2) If batch still fails
+- Open Unity GUI on the Test-VM, switch backend to Mono, and build Windows x86_64 to `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono`.
+- Capture any errors or screenshots for later debugging.
 
-## 3) Validate Mono MCP
-- Launch the Mono build `SpaceShooter.exe`; wait for UnityExplorer to load and confirm `%TEMP%\unity-explorer-mcp.json` exists.
-- Run `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:<port> -LogCount 10 -StreamLines 3` (from Linux if bindAddress is 0.0.0.0, else run on the VM). Capture PASS/FAIL and errors.
-- If MCP is unreachable, collect `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono\MelonLoader\Latest.log` and note blockers.
+## 3) Deploy MelonLoader + UE Mono + MCP
+- Install MelonLoader (same version as IL2CPP) into the new Mono build folder.
+- Copy `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll` into `Mods/`.
+- Enable MCP on port 51478 (keep writes off / confirm on), start the game, and confirm `%TEMP%\unity-explorer-mcp.json` is written.
 
-## 4) Docs & plan sync
-- Update `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` with Mono build path, port, MelonLoader version, and smoke result.
-- Touch `README-mcp.md` / `plans/mcp-interface-concept.md` only if DTO or config shapes change.
+## 4) Run Mono smoke from Linux
+- From `UnityExplorer/`, run:
+  - `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3`
+- Record pass/fail and any key log lines.
 
-## 5) Commit
-- Commit all changes from this iteration with a clear message.
+## 5) Docs + commit
+- Update `plans/space-shooter-test-plan.md` with Mono build/smoke results.
+- Keep `plans/unity-explorer-mcp-plan.md` and `plans/unity-explorer-mcp-todo.md` in sync.
+- Commit the changes.
