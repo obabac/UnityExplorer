@@ -1,6 +1,6 @@
 # Unity Explorer MCP – High‑Level TODOs (Streamable HTTP Era)
 
-Date: 2025‑12‑10  
+Date: 2025‑12‑12  
 Scope: Remaining work to get close to UnityExplorer feature parity over MCP, with a stable streamable‑http surface.
 
 ### Definition of Done (100%)
@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-11): Space Shooter host unchanged; last contract runs were green (45 passed, 1 skipped placeholder). ML_Mono now includes a lightweight MCP host (Newtonsoft.Json + TcpListener) for initialize/list_tools/read_resource/call_tool on read-only surfaces (now including MousePick world/ui); discovery is written on Mono, `stream_events` streams log/selection/scene/tool_result notifications; inspector schema/UX validation remains pending. Mono smoke wrapper `tools/Run-McpMonoSmoke.ps1` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result) is available for CI/local Mono hosts.
+Status (2025-12-12): Space Shooter host unchanged; last contract runs were green (45 passed, 1 skipped placeholder). ML_Mono includes the lightweight MCP host (Newtonsoft.Json + TcpListener) for initialize/list_tools/read_resource/call_tool on read-only surfaces (MousePick world/ui, GetVersion, discovery, log/selection/scene/tool_result stream events). Broadcast notification calls are now void-friendly on net35 (no discards), and `dotnet build src/UnityExplorer.csproj -c ML_Mono` succeeds (nullable warnings only). Inspector schema/UX validation remains pending; console scripts and hooks stay disabled on Mono until validated. Mono smoke wrapper `tools/Run-McpMonoSmoke.ps1` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result) is available for CI/local Mono hosts.
 
 ---
 
@@ -20,7 +20,7 @@ Status (2025-12-11): Space Shooter host unchanged; last contract runs were green
 This section summarizes what still needs to be in place so that Unity Explorer MCP is fully exercised and “green” under `@modelcontextprotocol/inspector` plus the `UnityExplorer.Mcp.ContractTests` harness.
 
 - Schema & payload validation:
-  - [x] Confirm `unity://status`, `unity://scenes`, and `unity://scene/{id}/objects` payloads match `.plans/mcp-interface-concept.md`, and adjust either DTOs or tests where they diverge.
+  - [x] Confirm `unity://status`, `unity://scenes`, and `unity://scene/{id}/objects` payloads match `plans/mcp-interface-concept.md`, and adjust either DTOs or tests where they diverge.
   - [x] Ensure all DTOs used by inspector‑facing tools/resources are serializable without custom JSON options (no cycles, no Unity engine types leaking).
 - Tool behaviour & write safety:
   - [x] Add a focused contract test for `SelectObject` that asserts selection state changes as expected (round‑trip with `unity://selection`).
@@ -67,7 +67,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 ## 2. Read‑Only Surface Parity (Core Explorer Features)
 
 - Status / Scenes / Objects (mostly done, needs validation polish):
-  - [x] Confirm `unity://status`, `unity://scenes`, `unity://scene/{id}/objects` payloads align with the spec in `.plans/mcp-interface-concept.md`.
+  - [x] Confirm `unity://status`, `unity://scenes`, `unity://scene/{id}/objects` payloads align with the spec in `plans/mcp-interface-concept.md`.
   - [x] Add contract tests for `unity://object/{id}` and `unity://object/{id}/components` via `/read`.
 - Search:
   - [x] Expose `unity://search?...` more fully (name/type/path/activeOnly) and add a contract test that exercises multiple filters.
@@ -151,5 +151,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Add a Mono smoke harness (subset of contract tests) and doc how to run it.
 
 - [ ] Phase C — Parity + tests
-  - [ ] Expand Mono coverage toward CoreCLR parity (selection, MousePick, camera, guarded writes where safe) and log known gaps vs. IL2CPP/Test-VM. (MousePick world/ui now implemented; guarded writes still pending.)
+  - [ ] Expand Mono coverage toward CoreCLR parity (selection, MousePick, camera, guarded writes where safe) and log known gaps vs. IL2CPP/Test-VM. (MousePick world/ui and GetVersion now implemented; console/scripts + hooks resources remain disabled on Mono pending validation; guarded writes still pending.)
+  - [x] Fix Mono notification broadcast compile issue (net35 has no Tasks): remove discards on void `BroadcastNotificationAsync` or reintroduce a Task-compatible wrapper.
+  - [ ] Run Mono smoke/inspector against a real Mono host and record results. See `README-mcp.md` Mono Host Validation Checklist. (Blocked until a Mono game is available.)
   - [x] Add Mono-specific contract/CI entry (`tools/Run-McpMonoSmoke.ps1`); run against a Mono host when available and keep IL2CPP behavior unchanged.

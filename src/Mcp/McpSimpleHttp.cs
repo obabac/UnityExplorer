@@ -20,7 +20,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -913,7 +912,7 @@ namespace UnityExplorer.Mcp
         private readonly int _streamLimit = 16;
         private readonly Dictionary<int, Stream> _streams = new Dictionary<int, Stream>();
         private readonly object _streamGate = new object();
-        private readonly CancellationTokenSource _disposeCts = new CancellationTokenSource();
+        private volatile bool _disposed;
         private int _active;
         private int _nextStreamId;
         public int Port { get; private set; }
@@ -1056,15 +1055,16 @@ namespace UnityExplorer.Mcp
             if (string.Equals(methodName, "call_tool", StringComparison.OrdinalIgnoreCase))
             {
                 if (!CheckSlot(stream, idToken)) return;
+                string name = string.Empty;
                 try
                 {
                     var args = root["params"]?["arguments"] as JObject;
-                    var name = (root["params"]?["name"] ?? root["params"]?["tool"] ?? string.Empty).ToString();
+                    name = (root["params"]?["name"] ?? root["params"]?["tool"] ?? string.Empty).ToString();
                     if (string.IsNullOrEmpty(name))
                         throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Invalid params: 'name' is required.");
                     var result = _handlers.CallTool(name, args);
                     WriteJsonResult(stream, idToken, new { content = new[] { new { type = "json", json = result } } });
-                    try { _ = BroadcastNotificationAsync("tool_result", new { name, ok = true, result }); } catch { }
+                    try { BroadcastNotificationAsync("tool_result", new { name, ok = true, result }); } catch { }
                 }
                 catch (MonoMcpHandlers.McpError err)
                 {
@@ -1072,7 +1072,7 @@ namespace UnityExplorer.Mcp
                     try
                     {
                         var data = BuildErrorData(err.Kind, err.Hint, err.Detail);
-                        _ = BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = err.Code, message = err.Message, data } });
+                        BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = err.Code, message = err.Message, data } });
                     }
                     catch { }
                 }
@@ -1082,7 +1082,7 @@ namespace UnityExplorer.Mcp
                     try
                     {
                         var data = BuildErrorData("Internal", null, ex.Message);
-                        _ = BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32603, message = "Internal error", data } });
+                        BroadcastNotificationAsync("tool_result", new { name, ok = false, error = new { code = -32603, message = "Internal error", data } });
                     }
                     catch { }
                 }
@@ -1198,7 +1198,7 @@ namespace UnityExplorer.Mcp
         public void Dispose()
         {
             _running = false;
-            try { _disposeCts.Cancel(); } catch { }
+            _disposed = true;
             try
             {
                 lock (_streamGate)
@@ -1212,7 +1212,6 @@ namespace UnityExplorer.Mcp
             }
             catch { }
             try { _listener.Stop(); } catch { }
-            try { _disposeCts.Dispose(); } catch { }
             Current = null;
         }
 
@@ -1229,9 +1228,9 @@ namespace UnityExplorer.Mcp
             stream.Write(payload, 0, payload.Length);
         }
 
-        private void BroadcastPayload(JObject payload, CancellationToken ct)
+        private void BroadcastPayload(JObject payload)
         {
-            if (_disposeCts.IsCancellationRequested)
+            if (_disposed)
                 return;
 
             List<KeyValuePair<int, Stream>> snapshot;
@@ -1250,7 +1249,7 @@ namespace UnityExplorer.Mcp
 
             foreach (var kv in snapshot)
             {
-                if (ct.IsCancellationRequested || _disposeCts.IsCancellationRequested) break;
+                if (_disposed) break;
                 var s = kv.Value;
                 try
                 {
@@ -1266,7 +1265,7 @@ namespace UnityExplorer.Mcp
             }
         }
 
-        public Task BroadcastNotificationAsync(string @event, object payload, CancellationToken ct = default)
+        public void BroadcastNotificationAsync(string @event, object payload)
         {
             var body = new JObject
             {
@@ -1274,8 +1273,7 @@ namespace UnityExplorer.Mcp
                 { "method", "notification" },
                 { "params", new JObject { { "event", @event }, { "payload", payload == null ? JValue.CreateNull() : JToken.FromObject(payload) } } }
             };
-            BroadcastPayload(body, ct);
-            return Task.CompletedTask;
+            BroadcastPayload(body);
         }
 
         private JObject BuildResultPayload(JToken? idToken, object result)
@@ -1324,7 +1322,7 @@ namespace UnityExplorer.Mcp
             var buffer = new byte[1];
             try
             {
-                while (_running && !_disposeCts.IsCancellationRequested)
+                while (_running && !_disposed)
                 {
                     int read;
                     try { read = stream.Read(buffer, 0, 1); }
@@ -1341,7 +1339,7 @@ namespace UnityExplorer.Mcp
         private void WriteJsonResult(Stream stream, JToken? idToken, object result)
         {
             var payload = BuildResultPayload(idToken, result);
-            BroadcastPayload(payload, CancellationToken.None);
+            BroadcastPayload(payload);
             WriteResponse(stream, 200, payload.ToString(Formatting.None), "application/json");
         }
 
@@ -1349,7 +1347,7 @@ namespace UnityExplorer.Mcp
         {
             try { ExplorerCore.LogWarning($"[MCP] {code}: {message}"); LogBuffer.Add("error", message, "mcp", kind); } catch { }
             var payload = BuildErrorPayload(idToken, code, message, kind, hint, detail);
-            BroadcastPayload(payload, CancellationToken.None);
+            BroadcastPayload(payload);
             WriteResponse(stream, statusCode, payload.ToString(Formatting.None), "application/json");
         }
 
@@ -1416,6 +1414,7 @@ namespace UnityExplorer.Mcp
             list.Add(new { name = "ListObjects", description = "List objects in a scene or all scenes.", inputSchema = Schema(new Dictionary<string, object> { { "sceneId", String() }, { "name", String() }, { "type", String() }, { "activeOnly", Bool() }, { "limit", Integer() }, { "offset", Integer() } }) });
             list.Add(new { name = "GetObject", description = "Get object details by id.", inputSchema = Schema(new Dictionary<string, object> { { "id", String() } }, new[] { "id" }) });
             list.Add(new { name = "GetComponents", description = "List component cards for an object.", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "limit", Integer() }, { "offset", Integer() } }, new[] { "objectId" }) });
+            list.Add(new { name = "GetVersion", description = "Version info for Unity Explorer MCP.", inputSchema = Schema(new Dictionary<string, object>()) });
             list.Add(new { name = "SearchObjects", description = "Search objects by name/type/path.", inputSchema = Schema(new Dictionary<string, object> { { "query", String() }, { "name", String() }, { "type", String() }, { "path", String() }, { "activeOnly", Bool() }, { "limit", Integer() }, { "offset", Integer() } }) });
             list.Add(new { name = "GetCameraInfo", description = "Get active camera info.", inputSchema = Schema(new Dictionary<string, object>()) });
             list.Add(new
@@ -1456,6 +1455,8 @@ namespace UnityExplorer.Mcp
                         var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
                         return _tools.GetComponents(oid, GetInt(args, "limit"), GetInt(args, "offset"));
                     }
+                case "getversion":
+                    return _tools.GetVersion();
                 case "searchobjects":
                     return _tools.SearchObjects(GetString(args, "query"), GetString(args, "name"), GetString(args, "type"), GetString(args, "path"), GetBool(args, "activeOnly"), GetInt(args, "limit"), GetInt(args, "offset"));
                 case "getcamerainfo":
@@ -1835,6 +1836,24 @@ namespace UnityExplorer.Mcp
                     list.Add(new ComponentCardDto { Type = typeName, Summary = summary });
                 }
                 return new Page<ComponentCardDto>(total, list);
+            });
+        }
+
+        public VersionInfoDto GetVersion()
+        {
+            return MainThread.Run(() =>
+            {
+                var explorerVersion = ExplorerCore.VERSION;
+                var mcpVersion = typeof(McpSimpleHttp).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+                var unityVersion = Application.unityVersion;
+                var runtime = Universe.Context.ToString();
+                return new VersionInfoDto
+                {
+                    ExplorerVersion = explorerVersion,
+                    McpVersion = mcpVersion,
+                    UnityVersion = unityVersion,
+                    Runtime = runtime
+                };
             });
         }
 

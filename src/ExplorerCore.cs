@@ -110,7 +110,7 @@ public static class ExplorerCore
                         count = scenes.Count
                     };
                     var http = Mcp.McpSimpleHttp.Current;
-                    if (http != null) _ = http.BroadcastNotificationAsync("scenes", payload);
+                    if (http != null) http.BroadcastNotificationAsync("scenes", payload);
                     Mcp.McpSceneDiffState.UpdateScenes(scenes);
                 }
                 catch { }
@@ -121,7 +121,7 @@ public static class ExplorerCore
                 try
                 {
                     var http = Mcp.McpSimpleHttp.Current;
-                    if (http != null) _ = http.BroadcastNotificationAsync("inspected_scene", new { name = scene.name, handle = scene.handle, isLoaded = scene.isLoaded });
+                    if (http != null) http.BroadcastNotificationAsync("inspected_scene", new { name = scene.name, handle = scene.handle, isLoaded = scene.isLoaded });
                 }
                 catch { }
             };
@@ -135,6 +135,46 @@ public static class ExplorerCore
         {
             Mcp.MainThread.Capture();
             Mcp.McpHost.StartIfEnabled();
+
+            InspectorManager.OnInspectedTabsChanged += () =>
+            {
+                try
+                {
+                    var sel = new Mcp.MonoReadTools().GetSelection();
+                    var http = Mcp.McpSimpleHttp.Current;
+                    if (http != null)
+                    {
+                        http.BroadcastNotificationAsync("selection", sel);
+                    }
+                }
+                catch { }
+            };
+
+            ObjectExplorer.SceneHandler.OnLoadedScenesUpdated += (scenes) =>
+            {
+                try
+                {
+                    var payload = new
+                    {
+                        loaded = scenes.Select(s => new { name = s.name, handle = s.handle, isLoaded = s.isLoaded }),
+                        count = scenes.Count
+                    };
+                    var http = Mcp.McpSimpleHttp.Current;
+                    if (http != null) http.BroadcastNotificationAsync("scenes", payload);
+                    Mcp.McpSceneDiffState.UpdateScenes(scenes);
+                }
+                catch { }
+            };
+
+            ObjectExplorer.SceneHandler.OnInspectedSceneChanged += (scene) =>
+            {
+                try
+                {
+                    var http = Mcp.McpSimpleHttp.Current;
+                    if (http != null) http.BroadcastNotificationAsync("inspected_scene", new { name = scene.name, handle = scene.handle, isLoaded = scene.isLoaded });
+                }
+                catch { }
+            };
         }
         catch (Exception ex)
         {

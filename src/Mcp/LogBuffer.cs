@@ -66,6 +66,16 @@ namespace UnityExplorer.Mcp
                 while (Buffer.Count > MaxLines)
                     Buffer.Dequeue();
             }
+
+            try
+            {
+                var http = McpSimpleHttp.Current;
+                if (http != null)
+                {
+                    http.BroadcastNotificationAsync("log", new { level = line.Level, message = line.Message, source = line.Source, category = line.Category, t = line.T });
+                }
+            }
+            catch { }
         }
 
         public static LogTailDto Tail(int count)

@@ -1,13 +1,13 @@
 # Unity Explorer MCP Integration Plan (Updated)
 
-- Updated: 2025-12-11  
+- Updated: 2025-12-12  
 - Owner: Unity Explorer MCP (p-unity-explorer-mcp)  
 - Goal: Expose Unity Explorer’s runtime capabilities through an in‑process MCP server with **streamable HTTP** transport, making game state and safe controls available as MCP resources, tools, and streams.
 
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
-### Latest iteration snapshot (2025-12-11)
-- ML_Mono now ships a lightweight MCP host (Newtonsoft.Json + TcpListener) that serves initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick; writes remain disabled. `stream_events` now streams log/selection/scene/tool_result notifications with cleanup + rate limits, and a discovery file is written from Mono builds. Config is persisted on Mono via `mcp.config.json`; main-thread marshaling uses the new `MainThread` sync-context helper.
+### Latest iteration snapshot (2025-12-12)
+- ML_Mono broadcast notifications now compile on net35 (void `BroadcastNotificationAsync` calls no longer use discards); `dotnet build src/UnityExplorer.csproj -c ML_Mono` succeeds (nullable warnings only). Mono MCP host remains read-only; deployment to the Test-VM Mono build is still pending.
 - CoreCLR/IL2CPP surface unchanged; last known Test-VM state: `Invoke-McpSmoke.ps1` + `Run-McpContractTests.ps1` (Release, BaseUrl `http://192.168.178.210:51477`) were green (45 passed, 0 failed, 1 skipped placeholder); not rerun this iteration.
 - `list_tools` still emits per-argument JSON Schemas (required fields, enums, defaults, `additionalProperties=false`); inspector UI validation remains pending. Mono smoke harness now uses `tools/Invoke-McpSmokeMono.ps1` with MousePick + tool_result stream verification and is wrapped by `tools/Run-McpMonoSmoke.ps1` for CI/local Mono jobs.
 
@@ -242,11 +242,16 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
 
 - `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3` for Mono/net35 hosts (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events; fails if `tool_result` is missing).
 
+### 5.4 Mono host validation checklist
+
+- Step‑by‑step human checklist lives in `README-mcp.md` (Mono Host Validation Checklist).
+- Current blocker: no Mono MCP host is running on this dev machine, so smoke/inspector validation is pending until a Mono game is available.
+
 ---
 
 ## 6) Roadmap / Remaining Work
 
-Fine‑grained TODOs live in `.plans/unity-explorer-mcp-todo.md`. High‑level themes:
+Fine‑grained TODOs live in `plans/unity-explorer-mcp-todo.md`. High‑level themes:
 
 - Mono / MelonLoader MCP host support (UnityExplorer.MelonLoader.Mono) follows a three-phase path: (A) get ML_Mono compiling again with an MCP host stub and guard non-INTEROP callers, (B) bring up a minimal read-only Mono MCP surface with a lighter JSON/HTTP stack, (C) close parity gaps and add Mono-specific smoke/contract coverage. See TODO section 11 for the detailed checklist.
 
@@ -271,10 +276,9 @@ Fine‑grained TODOs live in `.plans/unity-explorer-mcp-todo.md`. High‑level t
 
 ## 7) References
 
-- Concept draft: `.plans/mcp-interface-concept.md`
-- Full scope: `.plans/unity-explorer-mcp-full-scope.md`
-- Implementation snapshot: `.plans/unity-explorer-mcp-full.md`
-- TODOs: `.plans/unity-explorer-mcp-todo.md`
+- Concept draft: `plans/mcp-interface-concept.md`
+- TODOs: `plans/unity-explorer-mcp-todo.md`
+- Space Shooter validation plan: `plans/space-shooter-test-plan.md`
 - Non-MCP runtime feature summary: `docs/unity-explorer-game-interaction.md`
 - Code:
   - `UnityExplorer/src/Mcp/*`
@@ -282,4 +286,4 @@ Fine‑grained TODOs live in `.plans/unity-explorer-mcp-todo.md`. High‑level t
   - `UnityExplorer/tools/*`
   - `UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests/*`
 
-This plan is now the single source of truth for current design and future work; other `.plans/*` files provide historical context and deeper detail.
+This plan is now the single source of truth for current design and future work; other `plans/*` files provide historical context and deeper detail.

@@ -6,7 +6,9 @@
 - Scene baseline (Main): Main Camera, Directional Light, Player (with Boundary box), Background, GameController, UI Canvas (score/restart/help), Audio.
 
 ## Current Test-VM Setup (validated)
-- Game build: `C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP` (Unity 2021.3.45f1, IL2CPP, x86_64).
+- **Testing environment ownership:** Agents maintain the Space Shooter MCP host on the Test‑VM (IL2CPP/CoreCLR; Mono build pending) so E2E tests stay runnable.
+- Game source project: `C:\codex-workspace\space-shooter` (Unity project on Test‑VM).
+- Game build (IL2CPP/CoreCLR host): `C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP` (Unity 2021.3.45f1, IL2CPP, x86_64).
 - Loader/Mods: MelonLoader 0.7.2-ci (nightly) + `Mods\UnityExplorer.ML.IL2CPP.CoreCLR.dll` 4.12.8.
 - MCP config: `Mods\sinai-dev-UnityExplorer\mcp.config.json` (`Enabled=true`, `BindAddress=0.0.0.0`, `Port=51477`, `AuthToken=changeme`, writes disabled).
 - UE UI issue: dropdown Il2Cpp cast throws; mitigated with `Mods\UeMcpHeadless.dll` (small Melon patch that swallows InitUI exception) so MCP still starts. Keep it loaded until a real UE fix lands.

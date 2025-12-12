@@ -1,25 +1,31 @@
-# Iteration Instructions (Mono smoke validation + parity)
+# Iteration Instructions (Mono MCP host bring-up)
 
-High-level goal: validate the new Mono MCP smoke/CI entry and keep CoreCLR green while closing remaining Mono parity gaps.
+High-level goal: bring up a Mono Space Shooter MCP host on the Test-VM and validate the MCP smoke.
 
-## 1) Mono smoke validation
-- Run `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3` against a Mono host when available; record results (pass/fail + logs) in the plans/README.
-- The smoke flow must exercise initialize → notifications/initialized → list_tools → call_tool (`GetStatus`, `TailLogs`, `MousePick`) → read_resource (`unity://status|scenes|logs/tail`) → `stream_events` (expect `tool_result`).
-- If timeouts or stream gaps appear, tune the script (timeouts/lines) and update docs accordingly.
+## 1) Build + deploy Mono host on Test-VM
+- On the Windows VM open `C:\codex-workspace\space-shooter` in Unity 2021.3.45f1.
+- Switch scripting backend to Mono (Windows x86_64, .NET 4.x); keep other player settings identical to the IL2CPP build.
+- Build to `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` (do not overwrite IL2CPP).
+- Install MelonLoader (same line as IL2CPP) into the Mono build.
 
-## 2) Mono parity follow-up
-- Address remaining Mono gaps vs CoreCLR (selection stability, camera parity, guarded writes) per `.plans/unity-explorer-mcp-todo.md` section 11; update DTOs/tests/docs together when shapes change.
-- Keep `MousePick` world/ui behaviour aligned (multi-hit for UI) and document any Mono-specific limits.
+## 2) Deploy UnityExplorer Mono MCP
+- From repo root: `dotnet build src/UnityExplorer.csproj -c ML_Mono` (already passes; reuse the fresh output if present).
+- Copy `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll` to `Mods\` in the Mono build.
+- Add/update `Mods\sinai-dev-UnityExplorer\mcp.config.json` with `enabled=true`, `bindAddress=0.0.0.0`, `port=51478` (or another free port), writes disabled.
+- Ensure `%TEMP%\unity-explorer-mcp.json` is written on launch; pick a port that does not conflict with the IL2CPP host (51477).
 
-## 3) Inspector + IL2CPP sanity
-- Keep CoreCLR contract tests green: `pwsh ./tools/Run-McpContractTests.ps1 -Configuration Release` (skips when no host).
-- When touching shared MCP code, sanity-check inspector/stream_events against the Test-VM (`http://192.168.178.210:51477`) if available; note any schema or error envelope regressions.
+## 3) Validate Mono MCP
+- Start the Mono build (`C:\codex-workspace\space-shooter-build\SpaceShooter_Mono\SpaceShooter.exe`) and wait for the discovery file.
+- Run `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:<port> -LogCount 10 -StreamLines 3` from this repo (or on the VM if bound to localhost).
+- Capture results: pass/fail, log snippets, endpoint URL/port, Unity version.
 
-## 4) Docs & plans
-- Keep these in sync with behaviour/tests: `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, `plans/mcp-interface-concept.md`, `README-mcp.md`, `tests/dotnet/README.md`.
-- Document Mono smoke outcomes and any parity deltas in the plan/todo; avoid duplicating shapes across docs (concept doc is the source of truth).
+## 4) Docs + plans
+- Update `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` with Mono host path/port/smoke result and any gaps.
+- Keep `plans/mcp-interface-concept.md` consistent if shapes change (none expected).
+- Keep `README-mcp.md` user-facing notes in sync if steps change.
 
 ## 5) Working style
-- Prefer PowerShell helpers/one-liners; avoid touching `.codex/*` artifacts.
-- Ask only on true blockers; make reasonable assumptions and document them.
-- Update this file at the end of the iteration with fresh instructions; default to leaving changes unstaged unless explicitly asked to commit.
+- Keep responses concise; avoid questions unless blocked.
+- Keep plan/todo files in sync with code/docs; do not revert unrelated work.
+- Preserve IL2CPP host defaults; avoid enabling writes unless needed for smoke.
+- Commit changes at the end of the iteration.
