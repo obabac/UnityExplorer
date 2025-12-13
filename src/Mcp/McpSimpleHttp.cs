@@ -1429,17 +1429,17 @@ namespace UnityExplorer.Mcp
             var logMessage = $"[MCP] error {code}: {message}";
             try
             {
-                void LogOnMain()
+                MainThread.Run(() =>
                 {
-                    try { ExplorerCore.LogWarning(logMessage); } catch { }
                     try { LogBuffer.Add("error", logMessage, "mcp", kind); } catch { }
-                }
-                if (MainThread.IsCaptured)
-                    MainThread.Run(LogOnMain);
-                else
-                    LogOnMain();
+                    try { ExplorerCore.LogWarning(logMessage); } catch { }
+                });
             }
-            catch { }
+            catch
+            {
+                try { LogBuffer.Add("error", logMessage, "mcp", kind); } catch { }
+                try { ExplorerCore.LogWarning(logMessage); } catch { }
+            }
 
             var payload = BuildErrorPayload(idToken, code, message, kind, hint, detail);
             BroadcastPayload(payload);

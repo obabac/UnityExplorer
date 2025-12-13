@@ -1,6 +1,6 @@
 # Unity Explorer MCP – High‑Level TODOs (Streamable HTTP Era)
 
-Date: 2025‑12‑13  
+Date: 2025‑12‑14  
 Scope: Remaining work to get close to UnityExplorer feature parity over MCP, with a stable streamable‑http surface.
 
 ### Definition of Done (100%)
@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-13): inspector CLI compatibility is fixed (`initialize.capabilities.experimental.streamEvents` returns `{}`, `resources/list` is live, and `call_tool` returns inspector-friendly content). Mono Space Shooter host is up on `http://192.168.178.210:51478` and Mono smoke + inspector CLI pass; Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale) are implemented with an opt-in smoke flag. Space Shooter rebuild automation now succeeds (scene fallback + headless CPU lighting; `Build-SpaceShooter-Remote.ps1` emits logs under `C:\codex-workspace\space-shooter-build\logs`). IL2CPP Space Shooter host on `http://192.168.178.210:51477` is back online after guarding the dropdown refresh (no `UeMcpHeadless.dll`); inspector CLI, Invoke-McpSmoke, and contract tests (47 passed, 1 skipped) pass. MCP error logging now marshals warnings through the Unity main thread before broadcasting error payloads and writes `[MCP] error ...` lines into the MCP log buffer on both CoreCLR and Mono; local contract tests still compile/run (47 passed, 1 skipped without discovery) after the change.
+Status (2025-12-14): inspector CLI + Mono smoke + controlled error tail checks now pass on IL2CPP (`http://192.168.178.210:51477`) and Mono (`http://192.168.178.210:51478`) after rebuilding and redeploying the ML_Mono mod into `Mods/` and restarting the Mono host; allowWrites reset to false. `initialize.capabilities.experimental.streamEvents` returns `{}`, `resources/list` is live, and `call_tool` returns inspector-friendly content. Space Shooter rebuild automation still succeeds (scene fallback + headless CPU lighting; `Build-SpaceShooter-Remote.ps1` emits logs under `C:\codex-workspace\space-shooter-build\logs`). IL2CPP host remains healthy after the dropdown guard (no `UeMcpHeadless.dll`); inspector CLI, Invoke-McpSmoke, and contract tests (47 passed, 1 skipped) stay green. MCP error logging now writes `[MCP] error ...` lines into the MCP log buffer on both CoreCLR and Mono.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -108,7 +108,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 
 - [ ] Verify all tools and resources render cleanly in `@modelcontextprotocol/inspector` (no schema errors); per-argument `inputSchema` is now emitted from `list_tools` but still needs UI validation.
 - [x] Add contract coverage for `list_resources` plus inspector-friendly `call_tool` content (`text` + `mimeType` + `json`) to keep CLI compatibility stable.
-- [x] Add an inspector CLI smoke script (`tools/Run-McpInspectorCli.ps1`) that runs inspector --cli (tools/list, resources/list, read unity://status, tools/call GetStatus; optional Authorization header) and document usage; last run 2025-12-13: Mono 51478 PASS, IL2CPP 51477 connection refused (host offline).
+- [x] Add an inspector CLI smoke script (`tools/Run-McpInspectorCli.ps1`) that runs inspector --cli (tools/list, resources/list, read unity://status, tools/call GetStatus; optional Authorization header) and document usage; last run 2025-12-14: Mono 51478 PASS, IL2CPP 51477 PASS.
 - [x] Add JSON‑RPC contract tests that exercise `tools/list`, `tools/call`, and `call_tool` for all read‑only tools (matching inspector CLI usage).
 - [x] Add a small “how to connect with inspector” section to `README-mcp.md`, including:
   - [x] Example `initialize`, `list_tools`, `call_tool` flows.

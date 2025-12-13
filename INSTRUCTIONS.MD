@@ -1,36 +1,22 @@
-# Iteration Instructions — MCP log-main-thread validation
+# Iteration 2/10 — Validation-first MCP work
 
-Goal
-- Verify the new MCP error logging runs on the Unity main thread and shows `[MCP] error ...` in log tails on both IL2CPP and Mono hosts.
-- Keep Mono guarded writes safe on the Test-VM; leave `allowWrites=false` by default.
+Goals
+- Keep IL2CPP/CoreCLR (http://192.168.178.210:51477) and Mono (http://192.168.178.210:51478) MCP hosts healthy; `[MCP] error ...` must appear in `unity://logs/tail` on both after errors.
+- Advance roadmap items (Mono parity, inspector UX/tests) per `plans/unity-explorer-mcp-plan.md` and `plans/unity-explorer-mcp-todo.md`.
 
-Do (in order)
-1) Bring up both Space Shooter hosts on the Test-VM and watch for MCP bind lines:
-   - IL2CPP: `Start-Process "C:\\codex-workspace\\space-shooter-build\\SpaceShooter_IL2CPP\\SpaceShooter.exe"`
-   - Mono:   `Start-Process "C:\\codex-workspace\\space-shooter-build\\SpaceShooter_Mono\\SpaceShooter.exe"`
-   - Tail logs: `pwsh ./tools/Get-ML-Log.ps1 -Stream` (look for binds on 51477 / 51478).
-
-2) Inspector CLI gate (both hosts):
+Required checks (run when touching MCP behavior)
+1) Inspector CLI (both hosts):
    - `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477`
    - `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478`
-
-3) Error logging check (main-thread + prefix):
-   - Trigger a failing request on each host (e.g., POST /message without `method` or `read_resource` for `unity://no-such-resource`).
-   - Confirm `[MCP] error ...` appears in `unity://logs/tail` and the MelonLoader log without off-thread warnings.
-
-4) Mono guarded write smoke + reset:
+2) Mono guarded write smoke:
    - `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3 -EnableWriteSmoke`
-   - Ensure the run required `confirm=true` and reset config to `allowWrites=false` afterward.
+3) Error logging validation:
+   - Post bad `read_resource` to both hosts and confirm `[MCP] error ...` in `unity://logs/tail?count=50`.
+     - Example: `pwsh -NoProfile -Command "Invoke-RestMethod -Method Post -Uri http://192.168.178.210:51477/message -ContentType application/json -Body '{\"jsonrpc\":\"2.0\",\"id\":\"bad\",\"method\":\"read_resource\",\"params\":{\"uri\":\"unity://no-such-resource\"}}' | ConvertTo-Json -Depth 6"` (swap port for Mono).
+   - Reset config afterwards: `allowWrites=false`, `requireConfirm=true`.
 
-5) If any step fails:
-   - Fix the error envelope/logging (main-thread dispatch + `[MCP] error` prefix) or guarded write flows; keep CoreCLR/Mono parity.
-   - Update `plans/mcp-interface-concept.md` if shapes/errors change; sync `plans/unity-explorer-mcp-todo.md` checkboxes with what was validated.
-
-6) Housekeeping
-   - Keep `Mods\\UeMcpHeadless.dll` disabled on the Test-VM.
-   - Keep `allowWrites=false` by default; do not leave writes enabled on shared hosts.
-   - Ensure `plans/unity-explorer-mcp-plan.md` and `plans/unity-explorer-mcp-todo.md` reflect current status.
-
-Notes
-- Space Shooter is the primary Test-VM title; avoid game-specific assumptions beyond it.
-- Use the commands above on the Test-VM; inspector validation remains a gate for schema changes.
+Housekeeping
+- Space Shooter on Test-VM only; restart the corresponding game after deploy (`pwsh ./tools/Update-Mod-Remote.ps1 ...` + PowerShell `Start-Process`).
+- Keep `Mods\\UeMcpHeadless.dll` disabled; allowWrites=false at rest.
+- Update `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/mcp-interface-concept.md` when DTOs/errors change.
+- Commit small, keep docs/tests/DTOs in sync.
