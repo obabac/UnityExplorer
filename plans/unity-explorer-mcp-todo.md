@@ -11,10 +11,10 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-13): inspector CLI compatibility is fixed (`initialize.capabilities.experimental.streamEvents` returns `{}`, `resources/list` is live, and `call_tool` returns inspector-friendly content). Mono Space Shooter host is up on `http://192.168.178.210:51478` and Mono smoke + inspector CLI pass; Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale) are implemented with an opt-in smoke flag. Space Shooter rebuild automation now succeeds (scene fallback + headless CPU lighting; `Build-SpaceShooter-Remote.ps1` emits logs under `C:\codex-workspace\space-shooter-build\logs`). IL2CPP Space Shooter host on `http://192.168.178.210:51477` currently refuses connections (restart/redeploy needed before retesting).
+Status (2025-12-13): inspector CLI compatibility is fixed (`initialize.capabilities.experimental.streamEvents` returns `{}`, `resources/list` is live, and `call_tool` returns inspector-friendly content). Mono Space Shooter host is up on `http://192.168.178.210:51478` and Mono smoke + inspector CLI pass; Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale) are implemented with an opt-in smoke flag. Space Shooter rebuild automation now succeeds (scene fallback + headless CPU lighting; `Build-SpaceShooter-Remote.ps1` emits logs under `C:\codex-workspace\space-shooter-build\logs`). IL2CPP Space Shooter host on `http://192.168.178.210:51477` is back online after guarding the dropdown refresh (no `UeMcpHeadless.dll`); inspector CLI, Invoke-McpSmoke, and contract tests (47 passed, 1 skipped) pass.
 
 ## Decisions (2025-12-13)
-- [ ] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround.
+- [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
 - [x] Add guarded writes to Mono (start with `SetActive`, `SelectObject`, `GetTimeScale`/`SetTimeScale`) behind `allowWrites` + `requireConfirm` (implemented; validate on hosts).
 - [ ] Space Shooter project changes are allowed to improve repeatable IL2CPP + Mono rebuilds (source: `C:\codex-workspace\space-shooter`).
 - [ ] Treat inspector validation as a first-class gate: run `tools/Run-McpInspectorCli.ps1` early on both hosts for any wire/schema change.
@@ -146,7 +146,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 - [x] Ensure no contract tests assume game‑specific content; adjust tests and docs so Space Shooter is the fully supported host for MCP contract validation (other titles are examples only).
 - [x] Define 1–2 safe write scenarios on Space Shooter using `SetActive` / `SelectObject` with `AllowWrites=true` and `RequireConfirm=true`, and document them in `plans/space-shooter-test-plan.md` (also note `SetTimeScale` + `SpawnTestUi`/`MousePick` flow for UI validation).
 - [x] Make Space Shooter Mono + IL2CPP rebuilds repeatable from `C:\codex-workspace\space-shooter` (allowed to modify the Unity project/scripts); document exact build steps and keep build outputs stable (BuildCommands scene fallback + headless CPU lighting, scripts `Update-SpaceShooter-BuildScripts-Remote.ps1` / `Build-SpaceShooter-Remote.ps1` produce fresh outputs under `...\SpaceShooter_IL2CPP` / `...\SpaceShooter_Mono`).
-- [ ] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash (UI `Dropdown` array cast) and remove the Test‑VM‑only `UeMcpHeadless.dll` workaround.
+- [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash (UI `Dropdown` array cast) and remove the Test‑VM‑only `UeMcpHeadless.dll` workaround (guarded warning in UIManager; headless mod renamed to .disabled on Test-VM).
 
 ## 11. Mono / MelonLoader Support
 

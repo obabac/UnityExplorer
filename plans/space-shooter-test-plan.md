@@ -18,13 +18,13 @@
 - Unity Editor installed at `C:\Program Files\Unity 2021.3.45f1` (product version `2021.3.45f1_0da89fac8e79`).
 - Loader/Mods: MelonLoader 0.7.2-ci (nightly) + `Mods\UnityExplorer.ML.IL2CPP.CoreCLR.dll` 4.12.8.
 - MCP config: `Mods\sinai-dev-UnityExplorer\mcp.config.json` (`Enabled=true`, `BindAddress=0.0.0.0`, `Port=51477`, `AuthToken=changeme`, writes disabled).
-- UE UI issue: dropdown Il2Cpp cast throws; mitigated with `Mods\UeMcpHeadless.dll` (small Melon patch that swallows InitUI exception) so MCP still starts. Keep it loaded until a real UE fix lands.
+- UE UI dropdown refresh guard added; log shows a warning `Failed to refresh UI dropdowns; continuing without failsafe: ...` on init. `Mods\UeMcpHeadless.dll` is renamed to `.disabled` on the Test-VM.
 - Discovery file: `%TEMP%\unity-explorer-mcp.json` (refresh by deleting before launch).
 - Launch: `Start-Process 'C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe' -ArgumentList '-seed=1234'`.
 - Deployment note: stop `SpaceShooter.exe` before `Update-Mod-Remote.ps1` (SCP fails on locked DLLs), then restart the game.
-- 2025-12-13: Mono host responds on `http://192.168.178.210:51478` (Mono smoke + inspector CLI smoke should pass). IL2CPP host on `http://192.168.178.210:51477` is currently down (connection refused) and needs restart/redeploy.
+- 2025-12-13: Mono host responds on `http://192.168.178.210:51478` (Mono smoke + inspector CLI smoke should pass). IL2CPP host on `http://192.168.178.210:51477` is up after the dropdown guard; inspector CLI smoke, Invoke-McpSmoke, and MCP contract tests (47 passed, 1 skipped) pass without `UeMcpHeadless.dll`.
 - Gate: run `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <baseUrl>` early for any protocol/DTO changes (both hosts).
-- Pending: remove `Mods\\UeMcpHeadless.dll` by fixing the UnityExplorer dropdown Il2Cpp cast crash; add repeatable build automation for both outputs.
+- Pending: monitor the dropdown guard on other IL2CPP titles and keep `UeMcpHeadless.dll` disabled; maintain repeatable build automation for both outputs.
 
 ## Determinism Hardening
 - Frame pacing: `Application.targetFrameRate = 60`, vSync off, Fixed Timestep 0.02, Max Allowed Timestep 0.333.

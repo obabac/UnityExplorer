@@ -11,7 +11,7 @@ This plan merges the original scope, the current implementation snapshot, and th
 - Added `tools/Run-McpInspectorCli.ps1` (inspector --cli smoke: tools/list, resources/list, resources/read unity://status, tools/call GetStatus with optional auth header) and documented it in `README-mcp.md`.
 - Space Shooter build automation hardened: `BuildCommands` now falls back to a default scene when none are enabled and forces CPU lighting/denoiser-off in batchmode; synced via `Update-SpaceShooter-BuildScripts-Remote.ps1`, and `Build-SpaceShooter-Remote.ps1` produced fresh Mono + IL2CPP outputs under `C:\codex-workspace\space-shooter-build\` (logs in `...\logs`).
 - Mono Space Shooter host (`http://192.168.178.210:51478`) is up: inspector CLI smoke and `pwsh ./tools/Run-McpMonoSmoke.ps1 -LogCount 5 -StreamLines 2` pass (Ready=true, Scenes=1). Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale) are implemented with an opt-in write smoke flag (`-EnableWriteSmoke`).
-- IL2CPP Space Shooter host (`http://192.168.178.210:51477`) currently refuses connections for inspector/Invoke smokes; prior contract runs were green but need a redeploy or host restart before retesting.
+- IL2CPP dropdown refresh crash is now guarded (warning + continue); `Mods\UeMcpHeadless.dll` is disabled on the Test-VM. IL2CPP host (`http://192.168.178.210:51477`) is back online: inspector CLI + Invoke-McpSmoke pass and contract tests report 47 passed, 1 skipped.
 
 ---
 
@@ -19,14 +19,14 @@ This plan merges the original scope, the current implementation snapshot, and th
 
 - Mono now ships guarded writes (SetConfig/SetActive/SelectObject/TimeScale) behind `allowWrites` + `requireConfirm`; use the opt-in Mono write smoke when validating on hosts.
 - Space Shooter project changes on the Test‑VM are allowed to improve repeatable Mono/IL2CPP rebuilds (source: `C:\\codex-workspace\\space-shooter`).
-- Prioritize fixing the UnityExplorer dropdown Il2Cpp cast crash so we can remove the Test‑VM‑only `Mods\\UeMcpHeadless.dll` workaround.
+- Dropdown Il2Cpp cast crash is guarded; keep watching logs across titles and leave `UeMcpHeadless.dll` disabled.
 - Treat inspector validation as a first-class gate: run `tools/Run-McpInspectorCli.ps1` early on both hosts for any wire/schema change.
 
 ### Planned next 10 iterations (planner)
 
 1) Space Shooter build automation: modify `C:\\codex-workspace\\space-shooter` as needed to make Mono + IL2CPP rebuilds repeatable and as similar as possible; keep outputs stable under `C:\\codex-workspace\\space-shooter-build\\SpaceShooter_IL2CPP` and `...\\SpaceShooter_Mono`; document exact steps.
-2) Restore the IL2CPP host at `http://192.168.178.210:51477` (restart/redeploy) and rerun inspector CLI smoke + `Invoke-McpSmoke` (gate).
-3) PRIORITY: remove `Mods\\UeMcpHeadless.dll` by fixing the UnityExplorer dropdown Il2Cpp cast crash; redeploy and re-run IL2CPP contract tests + smokes.
+2) Keep the IL2CPP host at `http://192.168.178.210:51477` healthy after the dropdown guard; rerun inspector CLI smoke + `Invoke-McpSmoke` after protocol changes.
+3) Validate the dropdown refresh guard on other IL2CPP titles (no `Mods\\UeMcpHeadless.dll`) and keep contract tests green.
 4) Validate Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale) on the Space Shooter host using the opt-in Mono smoke flag; add follow-up coverage/tests once the host is online.
 5) Mono parity: align selection + camera + MousePick (including UI multi-hit) with IL2CPP; enable/validate `unity://console/scripts` and `unity://hooks` on Mono (or document why they stay disabled).
 6) Streams/testing: add a contract test for at least one non-tool stream event (`log` or `selection`) and keep rate-limit tests stable.

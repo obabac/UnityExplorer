@@ -102,8 +102,15 @@ namespace UnityExplorer.UI
             ConsoleController.Init();
 
             // Failsafe fix, in some games all dropdowns displayed values are blank on startup for some reason.
-            foreach (Dropdown dropdown in UIRoot.GetComponentsInChildren<Dropdown>(true))
-                dropdown.RefreshShownValue();
+            try
+            {
+                foreach (Dropdown dropdown in UIRoot.GetComponentsInChildren<Dropdown>(true))
+                    dropdown.RefreshShownValue();
+            }
+            catch (Exception ex)
+            {
+                ExplorerCore.LogWarning($"Failed to refresh UI dropdowns; continuing without failsafe: {ex.ReflectionExToString()}");
+            }
 
             Initializing = false;
 
