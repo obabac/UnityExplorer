@@ -135,10 +135,13 @@ try {
 
     $writeResult = $null
     if ($EnableWriteSmoke) {
-        Write-Host "[mono-smoke] guarded write smoke (SpawnTestUi/DestroyTestUi + SetTimeScale)"
+        Write-Host "[mono-smoke] guarded write smoke (SpawnTestUi -> Reparent -> DestroyObject -> DestroyTestUi + SetTimeScale)"
         $resetParams = @{ name = "SetConfig"; arguments = @{ allowWrites = $false; requireConfirm = $true } }
         $spawned = $false
-        $destroyJson = $null
+        $destroyUiJson = $null
+        $destroyBlockJson = $null
+        $reparentJson = $null
+        $blockIds = @()
         try {
             Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
 
@@ -146,6 +149,36 @@ try {
             $spawnJson = Get-JsonContent -Result $spawn
             if (-not $spawnJson -or -not $spawnJson.ok) { throw "SpawnTestUi returned ok=false" }
             $spawned = $true
+            if ($spawnJson.blocks) {
+                foreach ($b in $spawnJson.blocks) {
+                    if ($b.id) { $blockIds += $b.id }
+                }
+            }
+
+            if ($blockIds.Count -lt 2) {
+                Write-Host "[mono-smoke] falling back to MousePick UI for block ids"
+                $pickLeft = Invoke-McpRpc -Id "mouse-ui-left" -Method "call_tool" -Params @{ name = "MousePick"; arguments = @{ mode = "ui"; normalized = $true; x = 0.35; y = 0.5 } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+                $pickLeftJson = Get-JsonContent -Result $pickLeft
+                if ($pickLeftJson -and $pickLeftJson.Items -and $pickLeftJson.Items.Count -gt 0) { $blockIds += $pickLeftJson.Items[0].Id }
+
+                $pickRight = Invoke-McpRpc -Id "mouse-ui-right" -Method "call_tool" -Params @{ name = "MousePick"; arguments = @{ mode = "ui"; normalized = $true; x = 0.65; y = 0.5 } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+                $pickRightJson = Get-JsonContent -Result $pickRight
+                if ($pickRightJson -and $pickRightJson.Items -and $pickRightJson.Items.Count -gt 0) { $blockIds += $pickRightJson.Items[0].Id }
+            }
+
+            $blockIds = $blockIds | Where-Object { $_ } | Select-Object -Unique
+            if ($blockIds.Count -lt 2) { throw "Could not resolve two test UI block ids" }
+
+            $childId = $blockIds[1]
+            $parentId = $blockIds[0]
+
+            $reparent = Invoke-McpRpc -Id "reparent" -Method "call_tool" -Params @{ name = "Reparent"; arguments = @{ objectId = $childId; newParentId = $parentId; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $reparentJson = Get-JsonContent -Result $reparent
+            if (-not $reparentJson -or -not $reparentJson.ok) { throw "Reparent returned ok=false" }
+
+            $destroyBlock = Invoke-McpRpc -Id "destroy-block" -Method "call_tool" -Params @{ name = "DestroyObject"; arguments = @{ objectId = $childId; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $destroyBlockJson = Get-JsonContent -Result $destroyBlock
+            if (-not $destroyBlockJson -or -not $destroyBlockJson.ok) { throw "DestroyObject returned ok=false" }
 
             $setTime = Invoke-McpRpc -Id "set-timescale" -Method "call_tool" -Params @{ name = "SetTimeScale"; arguments = @{ value = 1.0; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $setTimeJson = Get-JsonContent -Result $setTime
@@ -155,20 +188,23 @@ try {
             $getTimeJson = Get-JsonContent -Result $getTime
             if (-not $getTimeJson -or -not $getTimeJson.ok) { throw "GetTimeScale returned ok=false" }
 
-            $destroy = Invoke-McpRpc -Id "destroy-testui" -Method "call_tool" -Params @{ name = "DestroyTestUi"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
-            $destroyJson = Get-JsonContent -Result $destroy
-            if (-not $destroyJson -or -not $destroyJson.ok) { throw "DestroyTestUi returned ok=false" }
+            $destroyUi = Invoke-McpRpc -Id "destroy-testui" -Method "call_tool" -Params @{ name = "DestroyTestUi"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $destroyUiJson = Get-JsonContent -Result $destroyUi
+            if (-not $destroyUiJson -or -not $destroyUiJson.ok) { throw "DestroyTestUi returned ok=false" }
 
             $writeResult = [ordered]@{
-                spawn   = $spawnJson
-                destroy = $destroyJson
-                time    = $getTimeJson
+                blocks       = $blockIds
+                spawn        = $spawnJson
+                reparent     = $reparentJson
+                destroyBlock = $destroyBlockJson
+                destroyUi    = $destroyUiJson
+                time         = $getTimeJson
             }
         }
         finally {
-            if ($spawned -and -not $destroyJson) {
+            if ($spawned -and -not $destroyUiJson) {
                 try {
-                    $destroyJson = Get-JsonContent -Result (Invoke-McpRpc -Id "destroy-testui-final" -Method "call_tool" -Params @{ name = "DestroyTestUi"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds)
+                    $destroyUiJson = Get-JsonContent -Result (Invoke-McpRpc -Id "destroy-testui-final" -Method "call_tool" -Params @{ name = "DestroyTestUi"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds)
                 } catch { Write-Warning "[mono-smoke] cleanup destroy failed: $_" }
             }
             try { Invoke-McpRpc -Id "set-config-reset" -Method "call_tool" -Params $resetParams -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null } catch { Write-Warning "[mono-smoke] failed to reset config: $_" }
@@ -227,10 +263,13 @@ try {
     Write-Host "Logs (read): $($readLogsDoc.Items.Count) items"
     if ($EnableWriteSmoke) {
         $spawnOk = if ($writeResult) { $writeResult.spawn.ok } else { $false }
-        $destroyOk = if ($writeResult) { $writeResult.destroy.ok } else { $false }
+        $reparentOk = if ($writeResult) { $writeResult.reparent.ok } else { $false }
+        $destroyBlockOk = if ($writeResult) { $writeResult.destroyBlock.ok } else { $false }
+        $destroyUiOk = if ($writeResult) { $writeResult.destroyUi.ok } else { $false }
+        $blockCount = if ($writeResult -and $writeResult.blocks) { ($writeResult.blocks | Measure-Object).Count } else { 0 }
         $timeValue = if ($writeResult) { $writeResult.time.value } else { $null }
         $timeLocked = if ($writeResult) { $writeResult.time.locked } else { $null }
-        Write-Host "Write smoke: spawnOk=$spawnOk destroyOk=$destroyOk timeValue=$timeValue locked=$timeLocked"
+        Write-Host "Write smoke: blocks=$blockCount spawnOk=$spawnOk reparentOk=$reparentOk destroyBlockOk=$destroyBlockOk destroyUiOk=$destroyUiOk timeValue=$timeValue locked=$timeLocked"
     }
     Write-Host "Stream events captured: $($events.Count) (tool_result observed=$($toolResultEvent -ne $null))"
     Write-Host "[mono-smoke] Done"

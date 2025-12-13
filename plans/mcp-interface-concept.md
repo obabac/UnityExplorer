@@ -4,7 +4,7 @@
 - Mode: In‑process server (C# SDK), HTTP transport via `ModelContextProtocol.AspNetCore`
 - Client transport: `HttpClientTransport` with `HttpTransportMode.AutoDetect | StreamableHttp | Sse`
 - Default policy: Read‑only. Writes gated behind config + confirmation + allowlist.
-- Mono (MelonLoader, `net35`): now ships a lightweight in-process MCP host (Newtonsoft.Json + TcpListener) covering initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion plus guarded writes (SetConfig/SetActive/SelectObject/GetTimeScale/SetTimeScale) when `allowWrites=true` (defaults stay read-only; `requireConfirm` is recommended). `stream_events` streams log/selection/scene/tool_result notifications with cleanup + rate limits. Discovery file is written from Mono builds.
+- Mono (MelonLoader, `net35`): now ships a lightweight in-process MCP host (Newtonsoft.Json + TcpListener) covering initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion plus guarded writes (SetConfig/SetActive/Reparent/DestroyObject/SelectObject/GetTimeScale/SetTimeScale/SpawnTestUi/DestroyTestUi) when `allowWrites=true` (defaults stay read-only; `requireConfirm` is recommended). `Reparent`/`DestroyObject` are limited to the SpawnTestUi blocks for safety, and SpawnTestUi returns the created block ids. `stream_events` streams log/selection/scene/tool_result notifications with cleanup + rate limits. Discovery file is written from Mono builds.
 
 ---
 
@@ -105,7 +105,7 @@ public static class UnityReadTools
 - `call_tool` responses use `content: [{ type: "text", mimeType: "application/json", text: "<json>", json: <object> }]` so the inspector CLI accepts them while programmatic clients can still consume the raw JSON payload.
 - `GetVersion` returns `VersionInfoDto { ExplorerVersion, McpVersion, UnityVersion, Runtime }` on both CoreCLR and Mono hosts.
 
-Phase‑later write tools exist but are disabled by default; they require allowlist + confirmations.
+Phase‑later write tools exist but are disabled by default; they require allowlist + confirmations. Guarded test-UI helpers (`SpawnTestUi` → `Reparent` → `DestroyObject` → `DestroyTestUi`) return `ok` payloads; `SpawnTestUi` returns `{ ok, rootId, blocks: [{ name, id }] }` so smoke scripts can reparent/destroy the created blocks. Mono host limits `Reparent`/`DestroyObject` to the SpawnTestUi hierarchy and surfaces `PermissionDenied` otherwise.
 
 ---
 
@@ -269,6 +269,24 @@ Tool‑level failures that still return a JSON‑RPC `result` use a consistent p
   ]
 }
 ```
+
+- `SpawnTestUi` (guarded; test UI helper)
+```json
+{
+  "ok": true,
+  "rootId": "obj:120000",
+  "blocks": [
+    { "name": "McpTestBlock_Left", "id": "obj:120001" },
+    { "name": "McpTestBlock_Right", "id": "obj:120002" }
+  ]
+}
+```
+
+- `Reparent` / `DestroyObject` (guarded)
+```json
+{ "ok": true }
+```
+Mono host limits these two tools to the SpawnTestUi hierarchy; calling them on anything else returns `ok=false` with `kind="PermissionDenied"`.
 
 Hook lifecycle contract tests run only when `UE_MCP_HOOK_TEST_ENABLED=1`; they expect `hookAllowlistSignatures` to include a safe type such as `UnityEngine.GameObject` and use `confirm=true` while `requireConfirm` is enabled.
 

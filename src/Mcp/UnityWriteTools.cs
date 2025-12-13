@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Reflection;
 using System.Threading;
@@ -28,6 +29,10 @@ namespace UnityExplorer.Mcp
             => new { ok = false, error = new { kind, message, hint } };
 
         private static GameObject? _testUiRoot;
+        private static GameObject? _testUiLeft;
+        private static GameObject? _testUiRight;
+
+        private static string ObjectId(GameObject go) => $"obj:{go.GetInstanceID()}";
 
         private static object ToolErrorFromException(Exception ex)
         {
@@ -506,6 +511,17 @@ namespace UnityExplorer.Mcp
                     var go = UnityQuery.FindByInstanceId(iid);
                     if (go == null) throw new InvalidOperationException("NotFound");
                     UnityEngine.Object.Destroy(go);
+                    if (_testUiRoot == go)
+                    {
+                        _testUiRoot = null;
+                        _testUiLeft = null;
+                        _testUiRight = null;
+                    }
+                    else
+                    {
+                        if (_testUiLeft == go) _testUiLeft = null;
+                        if (_testUiRight == go) _testUiRight = null;
+                    }
                     await Task.CompletedTask;
                 });
                 return new { ok = true };
@@ -633,7 +649,21 @@ namespace UnityExplorer.Mcp
             {
                 await MainThread.RunAsync(async () =>
                 {
-                    if (_testUiRoot != null) { await Task.CompletedTask; return; }
+                    if (_testUiRoot != null)
+                    {
+                        if (_testUiLeft == null)
+                        {
+                            var foundLeft = _testUiRoot.transform.Find("McpTestBlock_Left");
+                            if (foundLeft != null) _testUiLeft = foundLeft.gameObject;
+                        }
+                        if (_testUiRight == null)
+                        {
+                            var foundRight = _testUiRoot.transform.Find("McpTestBlock_Right");
+                            if (foundRight != null) _testUiRight = foundRight.gameObject;
+                        }
+                        await Task.CompletedTask;
+                        return;
+                    }
 
                     // Ensure EventSystem exists
                     if (EventSystem.current == null)
@@ -654,7 +684,7 @@ namespace UnityExplorer.Mcp
                     scaler.referenceResolution = new Vector2(1920, 1080);
                     scaler.matchWidthOrHeight = 0.5f;
 
-                    void AddBlock(string name, Color color, Vector2 anchor, Vector2 size)
+                    GameObject AddBlock(string name, Color color, Vector2 anchor, Vector2 size)
                     {
                         var go = new GameObject(name);
                         go.transform.SetParent(root.transform, false);
@@ -667,15 +697,20 @@ namespace UnityExplorer.Mcp
                         rt.anchoredPosition = Vector2.zero;
                         img.color = color;
                         img.raycastTarget = true;
+                        return go;
                     }
 
-                    AddBlock("McpTestBlock_Left", new Color(0.8f, 0.3f, 0.3f, 0.8f), new Vector2(0.35f, 0.5f), new Vector2(180, 180));
-                    AddBlock("McpTestBlock_Right", new Color(0.3f, 0.8f, 0.4f, 0.8f), new Vector2(0.65f, 0.5f), new Vector2(180, 180));
-
                     _testUiRoot = root;
+                    _testUiLeft = AddBlock("McpTestBlock_Left", new Color(0.8f, 0.3f, 0.3f, 0.8f), new Vector2(0.35f, 0.5f), new Vector2(180, 180));
+                    _testUiRight = AddBlock("McpTestBlock_Right", new Color(0.3f, 0.8f, 0.4f, 0.8f), new Vector2(0.65f, 0.5f), new Vector2(180, 180));
                     await Task.CompletedTask;
                 });
-                return new { ok = true };
+
+                var blocks = new List<object>();
+                if (_testUiLeft != null) blocks.Add(new { name = _testUiLeft.name, id = ObjectId(_testUiLeft) });
+                if (_testUiRight != null) blocks.Add(new { name = _testUiRight.name, id = ObjectId(_testUiRight) });
+
+                return new { ok = true, rootId = _testUiRoot != null ? ObjectId(_testUiRoot) : null, blocks = blocks.ToArray() };
             }
             catch (Exception ex)
             {
@@ -697,8 +732,10 @@ namespace UnityExplorer.Mcp
                     if (_testUiRoot != null)
                     {
                         try { GameObject.Destroy(_testUiRoot); } catch { }
-                        _testUiRoot = null;
                     }
+                    _testUiRoot = null;
+                    _testUiLeft = null;
+                    _testUiRight = null;
                     await Task.CompletedTask;
                 });
                 return new { ok = true };

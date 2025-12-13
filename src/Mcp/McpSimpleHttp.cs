@@ -1505,7 +1505,7 @@ namespace UnityExplorer.Mcp
                 experimental = new { streamEvents = new { } }
                 
             };
-            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, logs, camera, and mouse pick over streamable-http. Guarded writes (SetActive, SelectObject, SetTimeScale, SpawnTestUi, DestroyTestUi) are available when allowWrites=true (requireConfirm recommended). stream_events provides log/scene/selection/tool_result notifications.";
+            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, logs, camera, and mouse pick over streamable-http. Guarded writes (SetActive, Reparent, DestroyObject, SelectObject, SetTimeScale, SpawnTestUi, DestroyTestUi) are available when allowWrites=true (requireConfirm recommended; use SpawnTestUi blocks as safe targets). stream_events provides log/scene/selection/tool_result notifications.";
             return new { protocolVersion, capabilities, serverInfo, instructions };
         }
 
@@ -1537,6 +1537,8 @@ namespace UnityExplorer.Mcp
             list.Add(new { name = "TailLogs", description = "Tail recent logs.", inputSchema = Schema(new Dictionary<string, object> { { "count", Integer(200) } }) });
             list.Add(new { name = "GetSelection", description = "Current selection / inspected tabs.", inputSchema = Schema(new Dictionary<string, object>()) });
             list.Add(new { name = "SetActive", description = "Set GameObject active state (guarded by allowWrites/confirm).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "active", Bool() }, { "confirm", Bool(false) } }, new[] { "objectId", "active" }) });
+            list.Add(new { name = "Reparent", description = "Reparent a GameObject under a new parent (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "newParentId", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "newParentId" }) });
+            list.Add(new { name = "DestroyObject", description = "Destroy a GameObject (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "confirm", Bool(false) } }, new[] { "objectId" }) });
             list.Add(new { name = "SelectObject", description = "Select a GameObject in the inspector (requires allowWrites).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() } }, new[] { "objectId" }) });
             list.Add(new { name = "GetTimeScale", description = "Get current time-scale (read-only).", inputSchema = Schema(new Dictionary<string, object>()) });
             list.Add(new { name = "SetTimeScale", description = "Set Unity time-scale (guarded).", inputSchema = Schema(new Dictionary<string, object> { { "value", Number() }, { "lock", Bool() }, { "confirm", Bool(false) } }, new[] { "value" }) });
@@ -1615,6 +1617,17 @@ namespace UnityExplorer.Mcp
                         if (active == null)
                             throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'active' is required.");
                         return _write.SetActive(oid, active.Value, GetBool(args, "confirm") ?? false);
+                    }
+                case "reparent":
+                    {
+                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
+                        var pid = RequireString(args, "newParentId", "Invalid params: 'newParentId' is required.");
+                        return _write.Reparent(oid, pid, GetBool(args, "confirm") ?? false);
+                    }
+                case "destroyobject":
+                    {
+                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
+                        return _write.DestroyObject(oid, GetBool(args, "confirm") ?? false);
                     }
                 case "selectobject":
                     {
@@ -2236,10 +2249,26 @@ namespace UnityExplorer.Mcp
     {
         private readonly MonoReadTools _read;
         private static GameObject? _testUiRoot;
+        private static GameObject? _testUiLeft;
+        private static GameObject? _testUiRight;
 
         public MonoWriteTools(MonoReadTools read)
         {
             _read = read;
+        }
+
+        private static string ObjectId(GameObject go) => $"obj:{go.GetInstanceID()}";
+
+        private static bool IsTestUiObject(GameObject go)
+        {
+            if (_testUiRoot == null) return false;
+            var t = go.transform;
+            while (t != null)
+            {
+                if (t.gameObject == _testUiRoot) return true;
+                t = t.parent;
+            }
+            return false;
         }
 
         private static object ToolError(string kind, string message, string? hint = null)
@@ -2350,6 +2379,86 @@ namespace UnityExplorer.Mcp
             }
         }
 
+        public object Reparent(string objectId, string newParentId, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            if (!int.TryParse(objectId.StartsWith("obj:") ? objectId.Substring(4) : string.Empty, out var childId))
+                return ToolError("InvalidArgument", "Invalid child id");
+            if (!int.TryParse(newParentId.StartsWith("obj:") ? newParentId.Substring(4) : string.Empty, out var parentId))
+                return ToolError("InvalidArgument", "Invalid parent id");
+
+            try
+            {
+                object? response = null;
+                MainThread.Run(() =>
+                {
+                    var child = _read.FindByInstanceId(childId);
+                    var parent = _read.FindByInstanceId(parentId);
+                    if (child == null || parent == null) throw new InvalidOperationException("NotFound");
+                    if (child == parent) throw new InvalidOperationException("InvalidArgument");
+                    if (!IsTestUiObject(child) || !IsTestUiObject(parent))
+                    {
+                        response = ToolError("PermissionDenied", "Only test UI objects may be reparented (SpawnTestUi)");
+                        return;
+                    }
+
+                    child.transform.SetParent(parent.transform, true);
+                });
+                if (response != null) return response;
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        public object DestroyObject(string objectId, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+            if (!int.TryParse(objectId.StartsWith("obj:") ? objectId.Substring(4) : string.Empty, out var iid))
+                return ToolError("InvalidArgument", "Invalid id");
+
+            try
+            {
+                object? response = null;
+                MainThread.Run(() =>
+                {
+                    var go = _read.FindByInstanceId(iid);
+                    if (go == null) throw new InvalidOperationException("NotFound");
+                    if (!IsTestUiObject(go))
+                    {
+                        response = ToolError("PermissionDenied", "Only test UI objects may be destroyed (SpawnTestUi)");
+                        return;
+                    }
+
+                    UnityEngine.Object.Destroy(go);
+                    if (_testUiRoot == go)
+                    {
+                        _testUiRoot = null;
+                        _testUiLeft = null;
+                        _testUiRight = null;
+                    }
+                    else
+                    {
+                        if (_testUiLeft == go) _testUiLeft = null;
+                        if (_testUiRight == go) _testUiRight = null;
+                    }
+                });
+                if (response != null) return response;
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
         public object SelectObject(string objectId)
         {
             var cfg = McpConfig.Load();
@@ -2435,7 +2544,20 @@ namespace UnityExplorer.Mcp
             {
                 MainThread.Run(() =>
                 {
-                    if (_testUiRoot != null) return;
+                    if (_testUiRoot != null)
+                    {
+                        if (_testUiLeft == null)
+                        {
+                            var foundLeft = _testUiRoot.transform.Find("McpTestBlock_Left");
+                            _testUiLeft = foundLeft != null ? foundLeft.gameObject : AddTestBlock(_testUiRoot, "McpTestBlock_Left", new Color(0.8f, 0.3f, 0.3f, 0.8f), new Vector2(0.35f, 0.5f), new Vector2(180, 180));
+                        }
+                        if (_testUiRight == null)
+                        {
+                            var foundRight = _testUiRoot.transform.Find("McpTestBlock_Right");
+                            _testUiRight = foundRight != null ? foundRight.gameObject : AddTestBlock(_testUiRoot, "McpTestBlock_Right", new Color(0.3f, 0.8f, 0.4f, 0.8f), new Vector2(0.65f, 0.5f), new Vector2(180, 180));
+                        }
+                        return;
+                    }
 
                     if (EventSystem.current == null)
                     {
@@ -2456,12 +2578,21 @@ namespace UnityExplorer.Mcp
                     scaler.referenceResolution = new Vector2(1920, 1080);
                     scaler.matchWidthOrHeight = 0.5f;
 
-                    AddTestBlock(root, "McpTestBlock_Left", new Color(0.8f, 0.3f, 0.3f, 0.8f), new Vector2(0.35f, 0.5f), new Vector2(180, 180));
-                    AddTestBlock(root, "McpTestBlock_Right", new Color(0.3f, 0.8f, 0.4f, 0.8f), new Vector2(0.65f, 0.5f), new Vector2(180, 180));
-
                     _testUiRoot = root;
+                    _testUiLeft = AddTestBlock(root, "McpTestBlock_Left", new Color(0.8f, 0.3f, 0.3f, 0.8f), new Vector2(0.35f, 0.5f), new Vector2(180, 180));
+                    _testUiRight = AddTestBlock(root, "McpTestBlock_Right", new Color(0.3f, 0.8f, 0.4f, 0.8f), new Vector2(0.65f, 0.5f), new Vector2(180, 180));
                 });
-                return new { ok = true };
+
+                var blocks = new List<object>();
+                if (_testUiLeft != null) blocks.Add(new { name = _testUiLeft.name, id = ObjectId(_testUiLeft) });
+                if (_testUiRight != null) blocks.Add(new { name = _testUiRight.name, id = ObjectId(_testUiRight) });
+
+                return new
+                {
+                    ok = true,
+                    rootId = _testUiRoot != null ? ObjectId(_testUiRoot) : null,
+                    blocks = blocks.ToArray()
+                };
             }
             catch (Exception ex)
             {
@@ -2482,8 +2613,10 @@ namespace UnityExplorer.Mcp
                     if (_testUiRoot != null)
                     {
                         try { GameObject.Destroy(_testUiRoot); } catch { }
-                        _testUiRoot = null;
                     }
+                    _testUiRoot = null;
+                    _testUiLeft = null;
+                    _testUiRight = null;
                 });
                 return new { ok = true };
             }
@@ -2493,7 +2626,7 @@ namespace UnityExplorer.Mcp
             }
         }
 
-        private static void AddTestBlock(GameObject root, string name, Color color, Vector2 anchor, Vector2 size)
+        private static GameObject AddTestBlock(GameObject root, string name, Color color, Vector2 anchor, Vector2 size)
         {
             var go = new GameObject(name);
             go.transform.SetParent(root.transform, false);
@@ -2506,6 +2639,7 @@ namespace UnityExplorer.Mcp
             rt.anchoredPosition = Vector2.zero;
             img.color = color;
             img.raycastTarget = true;
+            return go;
         }
 
         private static void UnlockTimeScale(TimeScaleWidget widget)

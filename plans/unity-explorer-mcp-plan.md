@@ -7,7 +7,7 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-14)
-- Added guarded `SpawnTestUi` / `DestroyTestUi` to the Mono MCP surface, fixed packaging so the built DLL is copied into `Release/.../Mods/`, redeployed to `SpaceShooter_Mono`, and verified the new tools with `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` (writes enabled → spawn/destroy UI → config reset, allowWrites back to false).
+- Mono MCP writes expanded: `SpawnTestUi` now returns block ids; guarded `Reparent` / `DestroyObject` are limited to the SpawnTestUi blocks; write smoke now enables writes → spawn → reparent → destroy block → destroy UI → reset config (`allowWrites=false`). Packaging still copies the Mono DLL into `Release/.../Mods/`; redeployed to `SpaceShooter_Mono`.
 - Inspector CLI + Mono smoke + controlled error tails re-ran and pass on Test-VM IL2CPP (`http://192.168.178.210:51477`) and Mono (`http://192.168.178.210:51478`); `[MCP] error ...` shows up in `unity://logs/tail` after a bad request on both hosts.
 - `initialize.capabilities.experimental.streamEvents` now returns an object on both CoreCLR and Mono; added `resources/list` plus `call_tool` text+json content so inspector CLI validation succeeds. Added JSON-RPC contract tests to lock the `list_resources` and inspector-friendly `call_tool` content shape.
 - Added `tools/Run-McpInspectorCli.ps1` (inspector --cli smoke: tools/list, resources/list, resources/read unity://status, tools/call GetStatus with optional auth header) and documented it in `README-mcp.md`.
