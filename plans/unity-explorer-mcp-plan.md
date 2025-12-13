@@ -8,14 +8,15 @@ This plan merges the original scope, the current implementation snapshot, and th
 
 ### Latest iteration snapshot (2025-12-13)
 - `initialize.capabilities.experimental.streamEvents` now returns an object on both CoreCLR and Mono; added `resources/list` plus `call_tool` text+json content so inspector CLI validation succeeds.
-- IL2CPP Space Shooter host rebuilt/deployed; smoke (`pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477`) and contract suite (`UE_MCP_DISCOVERY=/tmp/ue-mcp-il2cpp-discovery.json pwsh ./tools/Run-McpContractTests.ps1 -Configuration Release`) pass, and inspector CLI (`./inspector --method tools/list|resources/list|resources/read --uri unity://status|tools/call --tool-name GetStatus`) now succeeds.
-- Mono Space Shooter host rebuilt/deployed with the same changes; `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3` passes and inspector CLI (`npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51478 --method tools/list|resources/read --uri unity://status`) is green after redeploying the Mono mod.
+- Added `tools/Run-McpInspectorCli.ps1` (inspector --cli smoke: tools/list, resources/list, resources/read unity://status, tools/call GetStatus with optional auth header) and documented it in `README-mcp.md`.
+- Mono Space Shooter host (`http://192.168.178.210:51478`) is up: inspector CLI smoke and `pwsh ./tools/Run-McpMonoSmoke.ps1 -LogCount 5 -StreamLines 2` pass (Ready=true, Scenes=1).
+- IL2CPP Space Shooter host (`http://192.168.178.210:51477`) currently refuses connections for inspector/Invoke smokes; prior contract runs were green but need a redeploy or host restart before retesting.
 
 ---
 
 ### Planned next 10 iterations (planner)
 
-1) Add an inspector CLI smoke script (non-interactive) that runs `tools/list`, `resources/list`, `resources/read unity://status`, and `tools/call GetStatus` against a base URL (IL2CPP + Mono).
+1) Bring the IL2CPP host at `http://192.168.178.210:51477` back up and rerun inspector CLI + `Invoke-McpSmoke` (LogCount ~10) to re-confirm parity with Mono; redeploy CoreCLR build if needed.
 2) Mono parity: enable/validate `unity://console/scripts` and `unity://hooks` on Mono (or document why they stay disabled), and extend `tools/Run-McpMonoSmoke.ps1` coverage.
 3) Mono parity: align selection + camera + MousePick behaviour with IL2CPP (DTOs + docs + smoke).
 4) Decision + implementation: keep Mono read-only forever, or add the first guarded writes for Mono (minimal + safe + confirm).

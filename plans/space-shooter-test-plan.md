@@ -17,7 +17,8 @@
 - Discovery file: `%TEMP%\unity-explorer-mcp.json` (refresh by deleting before launch).
 - Launch: `Start-Process 'C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe' -ArgumentList '-seed=1234'`.
 - Deployment note: stop `SpaceShooter.exe` before `Update-Mod-Remote.ps1` (SCP fails on locked DLLs), then restart the game.
-- 2025-12-12: Smoke (`pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477`) passes after rebuilding/deploying UnityExplorer 4.12.8 (SetTimeScale value reporting fix + test helper clones), but `Run-McpContractTests.ps1` now fails: `WriteToolsContractTests` cause connection reset/`SpaceShooter.exe` exit; `SelectObject` requests currently hang the server (even with writes disabled) and TimeScale responses remain `value=0` after setting to 1.
+- 2025-12-12: IL2CPP host smoke + contract tests are green on `http://192.168.178.210:51477` (45 passed, 1 skipped). Mono smoke is green on `http://192.168.178.210:51478`.
+- Pending: `@modelcontextprotocol/inspector` CLI validation (fix `initialize.capabilities.experimental.*` values to be objects, per MCP spec), and removal of `Mods\\UeMcpHeadless.dll` once the UnityExplorer dropdown Il2Cpp cast crash is fixed.
 
 ## Determinism Hardening
 - Frame pacing: `Application.targetFrameRate = 60`, vSync off, Fixed Timestep 0.02, Max Allowed Timestep 0.333.

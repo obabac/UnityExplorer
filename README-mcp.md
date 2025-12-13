@@ -15,7 +15,19 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 3. Discovery file is written to `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modeHints, startedAt }`.
 4. Connect a client via the MCP C# SDK using `HttpClientTransport` (AutoDetect mode), or talk directly to the HTTP endpoints described below.
 
+Test‑VM Space Shooter E2E plan: `plans/space-shooter-test-plan.md` (canonical paths/ports/builds on the VM).
+
 Mono/net35 builds: MCP host is available for read-only initialize/list_tools/read_resource/call_tool (status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion) with `stream_events` (log/selection/scene/tool_result; payloads include `source` + optional `category`) and discovery (`unity-explorer-mcp.json`). Console scripts and hooks resources remain disabled on Mono. Writes stay disabled; quick smoke/CI entry: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result check). Test-VM Mono host base URL: `http://192.168.178.210:51478`.
+
+## Inspector CLI smoke
+
+Run this non-interactive CLI smoke to validate the MCP surface via `@modelcontextprotocol/inspector --cli` (runs tools/list, resources/list, read status, and call GetStatus). Fails fast if `npx` is missing or the host is down.
+
+```powershell
+pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477
+# Mono host example (optional auth header)
+pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478 -AuthToken mytoken
+```
 
 ## Mono Host Validation Checklist
 
@@ -40,6 +52,9 @@ Use this when you have a Mono (non‑IL2CPP) Unity game with MelonLoader.
      ```json
      { "enabled": true, "port": 51477, "bindAddress": "127.0.0.1" }
      ```
+
+   - If you need remote access (e.g., Test‑VM), use `"bindAddress": "0.0.0.0"`.
+   - If you run IL2CPP + Mono side‑by‑side, use a different Mono port (Test‑VM standard: `51478`).
 
 4. Start the game and wait for UnityExplorer to load.
    - Verify discovery file exists and note `baseUrl`/`port`:
