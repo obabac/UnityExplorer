@@ -1259,7 +1259,18 @@ namespace UnityExplorer.Mcp
 
         private void HandleRead(Stream stream, string target)
         {
-            var query = MonoMcpHandlers.ParseQuery(target);
+            Dictionary<string, string> query;
+            try
+            {
+                var parsed = new Uri("http://localhost" + target);
+                query = MonoMcpHandlers.ParseQuery(parsed.Query);
+            }
+            catch
+            {
+                WriteResponse(stream, 400, "missing uri", "text/plain");
+                return;
+            }
+
             if (!query.TryGetValue("uri", out var uri) || string.IsNullOrEmpty(uri))
             {
                 WriteResponse(stream, 400, "missing uri", "text/plain");
@@ -1275,6 +1286,16 @@ namespace UnityExplorer.Mcp
             {
                 WriteResponse(stream, 400, ex.Message, "text/plain");
             }
+        }
+
+        internal SelectionDto GetSelectionSnapshot()
+        {
+            try
+            {
+                var obj = _handlers.ReadResource("unity://selection") as SelectionDto;
+                return obj ?? new SelectionDto();
+            }
+            catch { return new SelectionDto(); }
         }
 
         public void Dispose()
@@ -1829,6 +1850,17 @@ namespace UnityExplorer.Mcp
             return "/" + string.Join("/", names.ToArray());
         }
 
+        private static int CompareRaycastResult(RaycastResult a, RaycastResult b)
+        {
+            var layerA = SortingLayer.GetLayerValueFromID(a.sortingLayer);
+            var layerB = SortingLayer.GetLayerValueFromID(b.sortingLayer);
+            if (layerA != layerB) return layerB.CompareTo(layerA);
+            if (a.sortingOrder != b.sortingOrder) return b.sortingOrder.CompareTo(a.sortingOrder);
+            if (a.depth != b.depth) return b.depth.CompareTo(a.depth);
+            if (Mathf.Abs(a.distance - b.distance) > 0.0001f) return a.distance.CompareTo(b.distance);
+            return a.index.CompareTo(b.index);
+        }
+
         private sealed class SelectionSnapshot
         {
             public string? ActiveId { get; set; }
@@ -2201,6 +2233,10 @@ namespace UnityExplorer.Mcp
                     };
                     var raycastResults = new List<RaycastResult>();
                     eventSystem.RaycastAll(pointer, raycastResults);
+                    if (raycastResults.Count > 1)
+                    {
+                        raycastResults.Sort(CompareRaycastResult);
+                    }
                     var items = new List<PickHit>(raycastResults.Count);
                     foreach (var rr in raycastResults)
                     {

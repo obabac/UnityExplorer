@@ -27,6 +27,11 @@ namespace UnityExplorer.Mcp
                 action();
                 return Task.CompletedTask;
             }
+            if (SynchronizationContext.Current == _context)
+            {
+                action();
+                return Task.CompletedTask;
+            }
             var tcs = new TaskCompletionSource<object?>();
             _context.Post(_ =>
             {
@@ -39,6 +44,10 @@ namespace UnityExplorer.Mcp
         public static Task<T> Run<T>(Func<T> func)
         {
             if (_context == null)
+            {
+                return Task.FromResult(func());
+            }
+            if (SynchronizationContext.Current == _context)
             {
                 return Task.FromResult(func());
             }
@@ -101,6 +110,11 @@ namespace UnityExplorer.Mcp
                 action();
                 return;
             }
+            if (SynchronizationContext.Current == _context)
+            {
+                action();
+                return;
+            }
 
             Exception? ex = null;
             using (var done = new ManualResetEvent(false))
@@ -120,6 +134,10 @@ namespace UnityExplorer.Mcp
         {
             if (func == null) return default!;
             if (_context == null)
+            {
+                return func();
+            }
+            if (SynchronizationContext.Current == _context)
             {
                 return func();
             }

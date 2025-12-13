@@ -140,10 +140,10 @@ public static class ExplorerCore
             {
                 try
                 {
-                    var sel = new Mcp.MonoReadTools().GetSelection();
                     var http = Mcp.McpSimpleHttp.Current;
                     if (http != null)
                     {
+                        var sel = http.GetSelectionSnapshot();
                         http.BroadcastNotificationAsync("selection", sel);
                     }
                 }

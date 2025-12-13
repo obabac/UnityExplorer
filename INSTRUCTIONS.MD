@@ -1,16 +1,33 @@
-# Iteration 4/10 — Mono mouse-pick & selection parity
+# Iteration 5/10 — Selection streams contract + UI pick ordering (Mono parity)
 
 Rule
-- Validation first: rerun required checks in the same iteration whenever MCP behaviour changes.
+- Validation first: run the required checks BEFORE and AFTER behavior changes in this iteration.
 
-Goal
-- Align Mono mouse-pick (UI multi-hit) and selection/stream behaviour with CoreCLR and keep the smoke harness up to date.
+Hosts
+- IL2CPP/CoreCLR: `http://192.168.178.210:51477`
+- Mono:          `http://192.168.178.210:51478`
 
-Scope (do these)
-1) Mono MousePick: ensure UI mode returns the Items list + top-most Id like CoreCLR when using SpawnTestUi. Adjust handlers/DTOs if needed; keep allowWrites/confirm gates intact.
-2) Selection/streams: verify Mono selection responses + notifications match CoreCLR. Add minimal coverage (smoke or test) if gaps appear.
-3) Docs sync: update `plans/mcp-interface-concept.md` for any shape changes; refresh `plans/unity-explorer-mcp-plan.md` / `plans/unity-explorer-mcp-todo.md` / `plans/space-shooter-test-plan.md` if surfaces or validation steps change.
-4) Test-VM E2E: build Mono (`dotnet build src/UnityExplorer.csproj -c ML_Mono`), copy the DLL to `Release/.../Mods/`, restart the Mono game, and rerun `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3` (use `-EnableWriteSmoke` if write paths changed). Confirm inspector CLI and a controlled bad `read_resource` still surface `[MCP] error` in `unity://logs/tail` on both hosts.
+0) Baseline gates (run now, no code changes yet)
+- `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477`
+- `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478`
+- `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3 -EnableWriteSmoke`
+- Trigger bad `read_resource` on both hosts and confirm `[MCP] error ...` appears in `unity://logs/tail?count=50` (Mono GET `/read?uri=` now works).
+
+1) Selection streams contract (core task)
+- Add coverage (prefer contract test) that a selection change emits a `stream_events` `selection` notification with `ActiveId`/`Items` matching `unity://selection` on Mono and CoreCLR.
+- Keep selection snapshot used for `unity://selection` and notifications in sync; document any deltas in `plans/mcp-interface-concept.md`.
+
+2) MousePick UI ordering follow-up
+- Validate that `MousePick(mode="ui")` on Mono returns the ordered multi-hit list and top-most `Id` using `SpawnTestUi`; add harness/test if needed.
+
+3) Docs sync (single source of truth)
+- Update `plans/mcp-interface-concept.md` for any shape/payload changes; refresh `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` only for status/steps (avoid duplicating DTO shapes).
+
+4) Test-VM E2E (after code changes)
+- Build Mono (`dotnet build src/UnityExplorer.csproj -c ML_Mono`), deploy the DLL to `SpaceShooter_Mono/Mods`, restart the Mono game, and verify MCP binds on `:51478`.
+- Rerun ALL baseline gates from step 0.
 
 Housekeeping
-- Keep `Mods\\UeMcpHeadless.dll` disabled on the Test-VM; `allowWrites=false` at rest on both hosts. Use SpawnTestUi blocks as safe targets for any write smoke. Commits allowed; keep them small and scoped.
+- Keep `Mods\\UeMcpHeadless.dll` disabled.
+- `allowWrites=false` at rest on both hosts; use SpawnTestUi blocks as safe targets.
+- Commits allowed; keep them small and scoped.

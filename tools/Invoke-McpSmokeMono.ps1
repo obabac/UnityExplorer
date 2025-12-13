@@ -141,6 +141,7 @@ try {
         $destroyUiJson = $null
         $destroyBlockJson = $null
         $reparentJson = $null
+        $selectionEvent = $null
         $blockIds = @()
         try {
             Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
@@ -188,17 +189,51 @@ try {
             $getTimeJson = Get-JsonContent -Result $getTime
             if (-not $getTimeJson -or -not $getTimeJson.ok) { throw "GetTimeScale returned ok=false" }
 
+            if ($blockIds.Count -gt 0) {
+                $selectionStream = $null
+                $selectionEvents = @()
+                try {
+                    $selectionStream = Open-StreamEvents -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+                    $select = Invoke-McpRpc -Id "select-block" -Method "call_tool" -Params @{ name = "SelectObject"; arguments = @{ objectId = $parentId } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+                    $selectJson = Get-JsonContent -Result $select
+                    if (-not $selectJson -or -not $selectJson.ok) { throw "SelectObject returned ok=false" }
+
+                    $selectionEvents = Read-StreamEvents -Reader $selectionStream.Reader -Lines ([Math]::Max($StreamLines, 5))
+                    foreach ($chunk in $selectionEvents) {
+                        try {
+                            $obj = $chunk | ConvertFrom-Json
+                            if ($obj.method -eq "notification" -and $obj.params -and $obj.params.event -eq "selection") {
+                                $selectionEvent = $obj
+                                break
+                            }
+                        } catch {
+                            continue
+                        }
+                    }
+
+                    if (-not $selectionEvent) { throw "stream_events produced no selection notification" }
+                }
+                finally {
+                    if ($selectionStream) {
+                        try { $selectionStream.Reader.Dispose() } catch { }
+                        try { $selectionStream.Response.Dispose() } catch { }
+                        try { $selectionStream.Client.Dispose() } catch { }
+                    }
+                }
+            }
+
             $destroyUi = Invoke-McpRpc -Id "destroy-testui" -Method "call_tool" -Params @{ name = "DestroyTestUi"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $destroyUiJson = Get-JsonContent -Result $destroyUi
             if (-not $destroyUiJson -or -not $destroyUiJson.ok) { throw "DestroyTestUi returned ok=false" }
 
             $writeResult = [ordered]@{
-                blocks       = $blockIds
-                spawn        = $spawnJson
-                reparent     = $reparentJson
-                destroyBlock = $destroyBlockJson
-                destroyUi    = $destroyUiJson
-                time         = $getTimeJson
+                blocks         = $blockIds
+                spawn          = $spawnJson
+                reparent       = $reparentJson
+                destroyBlock   = $destroyBlockJson
+                destroyUi      = $destroyUiJson
+                time           = $getTimeJson
+                selectionEvent = $selectionEvent
             }
         }
         finally {
@@ -218,7 +253,8 @@ try {
     try {
         $streamHandle = Open-StreamEvents -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
         Invoke-McpRpc -Id "probe-stream" -Method "call_tool" -Params @{ name = "GetStatus"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
-        $events = Read-StreamEvents -Reader $streamHandle.Reader -Lines $StreamLines
+        $streamReadLines = [Math]::Max($StreamLines, 5)
+        $events = Read-StreamEvents -Reader $streamHandle.Reader -Lines $streamReadLines
     }
     finally {
         if ($streamHandle) {
@@ -269,7 +305,8 @@ try {
         $blockCount = if ($writeResult -and $writeResult.blocks) { ($writeResult.blocks | Measure-Object).Count } else { 0 }
         $timeValue = if ($writeResult) { $writeResult.time.value } else { $null }
         $timeLocked = if ($writeResult) { $writeResult.time.locked } else { $null }
-        Write-Host "Write smoke: blocks=$blockCount spawnOk=$spawnOk reparentOk=$reparentOk destroyBlockOk=$destroyBlockOk destroyUiOk=$destroyUiOk timeValue=$timeValue locked=$timeLocked"
+        $selectionSeen = if ($writeResult) { $writeResult.selectionEvent -ne $null } else { $false }
+        Write-Host "Write smoke: blocks=$blockCount spawnOk=$spawnOk reparentOk=$reparentOk destroyBlockOk=$destroyBlockOk destroyUiOk=$destroyUiOk timeValue=$timeValue locked=$timeLocked selectionEvent=$selectionSeen"
     }
     Write-Host "Stream events captured: $($events.Count) (tool_result observed=$($toolResultEvent -ne $null))"
     Write-Host "[mono-smoke] Done"
