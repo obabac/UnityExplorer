@@ -119,6 +119,52 @@ public class JsonRpcContractTests
     }
 
     [Fact]
+    public async Task ListResources_JsonRpc_Response_If_Server_Available()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var payload = new
+        {
+            jsonrpc = "2.0",
+            id = "list-resources-test",
+            method = "list_resources",
+            @params = new { }
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var res = await http.PostAsync("/message", content, cts.Token);
+        res.EnsureSuccessStatusCode();
+
+        var body = await res.Content.ReadAsStringAsync(cts.Token);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        root.GetProperty("jsonrpc").GetString().Should().Be("2.0");
+        root.TryGetProperty("error", out _).Should().BeFalse();
+        root.TryGetProperty("result", out var result).Should().BeTrue();
+        result.TryGetProperty("resources", out var resources).Should().BeTrue();
+        resources.ValueKind.Should().Be(JsonValueKind.Array);
+        resources.GetArrayLength().Should().BeGreaterThan(0);
+
+        foreach (var resource in resources.EnumerateArray())
+        {
+            resource.TryGetProperty("uri", out var uri).Should().BeTrue();
+            uri.ValueKind.Should().Be(JsonValueKind.String);
+            resource.TryGetProperty("name", out var name).Should().BeTrue();
+            name.ValueKind.Should().Be(JsonValueKind.String);
+            resource.TryGetProperty("description", out var description).Should().BeTrue();
+            description.ValueKind.Should().Be(JsonValueKind.String);
+            resource.TryGetProperty("mimeType", out var mime).Should().BeTrue();
+            mime.GetString().Should().Be("application/json");
+        }
+    }
+
+    [Fact]
     public async Task CallTool_GetStatus_JsonRpc_Response_If_Server_Available()
     {
         if (!Discovery.TryLoad(out var info))
@@ -198,6 +244,56 @@ public class JsonRpcContractTests
         version.TryGetProperty("McpVersion", out _).Should().BeTrue();
         version.TryGetProperty("UnityVersion", out _).Should().BeTrue();
         version.TryGetProperty("Runtime", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CallTool_Returns_Text_And_Json_Content_For_Inspector_Clients()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var payload = new
+        {
+            jsonrpc = "2.0",
+            id = "call-tool-content-shape",
+            method = "call_tool",
+            @params = new
+            {
+                name = "GetStatus",
+                arguments = new { }
+            }
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var res = await http.PostAsync("/message", content, cts.Token);
+        res.EnsureSuccessStatusCode();
+
+        var body = await res.Content.ReadAsStringAsync(cts.Token);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("result", out var result).Should().BeTrue();
+        result.TryGetProperty("content", out var contentArr).Should().BeTrue();
+        contentArr.ValueKind.Should().Be(JsonValueKind.Array);
+        contentArr.GetArrayLength().Should().BeGreaterThan(0);
+
+        var first = contentArr[0];
+        first.GetProperty("type").GetString().Should().Be("text");
+        first.TryGetProperty("mimeType", out var mimeType).Should().BeTrue();
+        mimeType.GetString().Should().Be("application/json");
+        first.TryGetProperty("text", out var text).Should().BeTrue();
+        text.ValueKind.Should().Be(JsonValueKind.String);
+        text.GetString().Should().NotBeNullOrWhiteSpace();
+        first.TryGetProperty("json", out var jsonPayload).Should().BeTrue();
+        jsonPayload.ValueKind.Should().Be(JsonValueKind.Object);
+
+        var parsedFromText = JsonDocument.Parse(text.GetString()!).RootElement;
+        parsedFromText.TryGetProperty("Ready", out _).Should().BeTrue();
+        parsedFromText.TryGetProperty("ScenesLoaded", out _).Should().BeTrue();
     }
 
     [Fact]

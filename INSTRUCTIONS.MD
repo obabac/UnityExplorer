@@ -1,16 +1,9 @@
-# Iteration Instructions — Mono guarded writes + IL2CPP host
+# Iteration Instructions — IL2CPP host bring-up + inspector smoke
 
-Goals:
-- Validate new Mono guarded write tools (SetConfig/SetActive/SelectObject/GetTimeScale/SetTimeScale) on the Test-VM.
-- Bring the IL2CPP host back online and rerun inspector/smoke checks.
-- Keep plans/todo/concept docs in sync with any shape or host changes.
+Goal: Bring the IL2CPP Space Shooter MCP host (streamable-http) back online and validate inspector + contract coverage (including new list_resources/call_tool content shape).
 
-Steps:
-1) Mono writes smoke: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3 -EnableWriteSmoke` (expect SetTimeScale ok + config reset). Record results.
-2) Restart/redeploy IL2CPP host (`http://192.168.178.210:51477`), then run `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477` and `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477 -LogCount 20`.
-3) If time remains, start on the dropdown Il2Cpp cast crash so `Mods/UeMcpHeadless.dll` can be removed (priority).
-
-Notes:
-- Tests: `dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests/UnityExplorer.Mcp.ContractTests.csproj`; `dotnet build src/UnityExplorer.csproj -c ML_Mono`.
-- Keep `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/mcp-interface-concept.md` aligned with any code/host changes.
-- Commit changes when done.
+Steps
+1) Restart/redeploy the IL2CPP host on the Test-VM (port 51477): stop `SpaceShooter.exe`, then from `UnityExplorer/` run `pwsh ./build-ml-coreclr.ps1` (and `pwsh ./tools/Update-Mod-Remote.ps1` if needed), then start the game with `Start-Process "C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe" -ArgumentList "-seed=1234"`. Keep `Mods\UeMcpHeadless.dll` loaded if the dropdown cast crash still occurs; capture `MelonLoader\Latest.log` if it does.
+2) Smoke with inspector CLI: `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477` and confirm initialize → list_tools/resources/list/read `unity://status` → call_tool GetStatus succeed.
+3) Run contract tests against that host (ensure `%TEMP%\unity-explorer-mcp.json` exists or set `UE_MCP_DISCOVERY`): `dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests/UnityExplorer.Mcp.ContractTests.csproj`. New tests cover `list_resources` and inspector-friendly `call_tool` content; keep them green.
+4) If the host fails to start or crashes (dropdown cast), grab `Latest.log` + stack and attempt a quick fix or note the blocker for the next iteration.

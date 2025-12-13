@@ -7,7 +7,7 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-13)
-- `initialize.capabilities.experimental.streamEvents` now returns an object on both CoreCLR and Mono; added `resources/list` plus `call_tool` text+json content so inspector CLI validation succeeds.
+- `initialize.capabilities.experimental.streamEvents` now returns an object on both CoreCLR and Mono; added `resources/list` plus `call_tool` text+json content so inspector CLI validation succeeds. Added JSON-RPC contract tests to lock the `list_resources` and inspector-friendly `call_tool` content shape.
 - Added `tools/Run-McpInspectorCli.ps1` (inspector --cli smoke: tools/list, resources/list, resources/read unity://status, tools/call GetStatus with optional auth header) and documented it in `README-mcp.md`.
 - Mono Space Shooter host (`http://192.168.178.210:51478`) is up: inspector CLI smoke and `pwsh ./tools/Run-McpMonoSmoke.ps1 -LogCount 5 -StreamLines 2` pass (Ready=true, Scenes=1). Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale) are implemented with an opt-in write smoke flag (`-EnableWriteSmoke`).
 - IL2CPP Space Shooter host (`http://192.168.178.210:51477`) currently refuses connections for inspector/Invoke smokes; prior contract runs were green but need a redeploy or host restart before retesting.

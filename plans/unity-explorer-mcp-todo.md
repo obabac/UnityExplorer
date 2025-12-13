@@ -106,6 +106,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 ## 7. Inspector & DX Polish
 
 - [ ] Verify all tools and resources render cleanly in `@modelcontextprotocol/inspector` (no schema errors); per-argument `inputSchema` is now emitted from `list_tools` but still needs UI validation.
+- [x] Add contract coverage for `list_resources` plus inspector-friendly `call_tool` content (`text` + `mimeType` + `json`) to keep CLI compatibility stable.
 - [x] Add an inspector CLI smoke script (`tools/Run-McpInspectorCli.ps1`) that runs inspector --cli (tools/list, resources/list, read unity://status, tools/call GetStatus; optional Authorization header) and document usage; last run 2025-12-13: Mono 51478 PASS, IL2CPP 51477 connection refused (host offline).
 - [x] Add JSON‑RPC contract tests that exercise `tools/list`, `tools/call`, and `call_tool` for all read‑only tools (matching inspector CLI usage).
 - [x] Add a small “how to connect with inspector” section to `README-mcp.md`, including:

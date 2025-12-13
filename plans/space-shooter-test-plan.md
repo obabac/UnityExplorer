@@ -8,6 +8,7 @@
 ## Current Test-VM Setup (validated)
 - **Testing environment ownership:** Agents maintain the Space Shooter MCP hosts on the Test‑VM (IL2CPP/CoreCLR and Mono) so E2E tests stay runnable.
 - Game source project: `C:\codex-workspace\space-shooter` (Unity project on Test‑VM).
+- Allowed: modify this Unity project to keep IL2CPP + Mono builds repeatable and as similar as possible.
 - Game build (IL2CPP/CoreCLR host): `C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP` (Unity 2021.3.45f1, IL2CPP, x86_64).
 - Mono host: `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` running at `http://192.168.178.210:51478`; `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3` passes (2 streamed lines including `tool_result`) after switching the harness to a PowerShell HttpClient line reader.
 - Unity Editor installed at `C:\Program Files\Unity 2021.3.45f1` (product version `2021.3.45f1_0da89fac8e79`).
@@ -17,8 +18,9 @@
 - Discovery file: `%TEMP%\unity-explorer-mcp.json` (refresh by deleting before launch).
 - Launch: `Start-Process 'C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe' -ArgumentList '-seed=1234'`.
 - Deployment note: stop `SpaceShooter.exe` before `Update-Mod-Remote.ps1` (SCP fails on locked DLLs), then restart the game.
-- 2025-12-12: IL2CPP host smoke + contract tests are green on `http://192.168.178.210:51477` (45 passed, 1 skipped). Mono smoke is green on `http://192.168.178.210:51478`.
-- Pending: `@modelcontextprotocol/inspector` CLI validation (fix `initialize.capabilities.experimental.*` values to be objects, per MCP spec), and removal of `Mods\\UeMcpHeadless.dll` once the UnityExplorer dropdown Il2Cpp cast crash is fixed.
+- 2025-12-13: Mono host responds on `http://192.168.178.210:51478` (Mono smoke + inspector CLI smoke should pass). IL2CPP host on `http://192.168.178.210:51477` is currently down (connection refused) and needs restart/redeploy.
+- Gate: run `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <baseUrl>` early for any protocol/DTO changes (both hosts).
+- Pending: remove `Mods\\UeMcpHeadless.dll` by fixing the UnityExplorer dropdown Il2Cpp cast crash; add repeatable build automation for both outputs.
 
 ## Determinism Hardening
 - Frame pacing: `Application.targetFrameRate = 60`, vSync off, Fixed Timestep 0.02, Max Allowed Timestep 0.333.
