@@ -8,6 +8,10 @@
 ## Current Test-VM Setup (validated)
 - **Testing environment ownership:** Agents maintain the Space Shooter MCP hosts on the Test‑VM (IL2CPP/CoreCLR and Mono) so E2E tests stay runnable.
 - Game source project: `C:\codex-workspace\space-shooter` (Unity project on Test‑VM).
+- Unity projects: `C:\codex-workspace\space-shooter\unity-space-shooter-2019` (IL2CPP target) and `C:\codex-workspace\space-shooter\unity-space-shooter-2019-mono` (Mono target).
+  - Sync `Assets/Editor/BuildCommands.cs` into both with `pwsh ./tools/Update-SpaceShooter-BuildScripts-Remote.ps1` (uses `scp` to the two project paths above).
+  - Remote builds: `pwsh ./tools/Build-SpaceShooter-Remote.ps1 -SkipMono` (IL2CPP) or `-SkipIl2Cpp` (Mono); logs land in `C:\codex-workspace\space-shooter-build\logs\` and outputs stay under `...\SpaceShooter_IL2CPP` / `...\SpaceShooter_Mono`.
+  - Build script now auto-picks the first enabled build scene, or falls back to `Assets/Scenes/Main.unity` → `Assets/Scenes/SampleScene.unity` → the first `.unity` asset if none are enabled; in batchmode it pins lighting to CPU and disables denoisers to avoid the OptiX headless crash.
 - Allowed: modify this Unity project to keep IL2CPP + Mono builds repeatable and as similar as possible.
 - Game build (IL2CPP/CoreCLR host): `C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP` (Unity 2021.3.45f1, IL2CPP, x86_64).
 - Mono host: `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` running at `http://192.168.178.210:51478`; `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3` passes (2 streamed lines including `tool_result`) after switching the harness to a PowerShell HttpClient line reader.

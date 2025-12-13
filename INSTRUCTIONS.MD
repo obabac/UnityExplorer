@@ -1,9 +1,12 @@
-# Iteration Instructions — IL2CPP host bring-up + inspector smoke
+# Iteration Instructions — SpaceShooter builds + IL2CPP host recovery
 
-Goal: Bring the IL2CPP Space Shooter MCP host (streamable-http) back online and validate inspector + contract coverage (including new list_resources/call_tool content shape).
+Goal: bring the IL2CPP MCP host back online without the headless workaround while keeping Space Shooter builds repeatable.
 
-Steps
-1) Restart/redeploy the IL2CPP host on the Test-VM (port 51477): stop `SpaceShooter.exe`, then from `UnityExplorer/` run `pwsh ./build-ml-coreclr.ps1` (and `pwsh ./tools/Update-Mod-Remote.ps1` if needed), then start the game with `Start-Process "C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe" -ArgumentList "-seed=1234"`. Keep `Mods\UeMcpHeadless.dll` loaded if the dropdown cast crash still occurs; capture `MelonLoader\Latest.log` if it does.
-2) Smoke with inspector CLI: `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477` and confirm initialize → list_tools/resources/list/read `unity://status` → call_tool GetStatus succeed.
-3) Run contract tests against that host (ensure `%TEMP%\unity-explorer-mcp.json` exists or set `UE_MCP_DISCOVERY`): `dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests/UnityExplorer.Mcp.ContractTests.csproj`. New tests cover `list_resources` and inspector-friendly `call_tool` content; keep them green.
-4) If the host fails to start or crashes (dropdown cast), grab `Latest.log` + stack and attempt a quick fix or note the blocker for the next iteration.
+Context:
+- BuildCommands now falls back to a default scene (Main → SampleScene → first .unity) and forces CPU lighting/denoisers off in batchmode to avoid the OptiX crash; synced to both Unity projects via `Update-SpaceShooter-BuildScripts-Remote.ps1`.
+- Remote builds succeeded on 2025-12-13: `pwsh ./tools/Build-SpaceShooter-Remote.ps1 -SkipIl2Cpp` (Mono log `build-mono-20251213-030649.log`) and `-SkipMono` (IL2CPP log `build-il2cpp-20251213-030728.log`). Outputs live under `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` / `...\SpaceShooter_IL2CPP`; `Mods/` and `MelonLoader/` directories stayed in place.
+
+Next steps:
+1) Restart/redeploy the IL2CPP SpaceShooter build on the Test-VM and verify MCP availability at `http://192.168.178.210:51477` (`Run-McpInspectorCli` + `Invoke-McpSmoke` / contract tests). Collect MelonLoader + latest build logs if it still fails.
+2) Fix the UnityExplorer dropdown Il2Cpp cast crash and remove `Mods\\UeMcpHeadless.dll`; redeploy the mod and rerun inspector/contract tests once fixed.
+3) Keep `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` in sync with any changes; retain the BuildCommands scene fallback + headless lighting defaults and rerun `pwsh ./tools/Build-SpaceShooter-Remote.ps1` after edits to confirm repeatable builds.
