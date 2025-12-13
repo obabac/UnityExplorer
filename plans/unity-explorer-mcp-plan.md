@@ -7,6 +7,7 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-13)
+- MCP error logging now marshals warning lines onto the Unity main thread before broadcasting error payloads so off-thread HTTP errors do not trip Unity-only APIs; local contract tests still build/run (47 passed, 1 skipped when discovery is missing).
 - `initialize.capabilities.experimental.streamEvents` now returns an object on both CoreCLR and Mono; added `resources/list` plus `call_tool` text+json content so inspector CLI validation succeeds. Added JSON-RPC contract tests to lock the `list_resources` and inspector-friendly `call_tool` content shape.
 - Added `tools/Run-McpInspectorCli.ps1` (inspector --cli smoke: tools/list, resources/list, resources/read unity://status, tools/call GetStatus with optional auth header) and documented it in `README-mcp.md`.
 - Space Shooter build automation hardened: `BuildCommands` now falls back to a default scene when none are enabled and forces CPU lighting/denoiser-off in batchmode; synced via `Update-SpaceShooter-BuildScripts-Remote.ps1`, and `Build-SpaceShooter-Remote.ps1` produced fresh Mono + IL2CPP outputs under `C:\codex-workspace\space-shooter-build\` (logs in `...\logs`).
@@ -24,16 +25,18 @@ This plan merges the original scope, the current implementation snapshot, and th
 
 ### Planned next 10 iterations (planner)
 
-1) Space Shooter build automation: modify `C:\\codex-workspace\\space-shooter` as needed to make Mono + IL2CPP rebuilds repeatable and as similar as possible; keep outputs stable under `C:\\codex-workspace\\space-shooter-build\\SpaceShooter_IL2CPP` and `...\\SpaceShooter_Mono`; document exact steps.
-2) Keep the IL2CPP host at `http://192.168.178.210:51477` healthy after the dropdown guard; rerun inspector CLI smoke + `Invoke-McpSmoke` after protocol changes.
-3) Validate the dropdown refresh guard on other IL2CPP titles (no `Mods\\UeMcpHeadless.dll`) and keep contract tests green.
-4) Validate Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale) on the Space Shooter host using the opt-in Mono smoke flag; add follow-up coverage/tests once the host is online.
-5) Mono parity: align selection + camera + MousePick (including UI multi-hit) with IL2CPP; enable/validate `unity://console/scripts` and `unity://hooks` on Mono (or document why they stay disabled).
-6) Streams/testing: add a contract test for at least one non-tool stream event (`log` or `selection`) and keep rate-limit tests stable.
-7) Inspector UX pass: run the inspector UI (not only CLI) against IL2CPP + Mono; fix any `inputSchema`/metadata issues.
-8) Regression coverage: add a test or scripted check for `resources/list` and `call_tool` text+json content so inspector remains compatible.
-9) Expand guarded writes (CoreCLR + Mono): reflection allowlists, hooks, console eval, etc. (still gated by config + confirm).
-10) Final DoD sweep: run IL2CPP smoke + contract tests + Mono smoke + inspector CLI smoke; mark all TODOs and remove stale docs.
+Pre-reqs already done (2025-12-13): inspector CLI gate (`tools/Run-McpInspectorCli.ps1`), removed the `UeMcpHeadless.dll` workaround, Mono baseline guarded writes, and repeatable Space Shooter IL2CPP+Mono rebuilds.
+
+1) Mono writes E2E gate: run `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -EnableWriteSmoke` and `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478`; ensure config resets (`allowWrites=false`) after the write smoke.
+2) Expand Mono writes (tier 1): add the next safest mutations (e.g., `DestroyObject`, `Reparent`, `SetMember` with allowlists), keeping `allowWrites+confirm` gating and CoreCLR error envelope parity; extend Mono smoke to cover at least one new write.
+3) Mono read parity: align selection, camera/freecam, and `MousePick` UI multi-hit behavior with IL2CPP; document any deltas in `plans/mcp-interface-concept.md`.
+4) Streams/testing: add a contract test for at least one non-tool stream notification (`selection` or `log`) and keep rate-limit tests stable.
+5) Inspector UX pass: run the inspector UI (not only CLI) against IL2CPP + Mono and fix any `inputSchema` / resource metadata issues; record results in `plans/unity-explorer-mcp-todo.md`.
+6) Space Shooter env hardening: keep Mono/IL2CPP builds as similar as possible; improve determinism (`-seed`) only if needed for flaky tests; keep rebuild scripts working.
+7) CoreCLR/IL2CPP write hardening: expand allowlists + confirm flows and keep contract tests green.
+8) Mono console/scripts + hooks: enable and validate parity (or document why disabled) with guarded writes + allowlists.
+9) Cross-title IL2CPP regression: validate the dropdown refresh guard on another IL2CPP title without headless workarounds.
+10) Final DoD sweep: run IL2CPP inspector CLI + Invoke-McpSmoke + contract tests and Mono inspector CLI + Mono smoke (with writes); check every TODO.
 
 ## 1) Context & Assumptions
 

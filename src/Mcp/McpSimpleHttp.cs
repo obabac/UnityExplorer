@@ -1410,7 +1410,19 @@ namespace UnityExplorer.Mcp
 
         private void WriteJsonError(Stream stream, JToken? idToken, int code, string message, string kind, string? hint, string? detail, int statusCode)
         {
-            try { ExplorerCore.LogWarning($"[MCP] {code}: {message}"); LogBuffer.Add("error", message, "mcp", kind); } catch { }
+            try
+            {
+                void LogOnMain() => ExplorerCore.LogWarning($"[MCP] {code}: {message}");
+                // ExplorerCore logging can require Unity thread state; dispatch when captured.
+                if (MainThread.IsCaptured)
+                    MainThread.RunAsync(LogOnMain);
+                else
+                    LogOnMain();
+            }
+            catch { }
+
+            try { LogBuffer.Add("error", message, "mcp", kind); } catch { }
+
             var payload = BuildErrorPayload(idToken, code, message, kind, hint, detail);
             BroadcastPayload(payload);
             WriteResponse(stream, statusCode, payload.ToString(Formatting.None), "application/json");

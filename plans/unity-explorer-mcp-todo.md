@@ -11,13 +11,13 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-13): inspector CLI compatibility is fixed (`initialize.capabilities.experimental.streamEvents` returns `{}`, `resources/list` is live, and `call_tool` returns inspector-friendly content). Mono Space Shooter host is up on `http://192.168.178.210:51478` and Mono smoke + inspector CLI pass; Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale) are implemented with an opt-in smoke flag. Space Shooter rebuild automation now succeeds (scene fallback + headless CPU lighting; `Build-SpaceShooter-Remote.ps1` emits logs under `C:\codex-workspace\space-shooter-build\logs`). IL2CPP Space Shooter host on `http://192.168.178.210:51477` is back online after guarding the dropdown refresh (no `UeMcpHeadless.dll`); inspector CLI, Invoke-McpSmoke, and contract tests (47 passed, 1 skipped) pass.
+Status (2025-12-13): inspector CLI compatibility is fixed (`initialize.capabilities.experimental.streamEvents` returns `{}`, `resources/list` is live, and `call_tool` returns inspector-friendly content). Mono Space Shooter host is up on `http://192.168.178.210:51478` and Mono smoke + inspector CLI pass; Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale) are implemented with an opt-in smoke flag. Space Shooter rebuild automation now succeeds (scene fallback + headless CPU lighting; `Build-SpaceShooter-Remote.ps1` emits logs under `C:\codex-workspace\space-shooter-build\logs`). IL2CPP Space Shooter host on `http://192.168.178.210:51477` is back online after guarding the dropdown refresh (no `UeMcpHeadless.dll`); inspector CLI, Invoke-McpSmoke, and contract tests (47 passed, 1 skipped) pass. MCP error logging now marshals warnings through the Unity main thread before broadcasting error payloads; local contract tests still compile/run (47 passed, 1 skipped without discovery) after the change.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
 - [x] Add guarded writes to Mono (start with `SetActive`, `SelectObject`, `GetTimeScale`/`SetTimeScale`) behind `allowWrites` + `requireConfirm` (implemented; validate on hosts).
-- [ ] Space Shooter project changes are allowed to improve repeatable IL2CPP + Mono rebuilds (source: `C:\codex-workspace\space-shooter`).
-- [ ] Treat inspector validation as a first-class gate: run `tools/Run-McpInspectorCli.ps1` early on both hosts for any wire/schema change.
+- [x] Space Shooter project changes are allowed to improve repeatable IL2CPP + Mono rebuilds (source: `C:\codex-workspace\space-shooter`).
+- [x] Treat inspector validation as a first-class gate: run `tools/Run-McpInspectorCli.ps1` early on both hosts for any wire/schema change.
 
 ---
 
@@ -155,7 +155,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Decide how `INTEROP` should apply to Mono (enable a minimal variant or keep it off with stubs) and ensure `McpConfig`/discovery file behavior is well-defined even if MCP is disabled. (Decision: keep INTEROP off; McpHost/Config return disabled defaults, Options panel shows disabled status.)
   - [x] Document the build command + expected output paths for Mono in the plan/todo and capture any remaining blocking errors in `build.log`. (Command: `dotnet build src/UnityExplorer.csproj -c ML_Mono` → `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll`; none blocking.)
 
-- [ ] Phase B — Read-only MCP surface on Mono
+- [x] Phase B — Read-only MCP surface on Mono
   - [x] Select a Mono-friendly JSON/HTTP stack (e.g., `Newtonsoft.Json` + `HttpListener`/simplified TCP) that preserves the CoreCLR DTOs/error envelope; avoid heavy ASP.NET deps.
   - [x] Bring up minimal Mono MCP endpoints (`initialize`, `list_tools`, `read_resource` for status/scenes/objects/logs) and keep shapes identical to CoreCLR; document any deltas in `plans/mcp-interface-concept.md`.
   - [x] Implement real `stream_events` on Mono (matching CoreCLR streamable-http behaviour; log/selection/scene/tool_result notifications; cleanup on disconnect; identical error envelope).
