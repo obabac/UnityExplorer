@@ -48,6 +48,17 @@ function Invoke-McpRpc {
     return $res
 }
 
+function Get-JsonContent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Result
+    )
+    $contentNode = $Result.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null } | Select-Object -First 1
+    if (-not $contentNode) { return $null }
+    if ($contentNode.json) { return $contentNode.json }
+    try { return ($contentNode.text | ConvertFrom-Json) } catch { return $null }
+}
+
 function Read-Chunk {
     param([System.IO.StreamReader]$Reader, [int]$TimeoutMs = 5000)
     $lineTask = $Reader.ReadLineAsync()
@@ -124,22 +135,42 @@ try {
 
     $writeResult = $null
     if ($EnableWriteSmoke) {
-        Write-Host "[mono-smoke] guarded write smoke (SetTimeScale)"
+        Write-Host "[mono-smoke] guarded write smoke (SpawnTestUi/DestroyTestUi + SetTimeScale)"
         $resetParams = @{ name = "SetConfig"; arguments = @{ allowWrites = $false; requireConfirm = $true } }
+        $spawned = $false
+        $destroyJson = $null
         try {
             Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+
+            $spawn = Invoke-McpRpc -Id "spawn-testui" -Method "call_tool" -Params @{ name = "SpawnTestUi"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $spawnJson = Get-JsonContent -Result $spawn
+            if (-not $spawnJson -or -not $spawnJson.ok) { throw "SpawnTestUi returned ok=false" }
+            $spawned = $true
+
             $setTime = Invoke-McpRpc -Id "set-timescale" -Method "call_tool" -Params @{ name = "SetTimeScale"; arguments = @{ value = 1.0; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
-            $setTimePart = ($setTime.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })[0]
-            $setTimeJson = if ($setTimePart.json) { $setTimePart.json } else { ($setTimePart.text | ConvertFrom-Json) }
-            if (-not $setTimeJson.ok) { throw "SetTimeScale returned ok=false" }
+            $setTimeJson = Get-JsonContent -Result $setTime
+            if (-not $setTimeJson -or -not $setTimeJson.ok) { throw "SetTimeScale returned ok=false" }
 
             $getTime = Invoke-McpRpc -Id "get-timescale" -Method "call_tool" -Params @{ name = "GetTimeScale"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
-            $getTimePart = ($getTime.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })[0]
-            $getTimeJson = if ($getTimePart.json) { $getTimePart.json } else { ($getTimePart.text | ConvertFrom-Json) }
-            if (-not $getTimeJson.ok) { throw "GetTimeScale returned ok=false" }
-            $writeResult = $getTimeJson
+            $getTimeJson = Get-JsonContent -Result $getTime
+            if (-not $getTimeJson -or -not $getTimeJson.ok) { throw "GetTimeScale returned ok=false" }
+
+            $destroy = Invoke-McpRpc -Id "destroy-testui" -Method "call_tool" -Params @{ name = "DestroyTestUi"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $destroyJson = Get-JsonContent -Result $destroy
+            if (-not $destroyJson -or -not $destroyJson.ok) { throw "DestroyTestUi returned ok=false" }
+
+            $writeResult = [ordered]@{
+                spawn   = $spawnJson
+                destroy = $destroyJson
+                time    = $getTimeJson
+            }
         }
         finally {
+            if ($spawned -and -not $destroyJson) {
+                try {
+                    $destroyJson = Get-JsonContent -Result (Invoke-McpRpc -Id "destroy-testui-final" -Method "call_tool" -Params @{ name = "DestroyTestUi"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds)
+                } catch { Write-Warning "[mono-smoke] cleanup destroy failed: $_" }
+            }
             try { Invoke-McpRpc -Id "set-config-reset" -Method "call_tool" -Params $resetParams -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null } catch { Write-Warning "[mono-smoke] failed to reset config: $_" }
         }
     }
@@ -163,12 +194,9 @@ try {
 
     Write-Host "[mono-smoke] Stream events captured: $($events.Count)"
 
-    $statusPart = ($statusTool.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })[0]
-    $status = if ($statusPart.json) { $statusPart.json } else { ($statusPart.text | ConvertFrom-Json) }
-    $logsPart = ($logsTool.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })[0]
-    $logs = if ($logsPart.json) { $logsPart.json } else { ($logsPart.text | ConvertFrom-Json) }
-    $mousePickPart = ($mousePickTool.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })[0]
-    $mousePick = if ($mousePickPart.json) { $mousePickPart.json } else { ($mousePickPart.text | ConvertFrom-Json) }
+    $status = Get-JsonContent -Result $statusTool
+    $logs = Get-JsonContent -Result $logsTool
+    $mousePick = Get-JsonContent -Result $mousePickTool
     if (-not $mousePick) { throw "MousePick returned no payload" }
     if (-not $mousePick.Mode) { throw "MousePick returned empty Mode" }
 
@@ -198,7 +226,11 @@ try {
     Write-Host "Logs (tool): $($logs.Items.Count) items (requested $LogCount)"
     Write-Host "Logs (read): $($readLogsDoc.Items.Count) items"
     if ($EnableWriteSmoke) {
-        Write-Host "Write smoke: ok=$($writeResult.ok) value=$($writeResult.value) locked=$($writeResult.locked)"
+        $spawnOk = if ($writeResult) { $writeResult.spawn.ok } else { $false }
+        $destroyOk = if ($writeResult) { $writeResult.destroy.ok } else { $false }
+        $timeValue = if ($writeResult) { $writeResult.time.value } else { $null }
+        $timeLocked = if ($writeResult) { $writeResult.time.locked } else { $null }
+        Write-Host "Write smoke: spawnOk=$spawnOk destroyOk=$destroyOk timeValue=$timeValue locked=$timeLocked"
     }
     Write-Host "Stream events captured: $($events.Count) (tool_result observed=$($toolResultEvent -ne $null))"
     Write-Host "[mono-smoke] Done"

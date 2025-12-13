@@ -29,6 +29,7 @@ using UnityExplorer.ObjectExplorer;
 using UnityExplorer.UI.Panels;
 using UnityExplorer.UI.Widgets;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 #endif
 
 #nullable enable
@@ -1504,7 +1505,7 @@ namespace UnityExplorer.Mcp
                 experimental = new { streamEvents = new { } }
                 
             };
-            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, logs, camera, and mouse pick over streamable-http. Guarded writes (SetActive, SelectObject, SetTimeScale) are available when allowWrites=true (requireConfirm recommended). stream_events provides log/scene/selection/tool_result notifications.";
+            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, logs, camera, and mouse pick over streamable-http. Guarded writes (SetActive, SelectObject, SetTimeScale, SpawnTestUi, DestroyTestUi) are available when allowWrites=true (requireConfirm recommended). stream_events provides log/scene/selection/tool_result notifications.";
             return new { protocolVersion, capabilities, serverInfo, instructions };
         }
 
@@ -1539,6 +1540,8 @@ namespace UnityExplorer.Mcp
             list.Add(new { name = "SelectObject", description = "Select a GameObject in the inspector (requires allowWrites).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() } }, new[] { "objectId" }) });
             list.Add(new { name = "GetTimeScale", description = "Get current time-scale (read-only).", inputSchema = Schema(new Dictionary<string, object>()) });
             list.Add(new { name = "SetTimeScale", description = "Set Unity time-scale (guarded).", inputSchema = Schema(new Dictionary<string, object> { { "value", Number() }, { "lock", Bool() }, { "confirm", Bool(false) } }, new[] { "value" }) });
+            list.Add(new { name = "SpawnTestUi", description = "Spawn a simple UI canvas for MousePick UI validation (guarded).", inputSchema = Schema(new Dictionary<string, object> { { "confirm", Bool(false) } }) });
+            list.Add(new { name = "DestroyTestUi", description = "Destroy the test UI canvas (guarded).", inputSchema = Schema(new Dictionary<string, object> { { "confirm", Bool(false) } }) });
             return list.ToArray();
         }
 
@@ -1627,6 +1630,10 @@ namespace UnityExplorer.Mcp
                             throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'value' is required.");
                         return _write.SetTimeScale(val.Value, GetBool(args, "lock"), GetBool(args, "confirm") ?? false);
                     }
+                case "spawntestui":
+                    return _write.SpawnTestUi(GetBool(args, "confirm") ?? false);
+                case "destroytestui":
+                    return _write.DestroyTestUi(GetBool(args, "confirm") ?? false);
                 default:
                     throw new McpError(-32004, 404, "NotFound", "Tool not found: " + name);
             }
@@ -2228,6 +2235,7 @@ namespace UnityExplorer.Mcp
     internal sealed class MonoWriteTools
     {
         private readonly MonoReadTools _read;
+        private static GameObject? _testUiRoot;
 
         public MonoWriteTools(MonoReadTools read)
         {
@@ -2415,6 +2423,89 @@ namespace UnityExplorer.Mcp
             {
                 return ToolErrorFromException(ex);
             }
+        }
+
+        public object SpawnTestUi(bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            try
+            {
+                MainThread.Run(() =>
+                {
+                    if (_testUiRoot != null) return;
+
+                    if (EventSystem.current == null)
+                    {
+                        var es = new GameObject("McpTest_EventSystem");
+                        es.AddComponent<EventSystem>();
+                        es.AddComponent<StandaloneInputModule>();
+                        es.hideFlags = HideFlags.DontUnloadUnusedAsset;
+                    }
+
+                    var root = new GameObject("McpTestCanvas");
+                    var canvas = root.AddComponent<Canvas>();
+                    root.AddComponent<CanvasScaler>();
+                    root.AddComponent<GraphicRaycaster>();
+                    canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+
+                    var scaler = root.GetComponent<CanvasScaler>();
+                    scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                    scaler.referenceResolution = new Vector2(1920, 1080);
+                    scaler.matchWidthOrHeight = 0.5f;
+
+                    AddTestBlock(root, "McpTestBlock_Left", new Color(0.8f, 0.3f, 0.3f, 0.8f), new Vector2(0.35f, 0.5f), new Vector2(180, 180));
+                    AddTestBlock(root, "McpTestBlock_Right", new Color(0.3f, 0.8f, 0.4f, 0.8f), new Vector2(0.65f, 0.5f), new Vector2(180, 180));
+
+                    _testUiRoot = root;
+                });
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        public object DestroyTestUi(bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            try
+            {
+                MainThread.Run(() =>
+                {
+                    if (_testUiRoot != null)
+                    {
+                        try { GameObject.Destroy(_testUiRoot); } catch { }
+                        _testUiRoot = null;
+                    }
+                });
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        private static void AddTestBlock(GameObject root, string name, Color color, Vector2 anchor, Vector2 size)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root.transform, false);
+            var rt = go.AddComponent<RectTransform>();
+            go.AddComponent<CanvasRenderer>();
+            var img = go.AddComponent<Image>();
+            rt.anchorMin = anchor;
+            rt.anchorMax = anchor;
+            rt.sizeDelta = size;
+            rt.anchoredPosition = Vector2.zero;
+            img.color = color;
+            img.raycastTarget = true;
         }
 
         private static void UnlockTimeScale(TimeScaleWidget widget)

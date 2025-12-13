@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-14): inspector CLI + Mono smoke + controlled error tail checks now pass on IL2CPP (`http://192.168.178.210:51477`) and Mono (`http://192.168.178.210:51478`) after rebuilding and redeploying the ML_Mono mod into `Mods/` and restarting the Mono host; allowWrites reset to false. `initialize.capabilities.experimental.streamEvents` returns `{}`, `resources/list` is live, and `call_tool` returns inspector-friendly content. Space Shooter rebuild automation still succeeds (scene fallback + headless CPU lighting; `Build-SpaceShooter-Remote.ps1` emits logs under `C:\codex-workspace\space-shooter-build\logs`). IL2CPP host remains healthy after the dropdown guard (no `UeMcpHeadless.dll`); inspector CLI, Invoke-McpSmoke, and contract tests (47 passed, 1 skipped) stay green. MCP error logging now writes `[MCP] error ...` lines into the MCP log buffer on both CoreCLR and Mono.
+Status (2025-12-14): inspector CLI + Mono smoke (with writes: SetConfig → SpawnTestUi → DestroyTestUi → config reset) + controlled error tail checks now pass on IL2CPP (`http://192.168.178.210:51477`) and Mono (`http://192.168.178.210:51478`) after copying the rebuilt ML_Mono DLL into `Release/.../Mods/` and redeploying to `SpaceShooter_Mono`; allowWrites reset to false. `initialize.capabilities.experimental.streamEvents` returns `{}`, `resources/list` is live, and `call_tool` returns inspector-friendly content. Space Shooter rebuild automation still succeeds (scene fallback + headless CPU lighting; `Build-SpaceShooter-Remote.ps1` emits logs under `C:\codex-workspace\space-shooter-build\logs`). IL2CPP host remains healthy after the dropdown guard (no `UeMcpHeadless.dll`); inspector CLI, Invoke-McpSmoke, and contract tests (47 passed, 1 skipped) stay green. MCP error logging now writes `[MCP] error ...` lines into the MCP log buffer on both CoreCLR and Mono.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -165,7 +165,9 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 
 - [ ] Phase C — Parity + tests
   - [x] Implement guarded writes on Mono (start with `SetActive`, `SelectObject`, `GetTimeScale`/`SetTimeScale`) behind `allowWrites` + `requireConfirm`; keep the same error envelope as CoreCLR (needs live validation on hosts).
+  - [x] Add `SpawnTestUi` / `DestroyTestUi` guarded tools to Mono and cover them in `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` (config enable → spawn/destroy → reset).
   - [ ] Expand Mono coverage toward CoreCLR parity (selection, MousePick, camera, console/scripts, hooks) and log known gaps vs. IL2CPP/Test-VM.
+  
   - [x] Fix Mono notification broadcast compile issue (net35 has no Tasks): remove discards on void `BroadcastNotificationAsync` or reintroduce a Task-compatible wrapper.
   - [x] Run Mono smoke + inspector CLI against a real Mono host and record results (Test‑VM base URL: `http://192.168.178.210:51478`). See `README-mcp.md` Mono Host Validation Checklist. (Ran `Run-McpMonoSmoke.ps1`, inspector tools/list + resources/read now green after redeploy.)
   - [x] Add Mono-specific contract/CI entry (`tools/Run-McpMonoSmoke.ps1`); run against a Mono host when available and keep IL2CPP behavior unchanged.

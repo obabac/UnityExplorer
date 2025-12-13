@@ -7,12 +7,12 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-14)
-- Rebuilt and redeployed the ML_Mono mod (copied into `Mods/`), restarted the Mono host, and confirmed `[MCP] error ...` log lines now appear in `unity://logs/tail` alongside the MCP error payload on both hosts; allowWrites reset to false after smoke.
-- Inspector CLI + Mono smoke + controlled error tails now pass on Test-VM IL2CPP (`http://192.168.178.210:51477`) and Mono (`http://192.168.178.210:51478`) in one run.
+- Added guarded `SpawnTestUi` / `DestroyTestUi` to the Mono MCP surface, fixed packaging so the built DLL is copied into `Release/.../Mods/`, redeployed to `SpaceShooter_Mono`, and verified the new tools with `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` (writes enabled → spawn/destroy UI → config reset, allowWrites back to false).
+- Inspector CLI + Mono smoke + controlled error tails re-ran and pass on Test-VM IL2CPP (`http://192.168.178.210:51477`) and Mono (`http://192.168.178.210:51478`); `[MCP] error ...` shows up in `unity://logs/tail` after a bad request on both hosts.
 - `initialize.capabilities.experimental.streamEvents` now returns an object on both CoreCLR and Mono; added `resources/list` plus `call_tool` text+json content so inspector CLI validation succeeds. Added JSON-RPC contract tests to lock the `list_resources` and inspector-friendly `call_tool` content shape.
 - Added `tools/Run-McpInspectorCli.ps1` (inspector --cli smoke: tools/list, resources/list, resources/read unity://status, tools/call GetStatus with optional auth header) and documented it in `README-mcp.md`.
 - Space Shooter build automation hardened: `BuildCommands` now falls back to a default scene when none are enabled and forces CPU lighting/denoiser-off in batchmode; synced via `Update-SpaceShooter-BuildScripts-Remote.ps1`, and `Build-SpaceShooter-Remote.ps1` produced fresh Mono + IL2CPP outputs under `C:\codex-workspace\space-shooter-build\` (logs in `...\logs`).
-- Mono Space Shooter host (`http://192.168.178.210:51478`) is up: inspector CLI smoke and `pwsh ./tools/Run-McpMonoSmoke.ps1 -LogCount 5 -StreamLines 2 -EnableWriteSmoke` pass (Ready=true, Scenes=1). Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale) remain gated by allowWrites+confirm.
+- Mono Space Shooter host (`http://192.168.178.210:51478`) is up: inspector CLI smoke and `pwsh ./tools/Run-McpMonoSmoke.ps1 -LogCount 5 -StreamLines 2 -EnableWriteSmoke` pass (Ready=true, Scenes=1). Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale/SpawnTestUi/DestroyTestUi) remain gated by allowWrites+confirm.
 - IL2CPP dropdown refresh crash is now guarded (warning + continue); `Mods\UeMcpHeadless.dll` is disabled on the Test-VM. IL2CPP host (`http://192.168.178.210:51477`) is back online: inspector CLI + Invoke-McpSmoke pass and contract tests report 47 passed, 1 skipped.
 
 ---
