@@ -11,7 +11,13 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-13): `initialize.capabilities.experimental.streamEvents` now returns an object on both CoreCLR and Mono; `resources/list` is live and `call_tool` responses include text+json content for inspector compatibility. IL2CPP Space Shooter host rebuilt/deployed; smoke + contract suite are green on `http://192.168.178.210:51477` and inspector CLI (`tools/list`, `resources/list`, `resources/read unity://status`, `tools/call GetStatus`) succeeds. Mono host rebuilt/deployed; `tools/Run-McpMonoSmoke.ps1` and inspector CLI (`tools/list`, `resources/read unity://status`) succeed on `http://192.168.178.210:51478`.
+Status (2025-12-13): inspector CLI compatibility is fixed (`initialize.capabilities.experimental.streamEvents` returns `{}`, `resources/list` is live, and `call_tool` returns inspector-friendly content). Mono Space Shooter host is up on `http://192.168.178.210:51478` and Mono smoke + inspector CLI pass; Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale) are implemented with an opt-in smoke flag. IL2CPP Space Shooter host on `http://192.168.178.210:51477` currently refuses connections (restart/redeploy needed before retesting).
+
+## Decisions (2025-12-13)
+- [ ] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround.
+- [x] Add guarded writes to Mono (start with `SetActive`, `SelectObject`, `GetTimeScale`/`SetTimeScale`) behind `allowWrites` + `requireConfirm` (implemented; validate on hosts).
+- [ ] Space Shooter project changes are allowed to improve repeatable IL2CPP + Mono rebuilds (source: `C:\codex-workspace\space-shooter`).
+- [ ] Treat inspector validation as a first-class gate: run `tools/Run-McpInspectorCli.ps1` early on both hosts for any wire/schema change.
 
 ---
 
@@ -48,6 +54,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 
 ### Pitfalls / reminders for agents
 - Keep `plans/mcp-interface-concept.md`, DTO code, and contract tests in sync; update all three together when shapes change.
+- Inspector validation is a gate: run `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <url>` early on both hosts for any wire/schema change.
 - Do not add game-specific assumptions; tests must pass on Space Shooter.
 - Guarded writes: always enforce `allowWrites` + `RequireConfirm` and return structured `ok=false` errors instead of throwing.
 - When adding new behaviour, include an example payload in the concept doc and a contract test.
@@ -137,7 +144,8 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 - [x] Run `UnityExplorer.Mcp.ContractTests` against the Space Shooter + MelonLoader host (document the exact steps and any required env vars / discovery overrides) and record whether all tests pass. (Release, BaseUrl `http://192.168.178.210:51477`: 45 passed, 1 skipped placeholder; host remained stable.)
 - [x] Ensure no contract tests assume game‑specific content; adjust tests and docs so Space Shooter is the fully supported host for MCP contract validation (other titles are examples only).
 - [x] Define 1–2 safe write scenarios on Space Shooter using `SetActive` / `SelectObject` with `AllowWrites=true` and `RequireConfirm=true`, and document them in `plans/space-shooter-test-plan.md` (also note `SetTimeScale` + `SpawnTestUi`/`MousePick` flow for UI validation).
-- [ ] Track an upstream fix for the UnityExplorer dropdown Il2Cpp cast crash (UI `Dropdown` array cast) and remove the Test‑VM‑only `UeMcpHeadless.dll` workaround once a proper fix is merged and validated.
+- [ ] Make Space Shooter Mono + IL2CPP rebuilds repeatable from `C:\codex-workspace\space-shooter` (allowed to modify the Unity project/scripts); document exact build steps and keep build outputs stable.
+- [ ] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash (UI `Dropdown` array cast) and remove the Test‑VM‑only `UeMcpHeadless.dll` workaround.
 
 ## 11. Mono / MelonLoader Support
 
@@ -154,7 +162,8 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Fix Space Shooter Mono Unity build automation (implement `BuildCommands.BuildWindows64Mono` or adjust the CLI target) so `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` can be produced for smoke runs (now available on the Test-VM at `http://192.168.178.210:51478`).
 
 - [ ] Phase C — Parity + tests
-  - [ ] Expand Mono coverage toward CoreCLR parity (selection, MousePick, camera, guarded writes where safe) and log known gaps vs. IL2CPP/Test-VM. (MousePick world/ui and GetVersion now implemented; console/scripts + hooks resources remain disabled on Mono pending validation; guarded writes still pending.)
+  - [x] Implement guarded writes on Mono (start with `SetActive`, `SelectObject`, `GetTimeScale`/`SetTimeScale`) behind `allowWrites` + `requireConfirm`; keep the same error envelope as CoreCLR (needs live validation on hosts).
+  - [ ] Expand Mono coverage toward CoreCLR parity (selection, MousePick, camera, console/scripts, hooks) and log known gaps vs. IL2CPP/Test-VM.
   - [x] Fix Mono notification broadcast compile issue (net35 has no Tasks): remove discards on void `BroadcastNotificationAsync` or reintroduce a Task-compatible wrapper.
   - [x] Run Mono smoke + inspector CLI against a real Mono host and record results (Test‑VM base URL: `http://192.168.178.210:51478`). See `README-mcp.md` Mono Host Validation Checklist. (Ran `Run-McpMonoSmoke.ps1`, inspector tools/list + resources/read now green after redeploy.)
   - [x] Add Mono-specific contract/CI entry (`tools/Run-McpMonoSmoke.ps1`); run against a Mono host when available and keep IL2CPP behavior unchanged.

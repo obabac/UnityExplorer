@@ -18,6 +18,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using Newtonsoft.Json;
@@ -26,6 +27,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityExplorer.ObjectExplorer;
 using UnityExplorer.UI.Panels;
+using UnityExplorer.UI.Widgets;
 using UnityEngine.EventSystems;
 #endif
 
@@ -1450,6 +1452,12 @@ namespace UnityExplorer.Mcp
         }
 
         private readonly MonoReadTools _tools = new MonoReadTools();
+        private readonly MonoWriteTools _write;
+
+        public MonoMcpHandlers()
+        {
+            _write = new MonoWriteTools(_tools);
+        }
 
         public object BuildInitializeResult()
         {
@@ -1466,13 +1474,15 @@ namespace UnityExplorer.Mcp
                 experimental = new { streamEvents = new { } }
                 
             };
-            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, and logs over streamable-http. Writes are disabled; stream_events provides log/scene/selection/tool_result notifications.";
+            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, logs, camera, and mouse pick over streamable-http. Guarded writes (SetActive, SelectObject, SetTimeScale) are available when allowWrites=true (requireConfirm recommended). stream_events provides log/scene/selection/tool_result notifications.";
             return new { protocolVersion, capabilities, serverInfo, instructions };
         }
 
         public object[] ListTools()
         {
             var list = new List<object>();
+            list.Add(new { name = "SetConfig", description = "Update MCP config settings and optionally restart the server.", inputSchema = Schema(new Dictionary<string, object> { { "allowWrites", Bool() }, { "requireConfirm", Bool() }, { "enableConsoleEval", Bool() }, { "componentAllowlist", new { type = "array", items = String() } }, { "reflectionAllowlistMembers", new { type = "array", items = String() } }, { "hookAllowlistSignatures", new { type = "array", items = String() } }, { "restart", Bool() } }) });
+            list.Add(new { name = "GetConfig", description = "Read current MCP config (sanitized).", inputSchema = Schema(new Dictionary<string, object>()) });
             list.Add(new { name = "GetStatus", description = "Status snapshot of Unity Explorer.", inputSchema = Schema(new Dictionary<string, object>()) });
             list.Add(new { name = "ListScenes", description = "List scenes (paged).", inputSchema = Schema(new Dictionary<string, object> { { "limit", Integer() }, { "offset", Integer() } }) });
             list.Add(new { name = "ListObjects", description = "List objects in a scene or all scenes.", inputSchema = Schema(new Dictionary<string, object> { { "sceneId", String() }, { "name", String() }, { "type", String() }, { "activeOnly", Bool() }, { "limit", Integer() }, { "offset", Integer() } }) });
@@ -1495,6 +1505,10 @@ namespace UnityExplorer.Mcp
             });
             list.Add(new { name = "TailLogs", description = "Tail recent logs.", inputSchema = Schema(new Dictionary<string, object> { { "count", Integer(200) } }) });
             list.Add(new { name = "GetSelection", description = "Current selection / inspected tabs.", inputSchema = Schema(new Dictionary<string, object>()) });
+            list.Add(new { name = "SetActive", description = "Set GameObject active state (guarded by allowWrites/confirm).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "active", Bool() }, { "confirm", Bool(false) } }, new[] { "objectId", "active" }) });
+            list.Add(new { name = "SelectObject", description = "Select a GameObject in the inspector (requires allowWrites).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() } }, new[] { "objectId" }) });
+            list.Add(new { name = "GetTimeScale", description = "Get current time-scale (read-only).", inputSchema = Schema(new Dictionary<string, object>()) });
+            list.Add(new { name = "SetTimeScale", description = "Set Unity time-scale (guarded).", inputSchema = Schema(new Dictionary<string, object> { { "value", Number() }, { "lock", Bool() }, { "confirm", Bool(false) } }, new[] { "value" }) });
             return list.ToArray();
         }
 
@@ -1522,6 +1536,17 @@ namespace UnityExplorer.Mcp
             var key = (name ?? string.Empty).ToLowerInvariant();
             switch (key)
             {
+                case "setconfig":
+                    return _write.SetConfig(
+                        GetBool(args, "allowWrites"),
+                        GetBool(args, "requireConfirm"),
+                        GetBool(args, "enableConsoleEval"),
+                        GetStringArray(args, "componentAllowlist"),
+                        GetStringArray(args, "reflectionAllowlistMembers"),
+                        GetStringArray(args, "hookAllowlistSignatures"),
+                        GetBool(args, "restart") ?? false);
+                case "getconfig":
+                    return _write.GetConfig();
                 case "getstatus":
                     return _tools.GetStatus();
                 case "listscenes":
@@ -1550,6 +1575,28 @@ namespace UnityExplorer.Mcp
                     return _tools.TailLogs(GetInt(args, "count") ?? 200);
                 case "getselection":
                     return _tools.GetSelection();
+                case "setactive":
+                    {
+                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
+                        var active = GetBool(args, "active");
+                        if (active == null)
+                            throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'active' is required.");
+                        return _write.SetActive(oid, active.Value, GetBool(args, "confirm") ?? false);
+                    }
+                case "selectobject":
+                    {
+                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
+                        return _write.SelectObject(oid);
+                    }
+                case "gettimescale":
+                    return _write.GetTimeScale();
+                case "settimescale":
+                    {
+                        var val = GetFloat(args, "value");
+                        if (val == null)
+                            throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'value' is required.");
+                        return _write.SetTimeScale(val.Value, GetBool(args, "lock"), GetBool(args, "confirm") ?? false);
+                    }
                 default:
                     throw new McpError(-32004, 404, "NotFound", "Tool not found: " + name);
             }
@@ -1636,6 +1683,8 @@ namespace UnityExplorer.Mcp
             => args != null && args[name] != null && bool.TryParse(args[name]!.ToString(), out var v) ? v : (bool?)null;
         private static string? GetString(JObject? args, string name)
             => args != null && args[name] != null ? args[name]!.ToString() : null;
+        private static string[]? GetStringArray(JObject? args, string name)
+            => args != null && args[name] is JArray arr ? arr.Select(v => v.ToString()).ToArray() : null;
         private static string RequireString(JObject? args, string name, string message)
         {
             var s = GetString(args, name);
@@ -1658,6 +1707,17 @@ namespace UnityExplorer.Mcp
 
     internal sealed class MonoReadTools
     {
+        private string? _fallbackSelectionActive;
+        private readonly List<string> _fallbackSelectionItems = new List<string>();
+
+        internal void RecordSelection(string objectId)
+        {
+            if (string.IsNullOrEmpty(objectId)) return;
+            _fallbackSelectionActive = objectId;
+            if (!_fallbackSelectionItems.Contains(objectId))
+                _fallbackSelectionItems.Insert(0, objectId);
+        }
+
         private sealed class TraversalEntry
         {
             public GameObject GameObject { get; }
@@ -1687,7 +1747,7 @@ namespace UnityExplorer.Mcp
             }
         }
 
-        private GameObject? FindByInstanceId(int instanceId)
+        internal GameObject? FindByInstanceId(int instanceId)
         {
             for (int i = 0; i < SceneManager.sceneCount; i++)
             {
@@ -1743,6 +1803,22 @@ namespace UnityExplorer.Mcp
                 }
             }
             catch { }
+
+            if (snap.ActiveId != null)
+                RecordSelection(snap.ActiveId);
+
+            if (snap.Items.Count == 0 && _fallbackSelectionItems.Count > 0)
+            {
+                foreach (var id in _fallbackSelectionItems)
+                {
+                    if (!snap.Items.Contains(id))
+                        snap.Items.Add(id);
+                }
+            }
+
+            if (string.IsNullOrEmpty(snap.ActiveId) && !string.IsNullOrEmpty(_fallbackSelectionActive))
+                snap.ActiveId = _fallbackSelectionActive;
+
             if (snap.ActiveId != null && !snap.Items.Contains(snap.ActiveId))
                 snap.Items.Insert(0, snap.ActiveId);
             return snap;
@@ -2116,6 +2192,225 @@ namespace UnityExplorer.Mcp
                 var snap = CaptureSelection();
                 return new SelectionDto { ActiveId = snap.ActiveId, Items = snap.Items };
             });
+        }
+    }
+
+    internal sealed class MonoWriteTools
+    {
+        private readonly MonoReadTools _read;
+
+        public MonoWriteTools(MonoReadTools read)
+        {
+            _read = read;
+        }
+
+        private static object ToolError(string kind, string message, string? hint = null)
+            => new { ok = false, error = new { kind, message, hint } };
+
+        private static object ToolErrorFromException(Exception ex)
+        {
+            if (ex is InvalidOperationException inv)
+            {
+                switch (inv.Message)
+                {
+                    case "NotFound": return ToolError("NotFound", "Not found");
+                    case "PermissionDenied": return ToolError("PermissionDenied", "Permission denied");
+                    case "ConfirmationRequired": return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+                    default: return ToolError("InvalidArgument", inv.Message);
+                }
+            }
+
+            if (ex is ArgumentException arg)
+                return ToolError("InvalidArgument", arg.Message);
+
+            return ToolError("Internal", ex.Message);
+        }
+
+        public object SetConfig(
+            bool? allowWrites = null,
+            bool? requireConfirm = null,
+            bool? enableConsoleEval = null,
+            string[]? componentAllowlist = null,
+            string[]? reflectionAllowlistMembers = null,
+            string[]? hookAllowlistSignatures = null,
+            bool restart = false)
+        {
+            try
+            {
+                var cfg = McpConfig.Load();
+                if (allowWrites.HasValue) cfg.AllowWrites = allowWrites.Value;
+                if (requireConfirm.HasValue) cfg.RequireConfirm = requireConfirm.Value;
+                if (enableConsoleEval.HasValue) cfg.EnableConsoleEval = enableConsoleEval.Value;
+                if (componentAllowlist != null) cfg.ComponentAllowlist = componentAllowlist;
+                if (reflectionAllowlistMembers != null) cfg.ReflectionAllowlistMembers = reflectionAllowlistMembers;
+                if (hookAllowlistSignatures != null) cfg.HookAllowlistSignatures = hookAllowlistSignatures;
+                McpConfig.Save(cfg);
+                if (restart)
+                {
+                    McpHost.Stop();
+                    McpHost.StartIfEnabled();
+                }
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolError("Internal", ex.Message);
+            }
+        }
+
+        public object GetConfig()
+        {
+            try
+            {
+                var cfg = McpConfig.Load();
+                return new
+                {
+                    ok = true,
+                    enabled = cfg.Enabled,
+                    bindAddress = cfg.BindAddress,
+                    port = cfg.Port,
+                    allowWrites = cfg.AllowWrites,
+                    requireConfirm = cfg.RequireConfirm,
+                    exportRoot = cfg.ExportRoot,
+                    logLevel = cfg.LogLevel,
+                    componentAllowlist = cfg.ComponentAllowlist,
+                    reflectionAllowlistMembers = cfg.ReflectionAllowlistMembers,
+                    enableConsoleEval = cfg.EnableConsoleEval,
+                    hookAllowlistSignatures = cfg.HookAllowlistSignatures
+                };
+            }
+            catch (Exception ex)
+            {
+                return ToolError("Internal", ex.Message);
+            }
+        }
+
+        public object SetActive(string objectId, bool active, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            if (string.IsNullOrEmpty(objectId) || objectId.Trim().Length == 0 || !objectId.StartsWith("obj:"))
+                return ToolError("InvalidArgument", "Invalid objectId; expected 'obj:<instanceId>'");
+            if (!int.TryParse(objectId.Substring(4), out var iid))
+                return ToolError("InvalidArgument", "Invalid instance id");
+
+            try
+            {
+                MainThread.Run(() =>
+                {
+                    var go = _read.FindByInstanceId(iid);
+                    if (go == null) throw new InvalidOperationException("NotFound");
+                    go.SetActive(active);
+                });
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        public object SelectObject(string objectId)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+
+            if (string.IsNullOrEmpty(objectId) || objectId.Trim().Length == 0 || !objectId.StartsWith("obj:"))
+                return ToolError("InvalidArgument", "Invalid objectId; expected 'obj:<instanceId>'");
+            if (!int.TryParse(objectId.Substring(4), out var iid))
+                return ToolError("InvalidArgument", "Invalid instance id");
+
+            try
+            {
+                MainThread.Run(() =>
+                {
+                    var go = _read.FindByInstanceId(iid);
+                    if (go == null) throw new InvalidOperationException("NotFound");
+                    try { InspectorManager.Inspect(go); } catch { }
+                    _read.RecordSelection(objectId);
+                });
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        public object GetTimeScale()
+        {
+            bool locked = false;
+            float value = Time.timeScale;
+            MainThread.Run(() =>
+            {
+                TryGetTimeScaleState(TimeScaleWidget.Instance, out locked, out value);
+            });
+            return new { ok = true, value, locked };
+        }
+
+        public object SetTimeScale(float value, bool? @lock = null, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            var clamped = Mathf.Clamp(value, 0f, 4f);
+            try
+            {
+                bool locked = false;
+                float applied = clamped;
+                MainThread.Run(() =>
+                {
+                    var widget = TimeScaleWidget.Instance;
+                    if (@lock == true && widget != null)
+                    {
+                        widget.LockTo(clamped);
+                    }
+                    else
+                    {
+                        Time.timeScale = clamped;
+                        if (@lock == false && widget != null)
+                        {
+                            UnlockTimeScale(widget);
+                        }
+                    }
+
+                    TryGetTimeScaleState(widget, out locked, out applied);
+                });
+                return new { ok = true, value = applied, locked };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        private static void UnlockTimeScale(TimeScaleWidget widget)
+        {
+            try
+            {
+                var lockedField = typeof(TimeScaleWidget).GetField("locked", BindingFlags.NonPublic | BindingFlags.Instance);
+                lockedField?.SetValue(widget, false);
+                var updateUi = typeof(TimeScaleWidget).GetMethod("UpdateUi", BindingFlags.NonPublic | BindingFlags.Instance);
+                updateUi?.Invoke(widget, null);
+            }
+            catch { }
+        }
+
+        private static void TryGetTimeScaleState(TimeScaleWidget? widget, out bool locked, out float value)
+        {
+            locked = false;
+            value = Time.timeScale;
+            if (widget == null) return;
+            try
+            {
+                var lockedField = typeof(TimeScaleWidget).GetField("locked", BindingFlags.NonPublic | BindingFlags.Instance);
+                var lockedVal = lockedField?.GetValue(widget);
+                if (lockedVal is bool b) locked = b;
+            }
+            catch { }
         }
     }
 #else

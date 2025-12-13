@@ -4,7 +4,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 
 ## Status
 
-- Targets: CoreCLR builds (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) now hosts a lightweight read-only MCP (initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion) with discovery and `stream_events` (log/selection/scene/tool_result notifications that include `source` + optional `category`); writes remain disabled, so prefer CoreCLR for guarded writes. Console/scripts + hooks resources stay disabled on Mono until validated.
+- Targets: CoreCLR builds (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) hosts a lightweight MCP (initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion) with discovery and `stream_events` (log/selection/scene/tool_result notifications with `source` + optional `category`); Mono also exposes guarded writes (SetConfig/SetActive/SelectObject/GetTimeScale/SetTimeScale) when `allowWrites=true` (defaults stay read-only; `requireConfirm` recommended). Console/scripts + hooks resources stay disabled on Mono until validated.
 - Transport: lightweight streamable HTTP over a local TCP listener.
 - Default mode: Read‑only (guarded writes must be explicitly enabled).
 
@@ -17,7 +17,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 
 Test‑VM Space Shooter E2E plan: `plans/space-shooter-test-plan.md` (canonical paths/ports/builds on the VM).
 
-Mono/net35 builds: MCP host is available for read-only initialize/list_tools/read_resource/call_tool (status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion) with `stream_events` (log/selection/scene/tool_result; payloads include `source` + optional `category`) and discovery (`unity-explorer-mcp.json`). Console scripts and hooks resources remain disabled on Mono. Writes stay disabled; quick smoke/CI entry: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result check). Test-VM Mono host base URL: `http://192.168.178.210:51478`.
+Mono/net35 builds: MCP host exposes initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion plus guarded writes (SetConfig/SetActive/SelectObject/GetTimeScale/SetTimeScale) when `allowWrites=true` (`requireConfirm` recommended). `stream_events` (log/selection/scene/tool_result; payloads include `source` + optional `category`) and discovery (`unity-explorer-mcp.json`) are available. Console scripts and hooks resources remain disabled on Mono. Smoke/CI: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3 [-EnableWriteSmoke]` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → optional time-scale write → stream_events tool_result check). Test-VM Mono host base URL: `http://192.168.178.210:51478`.
 
 ## Inspector CLI smoke
 
@@ -66,10 +66,10 @@ Use this when you have a Mono (non‑IL2CPP) Unity game with MelonLoader.
 5. Run the Mono smoke script from this repo:
 
    ```powershell
-   pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3
+   pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3 [-EnableWriteSmoke]
    ```
 
-   Expect PASS. If you see “Connection refused”, MCP is not enabled or the port differs.
+   Expect PASS. Add `-EnableWriteSmoke` to toggle `allowWrites` temporarily and exercise `SetTimeScale` (config resets afterward). If you see “Connection refused”, MCP is not enabled or the port differs.
 
 6. (Optional) Inspector check:
 
@@ -345,5 +345,5 @@ This matches the `stream_events` behavior and will print JSON‑RPC `notificatio
 ## Notes
 
 - Error envelopes follow JSON-RPC with `error.data.kind` (see `plans/mcp-interface-concept.md` for the exact shapes). Tool failures return `{ ok:false, error:{ kind, message, hint? } }`.
-- Mono/net35 hosts the lightweight read-only MCP (initialize/list_tools/read_resource/call_tool incl. MousePick + `stream_events`); Unhollower builds still do not host the MCP server, and writes remain disabled there.
+- Mono/net35 hosts the lightweight MCP with the same read surface plus guarded writes (SetConfig/SetActive/SelectObject/GetTimeScale/SetTimeScale) gated by `allowWrites` + `requireConfirm` (defaults keep writes off). Unhollower builds still do not host the MCP server.
 - All Unity API calls are marshalled to the main thread.

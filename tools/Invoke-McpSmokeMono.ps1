@@ -3,7 +3,8 @@ param(
     [string]$DiscoveryPath = $env:UE_MCP_DISCOVERY,
     [int]$LogCount = 10,
     [int]$StreamLines = 3,
-    [int]$TimeoutSeconds = 10
+    [int]$TimeoutSeconds = 10,
+    [switch]$EnableWriteSmoke
 )
 
 $ErrorActionPreference = "Stop"
@@ -121,6 +122,28 @@ try {
     $readScenes = Invoke-McpRpc -Id "read-scenes" -Method "read_resource" -Params @{ uri = "unity://scenes" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
     $readLogs = Invoke-McpRpc -Id "read-logs" -Method "read_resource" -Params @{ uri = "unity://logs/tail?count=$LogCount" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
 
+    $writeResult = $null
+    if ($EnableWriteSmoke) {
+        Write-Host "[mono-smoke] guarded write smoke (SetTimeScale)"
+        $resetParams = @{ name = "SetConfig"; arguments = @{ allowWrites = $false; requireConfirm = $true } }
+        try {
+            Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+            $setTime = Invoke-McpRpc -Id "set-timescale" -Method "call_tool" -Params @{ name = "SetTimeScale"; arguments = @{ value = 1.0; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $setTimePart = ($setTime.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })[0]
+            $setTimeJson = if ($setTimePart.json) { $setTimePart.json } else { ($setTimePart.text | ConvertFrom-Json) }
+            if (-not $setTimeJson.ok) { throw "SetTimeScale returned ok=false" }
+
+            $getTime = Invoke-McpRpc -Id "get-timescale" -Method "call_tool" -Params @{ name = "GetTimeScale"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $getTimePart = ($getTime.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })[0]
+            $getTimeJson = if ($getTimePart.json) { $getTimePart.json } else { ($getTimePart.text | ConvertFrom-Json) }
+            if (-not $getTimeJson.ok) { throw "GetTimeScale returned ok=false" }
+            $writeResult = $getTimeJson
+        }
+        finally {
+            try { Invoke-McpRpc -Id "set-config-reset" -Method "call_tool" -Params $resetParams -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null } catch { Write-Warning "[mono-smoke] failed to reset config: $_" }
+        }
+    }
+
     Write-Host "[mono-smoke] RPCs completed"
 
     $streamHandle = $null
@@ -174,6 +197,9 @@ try {
     Write-Host "Scenes: $($readScenesDoc.Total) total"
     Write-Host "Logs (tool): $($logs.Items.Count) items (requested $LogCount)"
     Write-Host "Logs (read): $($readLogsDoc.Items.Count) items"
+    if ($EnableWriteSmoke) {
+        Write-Host "Write smoke: ok=$($writeResult.ok) value=$($writeResult.value) locked=$($writeResult.locked)"
+    }
     Write-Host "Stream events captured: $($events.Count) (tool_result observed=$($toolResultEvent -ne $null))"
     Write-Host "[mono-smoke] Done"
 }
