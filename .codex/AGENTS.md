@@ -39,6 +39,7 @@ Speak a simple language so you are easier to understand
 # Quality gates
 - Build passes locally.
 - Basic e2e path demonstrable (start → handshake → tool call → response).
+- Test-VM validation is a gate: for any behavior change, validate on the Test-VM in the same iteration (not after). See `plans/unity-explorer-mcp-todo.md` → Pitfalls.
 - Include minimal docs: feature overview + how to run/dev test.
 
 Docs map (single source of truth, no duplication)

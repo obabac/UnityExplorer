@@ -85,6 +85,7 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
   - Agents working on MCP behavior should treat starting/stopping the game as
     their own responsibility and perform these steps whenever deploying a new
     UnityExplorer build or when tests depend on a fresh process.
+  - For any behavior change, validate on the Test-VM in the same iteration (see `plans/unity-explorer-mcp-todo.md` → Pitfalls).
 - **Inspect logs**:
   - Once the game is starting, use:
     ```powershell

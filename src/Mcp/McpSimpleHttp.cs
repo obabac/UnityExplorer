@@ -563,7 +563,15 @@ namespace UnityExplorer.Mcp
                 try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
             }
             var logMessage = $"[MCP] error {code}: {message}";
-            try { LogBuffer.Add("error", logMessage, "mcp", kind); } catch { }
+            try
+            {
+                await MainThread.Run(() =>
+                {
+                    try { ExplorerCore.LogWarning(logMessage); } catch { }
+                    try { LogBuffer.Add("error", logMessage, "mcp", kind); } catch { }
+                }).ConfigureAwait(false);
+            }
+            catch { }
             var payload = JsonSerializer.Serialize(new
             {
                 jsonrpc = "2.0",
@@ -576,7 +584,15 @@ namespace UnityExplorer.Mcp
         private async Task SendJsonRpcErrorAsync(int code, string message, string kind, string? hint, string? detail, CancellationToken ct)
         {
             var logMessage = $"[MCP] error {code}: {message}";
-            try { LogBuffer.Add("error", logMessage, "mcp", kind); } catch { }
+            try
+            {
+                await MainThread.Run(() =>
+                {
+                    try { ExplorerCore.LogWarning(logMessage); } catch { }
+                    try { LogBuffer.Add("error", logMessage, "mcp", kind); } catch { }
+                }).ConfigureAwait(false);
+            }
+            catch { }
             var payload = JsonSerializer.Serialize(new
             {
                 jsonrpc = "2.0",
@@ -1410,18 +1426,20 @@ namespace UnityExplorer.Mcp
 
         private void WriteJsonError(Stream stream, JToken? idToken, int code, string message, string kind, string? hint, string? detail, int statusCode)
         {
+            var logMessage = $"[MCP] error {code}: {message}";
             try
             {
-                void LogOnMain() => ExplorerCore.LogWarning($"[MCP] {code}: {message}");
-                // ExplorerCore logging can require Unity thread state; dispatch when captured.
+                void LogOnMain()
+                {
+                    try { ExplorerCore.LogWarning(logMessage); } catch { }
+                    try { LogBuffer.Add("error", logMessage, "mcp", kind); } catch { }
+                }
                 if (MainThread.IsCaptured)
-                    MainThread.RunAsync(LogOnMain);
+                    MainThread.Run(LogOnMain);
                 else
                     LogOnMain();
             }
             catch { }
-
-            try { LogBuffer.Add("error", message, "mcp", kind); } catch { }
 
             var payload = BuildErrorPayload(idToken, code, message, kind, hint, detail);
             BroadcastPayload(payload);

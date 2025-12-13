@@ -7,7 +7,7 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-13)
-- MCP error logging now marshals warning lines onto the Unity main thread before broadcasting error payloads so off-thread HTTP errors do not trip Unity-only APIs; local contract tests still build/run (47 passed, 1 skipped when discovery is missing).
+- MCP error logging now marshals warning lines onto the Unity main thread before broadcasting error payloads and writes `[MCP] error ...` entries into the MCP log buffer on both CoreCLR and Mono so inspector/log tail checks stay consistent; local contract tests still build/run (47 passed, 1 skipped when discovery is missing).
 - `initialize.capabilities.experimental.streamEvents` now returns an object on both CoreCLR and Mono; added `resources/list` plus `call_tool` text+json content so inspector CLI validation succeeds. Added JSON-RPC contract tests to lock the `list_resources` and inspector-friendly `call_tool` content shape.
 - Added `tools/Run-McpInspectorCli.ps1` (inspector --cli smoke: tools/list, resources/list, resources/read unity://status, tools/call GetStatus with optional auth header) and documented it in `README-mcp.md`.
 - Space Shooter build automation hardened: `BuildCommands` now falls back to a default scene when none are enabled and forces CPU lighting/denoiser-off in batchmode; synced via `Update-SpaceShooter-BuildScripts-Remote.ps1`, and `Build-SpaceShooter-Remote.ps1` produced fresh Mono + IL2CPP outputs under `C:\codex-workspace\space-shooter-build\` (logs in `...\logs`).
