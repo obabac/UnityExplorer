@@ -61,10 +61,14 @@ try {
     Write-Host "Tools: $toolNames"
 
     $statusTool = Invoke-McpRpc -Id "get-status" -Method "call_tool" -Params @{ name = "GetStatus"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
-    $status = ($statusTool.result.content | Where-Object { $_.type -eq "json" })[0].json
+    $statusContent = ($statusTool.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })
+    $statusPart = $statusContent[0]
+    $status = if ($statusPart.json) { $statusPart.json } else { ($statusPart.text | ConvertFrom-Json) }
 
     $logsTool = Invoke-McpRpc -Id "tail-logs" -Method "call_tool" -Params @{ name = "TailLogs"; arguments = @{ count = $LogCount } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
-    $logs = ($logsTool.result.content | Where-Object { $_.type -eq "json" })[0].json
+    $logsContent = ($logsTool.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })
+    $logsPart = $logsContent[0]
+    $logs = if ($logsPart.json) { $logsPart.json } else { ($logsPart.text | ConvertFrom-Json) }
 
     $readStatus = Invoke-McpRpc -Id "read-status" -Method "read_resource" -Params @{ uri = "unity://status" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
     $readScenes = Invoke-McpRpc -Id "read-scenes" -Method "read_resource" -Params @{ uri = "unity://scenes" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds

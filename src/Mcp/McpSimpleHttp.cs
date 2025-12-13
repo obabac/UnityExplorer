@@ -174,6 +174,8 @@ namespace UnityExplorer.Mcp
                                 methodName = "call_tool";
                             else if (string.Equals(methodName, "resources/read", StringComparison.OrdinalIgnoreCase))
                                 methodName = "read_resource";
+                            else if (string.Equals(methodName, "resources/list", StringComparison.OrdinalIgnoreCase))
+                                methodName = "list_resources";
 
                             if (!string.Equals(methodName, "stream_events", StringComparison.OrdinalIgnoreCase))
                             {
@@ -203,7 +205,7 @@ namespace UnityExplorer.Mcp
                                     {
                                         tools = new { listChanged = true },
                                         resources = new { listChanged = true },
-                                        experimental = new { streamEvents = true }
+                                        experimental = new { streamEvents = new { } }
                                     };
 
                                     var instructions =
@@ -266,6 +268,25 @@ namespace UnityExplorer.Mcp
                                 return;
                             }
 
+                            if (string.Equals(methodName, "list_resources", StringComparison.OrdinalIgnoreCase))
+                            {
+                                try
+                                {
+                                    var resources = McpReflection.ListResources();
+                                    var resultObj = new { resources };
+                                    await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
+                                    var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
+                                    await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
+                                }
+                                catch (Exception ex)
+                                {
+                                    await SendJsonRpcErrorAsync(root, ErrorInternal, "Internal error", "Internal", null, ex.Message, ct).ConfigureAwait(false);
+                                    var errorPayload = BuildJsonRpcErrorPayload(root, ErrorInternal, "Internal error", "Internal", null, ex.Message);
+                                    await WriteJsonResponseAsync(stream, 500, errorPayload, ct).ConfigureAwait(false);
+                                }
+                                return;
+                            }
+
                             if (string.Equals(methodName, "call_tool", StringComparison.OrdinalIgnoreCase))
                             {
                                 if (!root.TryGetProperty("params", out var pr))
@@ -289,7 +310,19 @@ namespace UnityExplorer.Mcp
                                 try
                                 {
                                     var result = await McpReflection.InvokeToolAsync(name, args).ConfigureAwait(false);
-                                    var wrapped = new { content = new[] { new { type = "json", json = result } } };
+                                    var wrapped = new
+                                    {
+                                        content = new[]
+                                        {
+                                            new
+                                            {
+                                                type = "text",
+                                                text = JsonSerializer.Serialize(result),
+                                                mimeType = "application/json",
+                                                json = result
+                                            }
+                                        }
+                                    };
                                     await SendJsonRpcResultAsync(root, wrapped, ct).ConfigureAwait(false);
                                     try { await BroadcastNotificationAsync("tool_result", new { name, ok = true, result }, ct).ConfigureAwait(false); } catch { }
                                     var responsePayload = BuildJsonRpcResultPayload(root, wrapped);
@@ -664,6 +697,27 @@ namespace UnityExplorer.Mcp
             return list.ToArray();
         }
 
+        public static object[] ListResources()
+        {
+            static object Resource(string uri, string name, string description)
+                => new { uri, name, description, mimeType = "application/json" };
+
+            return new object[]
+            {
+                Resource("unity://status", "Status", "Status snapshot resource."),
+                Resource("unity://scenes", "Scenes", "List scenes resource."),
+                Resource("unity://scene/{sceneId}/objects", "Scene objects", "List objects under a scene (paged)."),
+                Resource("unity://object/{id}", "Object detail", "Object details by id."),
+                Resource("unity://object/{id}/components", "Object components", "Components for object id (paged)."),
+                Resource("unity://search", "Search objects", "Search objects across scenes."),
+                Resource("unity://camera/active", "Active camera", "Active camera info."),
+                Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
+                Resource("unity://logs/tail", "Log tail", "Tail recent MCP log buffer."),
+                Resource("unity://console/scripts", "Console scripts", "List C# console scripts (from the Scripts folder)."),
+                Resource("unity://hooks", "Hooks", "List active method hooks."),
+            };
+        }
+
         private static JsonSchema BuildInputSchema(System.Reflection.MethodInfo mi)
         {
             var properties = new System.Collections.Generic.Dictionary<string, JsonSchemaProperty>(StringComparer.OrdinalIgnoreCase);
@@ -1028,6 +1082,7 @@ namespace UnityExplorer.Mcp
             if (string.Equals(methodName, "tools/list", StringComparison.OrdinalIgnoreCase)) methodName = "list_tools";
             else if (string.Equals(methodName, "tools/call", StringComparison.OrdinalIgnoreCase)) methodName = "call_tool";
             else if (string.Equals(methodName, "resources/read", StringComparison.OrdinalIgnoreCase)) methodName = "read_resource";
+            else if (string.Equals(methodName, "resources/list", StringComparison.OrdinalIgnoreCase)) methodName = "list_resources";
 
             if (string.Equals(methodName, "notifications/initialized", StringComparison.OrdinalIgnoreCase))
             {
@@ -1054,6 +1109,12 @@ namespace UnityExplorer.Mcp
                 return;
             }
 
+            if (string.Equals(methodName, "list_resources", StringComparison.OrdinalIgnoreCase))
+            {
+                WriteJsonResult(stream, idToken, new { resources = _handlers.ListResources() });
+                return;
+            }
+
             if (string.Equals(methodName, "call_tool", StringComparison.OrdinalIgnoreCase))
             {
                 if (!CheckSlot(stream, idToken)) return;
@@ -1065,7 +1126,7 @@ namespace UnityExplorer.Mcp
                     if (string.IsNullOrEmpty(name))
                         throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Invalid params: 'name' is required.");
                     var result = _handlers.CallTool(name, args);
-                    WriteJsonResult(stream, idToken, new { content = new[] { new { type = "json", json = result } } });
+                    WriteJsonResult(stream, idToken, new { content = new[] { new { type = "text", text = JsonConvert.SerializeObject(result), mimeType = "application/json", json = result } } });
                     try { BroadcastNotificationAsync("tool_result", new { name, ok = true, result }); } catch { }
                 }
                 catch (MonoMcpHandlers.McpError err)
@@ -1402,7 +1463,8 @@ namespace UnityExplorer.Mcp
             {
                 tools = new { listChanged = true },
                 resources = new { listChanged = true },
-                experimental = new { streamEvents = true }
+                experimental = new { streamEvents = new { } }
+                
             };
             var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, and logs over streamable-http. Writes are disabled; stream_events provides log/scene/selection/tool_result notifications.";
             return new { protocolVersion, capabilities, serverInfo, instructions };
@@ -1434,6 +1496,25 @@ namespace UnityExplorer.Mcp
             list.Add(new { name = "TailLogs", description = "Tail recent logs.", inputSchema = Schema(new Dictionary<string, object> { { "count", Integer(200) } }) });
             list.Add(new { name = "GetSelection", description = "Current selection / inspected tabs.", inputSchema = Schema(new Dictionary<string, object>()) });
             return list.ToArray();
+        }
+
+        public object[] ListResources()
+        {
+            static object Resource(string uri, string name, string description)
+                => new { uri, name, description, mimeType = "application/json" };
+
+            return new object[]
+            {
+                Resource("unity://status", "Status", "Status snapshot resource."),
+                Resource("unity://scenes", "Scenes", "List scenes resource."),
+                Resource("unity://scene/{sceneId}/objects", "Scene objects", "List objects under a scene (paged)."),
+                Resource("unity://object/{id}", "Object detail", "Object details by id."),
+                Resource("unity://object/{id}/components", "Object components", "Components for object id (paged)."),
+                Resource("unity://search", "Search objects", "Search objects across scenes."),
+                Resource("unity://camera/active", "Active camera", "Active camera info."),
+                Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
+                Resource("unity://logs/tail", "Log tail", "Tail recent MCP log buffer."),
+            };
         }
 
         public object CallTool(string name, JObject? args)
@@ -1537,7 +1618,7 @@ namespace UnityExplorer.Mcp
             {
                 type = "object",
                 properties = props,
-                required = required != null && required.Length > 0 ? required : null,
+                required = required != null && required.Length > 0 ? required : new string[0],
                 additionalProperties = false
             };
         }

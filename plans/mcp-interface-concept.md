@@ -102,6 +102,7 @@ public static class UnityReadTools
 
 `list_tools` returns an `inputSchema` per tool with JSON Schema primitives for each argument (string, integer, number, boolean, array) and marks non-optional parameters as `required`; `MousePick.mode` advertises an enum of `world|ui`. Cancellation tokens are omitted so inspector call forms stay clean.
 
+- `call_tool` responses use `content: [{ type: "text", mimeType: "application/json", text: "<json>", json: <object> }]` so the inspector CLI accepts them while programmatic clients can still consume the raw JSON payload.
 - `GetVersion` returns `VersionInfoDto { ExplorerVersion, McpVersion, UnityVersion, Runtime }` on both CoreCLR and Mono hosts.
 
 Phase‑later write tools exist but are disabled by default; they require allowlist + confirmations.
@@ -126,6 +127,10 @@ public static class UnityResources
         => UnityReadTools.GetObject(id, ct);
 }
 ```
+
+## Resource Listing
+
+- `resources/list` returns `resources: [{ uri, name, description, mimeType }]` covering all `unity://` surfaces (status, scenes, scene/{sceneId}/objects, object/{id}, object/{id}/components, search, camera/active, selection, logs/tail, console/scripts, hooks).
 
 ---
 
@@ -184,6 +189,25 @@ Tool‑level failures that still return a JSON‑RPC `result` use a consistent p
 - Bind: `127.0.0.1:0` (ephemeral). Publish discovery file `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modes }`.
 - Client: `new HttpClientTransport(new() { Endpoint = baseUrl, Mode = AutoDetect })`.
 - Mono/net35 builds: MCP host uses a lightweight TcpListener + Newtonsoft.Json pipeline (no ASP.NET); discovery file is produced; `stream_events` mirrors CoreCLR notifications (log/selection/scene/tool_result) with the same error envelope; writes remain disabled. Use `tools/Run-McpMonoSmoke.ps1` for smoke/CI (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result).
+
+## Initialize Handshake
+
+- `initialize` returns `protocolVersion`, `capabilities`, `serverInfo`, and `instructions`.
+- MCP requires every `capabilities.experimental` entry to be an **object**. We advertise `streamEvents` as `{}` (never `true`/`false`) to satisfy the spec.
+- Example:
+```json
+{
+  "protocolVersion": "2024-11-05",
+  "capabilities": {
+    "tools": { "listChanged": true },
+    "resources": { "listChanged": true },
+    "experimental": { "streamEvents": {} }
+  },
+  "serverInfo": { "name": "UnityExplorer.Mcp", "version": "<semver>" },
+  "instructions": "Unity Explorer MCP exposes Unity scenes, objects, and logs as tools and resources. Use list_tools + call_tool for inspection, and read_resource with unity:// URIs for structured state."
+}
+```
+- Mono host mirrors the same shape; only `serverInfo.name` differs (`UnityExplorer.Mcp.Mono`) and its `instructions` string calls out that writes stay disabled.
 
 ---
 

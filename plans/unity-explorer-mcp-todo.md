@@ -1,6 +1,6 @@
 # Unity Explorer MCP – High‑Level TODOs (Streamable HTTP Era)
 
-Date: 2025‑12‑12  
+Date: 2025‑12‑13  
 Scope: Remaining work to get close to UnityExplorer feature parity over MCP, with a stable streamable‑http surface.
 
 ### Definition of Done (100%)
@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-12): IL2CPP Space Shooter host rebuilt/deployed with headless-safe `SelectObject` + JSON-RPC error logging through `LogBuffer`; smoke and full contract suite now pass on `http://192.168.178.210:51477` (`Run-McpContractTests.ps1 -Configuration Release`). Mono host not rerun this cycle (last known green at `http://192.168.178.210:51478` via `tools/Run-McpMonoSmoke.ps1`). Inspector schema/UX validation remains pending; console scripts/hooks still disabled on Mono until validated.
+Status (2025-12-13): `initialize.capabilities.experimental.streamEvents` now returns an object on both CoreCLR and Mono; `resources/list` is live and `call_tool` responses include text+json content for inspector compatibility. IL2CPP Space Shooter host rebuilt/deployed; smoke + contract suite are green on `http://192.168.178.210:51477` and inspector CLI (`tools/list`, `resources/list`, `resources/read unity://status`, `tools/call GetStatus`) succeeds. Mono host rebuilt/deployed; `tools/Run-McpMonoSmoke.ps1` and inspector CLI (`tools/list`, `resources/read unity://status`) succeed on `http://192.168.178.210:51478`.
 
 ---
 
@@ -30,7 +30,8 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Ensure current concurrency behaviour matches `RateLimit_Does_Not_Crash_Server_When_Many_Concurrent_Requests` and, if a 429 limit is enabled, returns a structured JSON error payload.
   - [x] Add structured error JSON tests for common cases (`NotReady`, `NotFound`, `PermissionDenied`) that align server responses with inspector expectations.
 - Inspector UX & dev‑experience:
-  - [ ] Verify that all tools and resources render without schema or validation errors in `@modelcontextprotocol/inspector` during typical flows (initialize → list_tools/read_resource → stream_events); `list_tools` now ships per-argument schemas and needs a live inspector run to confirm.
+  - [x] Fix `initialize.capabilities.experimental` to use object values (per MCP spec). `streamEvents` now returns `{}` so `@modelcontextprotocol/inspector --cli` can connect.
+  - [x] Verify that all tools and resources render without schema or validation errors in `@modelcontextprotocol/inspector` during typical flows (initialize → list_tools/read_resource → stream_events); `list_tools` now ships per-argument schemas and needs a live inspector run to confirm (IL2CPP + Mono inspector CLI now succeed for tools/list, resources/list/read, tools/call).
   - [x] Extend `UnityExplorer/README-mcp.md` with the final tool/resource list and representative example payloads used by inspector.
   - [x] Add a small smoke CLI/PowerShell script that runs `initialize`, `list_tools`, `GetStatus`, and `TailLogs` against a running Unity Explorer MCP instance, mirroring the `inspector` script defaults (see `tools/Invoke-McpSmoke.ps1`).
   - [x] Add a CI note/script to run `dotnet test UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests` (and optionally a scripted inspector run) as part of the UnityExplorer build/validation pipeline.
@@ -154,5 +155,5 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 - [ ] Phase C — Parity + tests
   - [ ] Expand Mono coverage toward CoreCLR parity (selection, MousePick, camera, guarded writes where safe) and log known gaps vs. IL2CPP/Test-VM. (MousePick world/ui and GetVersion now implemented; console/scripts + hooks resources remain disabled on Mono pending validation; guarded writes still pending.)
   - [x] Fix Mono notification broadcast compile issue (net35 has no Tasks): remove discards on void `BroadcastNotificationAsync` or reintroduce a Task-compatible wrapper.
-  - [ ] Run Mono smoke/inspector against a real Mono host and record results. See `README-mcp.md` Mono Host Validation Checklist. (Blocked until a Mono game is available.)
+  - [x] Run Mono smoke + inspector CLI against a real Mono host and record results (Test‑VM base URL: `http://192.168.178.210:51478`). See `README-mcp.md` Mono Host Validation Checklist. (Ran `Run-McpMonoSmoke.ps1`, inspector tools/list + resources/read now green after redeploy.)
   - [x] Add Mono-specific contract/CI entry (`tools/Run-McpMonoSmoke.ps1`); run against a Mono host when available and keep IL2CPP behavior unchanged.

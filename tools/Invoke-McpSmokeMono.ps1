@@ -140,9 +140,12 @@ try {
 
     Write-Host "[mono-smoke] Stream events captured: $($events.Count)"
 
-    $status = ($statusTool.result.content | Where-Object { $_.type -eq "json" })[0].json
-    $logs = ($logsTool.result.content | Where-Object { $_.type -eq "json" })[0].json
-    $mousePick = ($mousePickTool.result.content | Where-Object { $_.type -eq "json" })[0].json
+    $statusPart = ($statusTool.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })[0]
+    $status = if ($statusPart.json) { $statusPart.json } else { ($statusPart.text | ConvertFrom-Json) }
+    $logsPart = ($logsTool.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })[0]
+    $logs = if ($logsPart.json) { $logsPart.json } else { ($logsPart.text | ConvertFrom-Json) }
+    $mousePickPart = ($mousePickTool.result.content | Where-Object { $_.json -ne $null -or $_.text -ne $null })[0]
+    $mousePick = if ($mousePickPart.json) { $mousePickPart.json } else { ($mousePickPart.text | ConvertFrom-Json) }
     if (-not $mousePick) { throw "MousePick returned no payload" }
     if (-not $mousePick.Mode) { throw "MousePick returned empty Mode" }
 

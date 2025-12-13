@@ -1,17 +1,30 @@
 # Unity Explorer MCP Integration Plan (Updated)
 
-- Updated: 2025-12-12  
+- Updated: 2025-12-13  
 - Owner: Unity Explorer MCP (p-unity-explorer-mcp)  
 - Goal: Expose Unity Explorer’s runtime capabilities through an in‑process MCP server with **streamable HTTP** transport, making game state and safe controls available as MCP resources, tools, and streams.
 
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
-### Latest iteration snapshot (2025-12-12)
-- IL2CPP Space Shooter host rebuilt/deployed with headless-safe `SelectObject` (records selection without touching the inspector UI) and JSON-RPC error logging routed through `LogBuffer`; smoke (`pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477`) and full contract suite (`pwsh ./tools/Run-McpContractTests.ps1 -Configuration Release`) now pass against `http://192.168.178.210:51477`.
-- Invalid JSON-RPC requests now log `[MCP] error ...` without calling `ExplorerCore.LogWarning` off the main thread, fixing the crash triggered by the log-tail contract test; `SelectObject` contract test updated to expect `ok=true` instead of tolerating `NotReady`.
-- Mono host not rerun this iteration; previous Mono smoke status unchanged (last known green at `http://192.168.178.210:51478`). Inspector UI validation still pending; `list_tools` continues to emit per-argument schemas.
+### Latest iteration snapshot (2025-12-13)
+- `initialize.capabilities.experimental.streamEvents` now returns an object on both CoreCLR and Mono; added `resources/list` plus `call_tool` text+json content so inspector CLI validation succeeds.
+- IL2CPP Space Shooter host rebuilt/deployed; smoke (`pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477`) and contract suite (`UE_MCP_DISCOVERY=/tmp/ue-mcp-il2cpp-discovery.json pwsh ./tools/Run-McpContractTests.ps1 -Configuration Release`) pass, and inspector CLI (`./inspector --method tools/list|resources/list|resources/read --uri unity://status|tools/call --tool-name GetStatus`) now succeeds.
+- Mono Space Shooter host rebuilt/deployed with the same changes; `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3` passes and inspector CLI (`npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51478 --method tools/list|resources/read --uri unity://status`) is green after redeploying the Mono mod.
 
 ---
+
+### Planned next 10 iterations (planner)
+
+1) Add an inspector CLI smoke script (non-interactive) that runs `tools/list`, `resources/list`, `resources/read unity://status`, and `tools/call GetStatus` against a base URL (IL2CPP + Mono).
+2) Mono parity: enable/validate `unity://console/scripts` and `unity://hooks` on Mono (or document why they stay disabled), and extend `tools/Run-McpMonoSmoke.ps1` coverage.
+3) Mono parity: align selection + camera + MousePick behaviour with IL2CPP (DTOs + docs + smoke).
+4) Decision + implementation: keep Mono read-only forever, or add the first guarded writes for Mono (minimal + safe + confirm).
+5) Streams/testing: add a contract test for at least one non-tool stream event (`log` or `selection`) and keep rate-limit tests stable.
+6) Remove Test‑VM workaround: fix the UnityExplorer dropdown Il2Cpp cast crash so `Mods\\UeMcpHeadless.dll` is no longer needed.
+7) Inspector UX pass: validate `inputSchema` rendering (enums/defaults/nullability) and fix any schema mismatches found.
+8) Test env automation/docs: keep SpaceShooter IL2CPP + Mono builds reproducible from `C:\\codex-workspace\\space-shooter` and keep ports/paths documented in `plans/space-shooter-test-plan.md`.
+9) Final DoD sweep: run IL2CPP smoke + contract tests + Mono smoke + inspector CLI; mark all TODOs and clean stale docs.
+10) Add regression coverage (test or inspector smoke) for `resources/list` and `call_tool` text+json content so inspector remains compatible.
 
 ## 1) Context & Assumptions
 
