@@ -541,6 +541,7 @@ namespace UnityExplorer.Mcp
             if (!int.TryParse(objectId.Substring(4), out var iid))
                 return ToolError("InvalidArgument", "Invalid instance id");
 
+            SelectionDto? selection = null;
             try
             {
                 await MainThread.RunAsync(async () =>
@@ -552,6 +553,15 @@ namespace UnityExplorer.Mcp
 
                     await Task.CompletedTask;
                 });
+
+                selection = await UnityReadTools.GetSelection(ct).ConfigureAwait(false);
+                try
+                {
+                    var http = McpSimpleHttp.Current;
+                    if (http != null && selection != null)
+                        await http.BroadcastNotificationAsync("selection", selection, ct).ConfigureAwait(false);
+                }
+                catch { }
 
                 return new { ok = true };
             }

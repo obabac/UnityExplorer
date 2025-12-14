@@ -139,7 +139,7 @@ public static class UnityResources
 
 - Streams
   - `logs/stream`: `{ level, message, t }`
-  - `selection/stream`: `{ added: [id], removed: [id], current: [id] }`
+  - `selection/stream`: `SelectionDto { ActiveId, Items[] }` (same snapshot as `unity://selection` / `GetSelection`), emitted on inspector tab changes and `SelectObject`.
   - `scene/stream`: `{ event: "loaded|unloaded", scene: { id, name } }`
 
 - Progress Notifications

@@ -1,33 +1,24 @@
-# Iteration 5/10 — Selection streams contract + UI pick ordering (Mono parity)
+# Iteration 6/10 — Stabilize IL2CPP contract tests
 
 Rule
-- Validation first: run the required checks BEFORE and AFTER behavior changes in this iteration.
+- Focus on the IL2CPP contract suite crash (UnityPlayer.dll 0x80000003 / "Graphics device is null"). Fix before adding new behavior.
+- Run baseline gates (inspector CLI both hosts, Mono smoke with writes, bad read_resource) before and after changes.
 
 Hosts
-- IL2CPP/CoreCLR: `http://192.168.178.210:51477`
-- Mono:          `http://192.168.178.210:51478`
+- IL2CPP/CoreCLR: http://192.168.178.210:51477
+- Mono:          http://192.168.178.210:51478
 
-0) Baseline gates (run now, no code changes yet)
-- `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477`
-- `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478`
-- `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3 -EnableWriteSmoke`
-- Trigger bad `read_resource` on both hosts and confirm `[MCP] error ...` appears in `unity://logs/tail?count=50` (Mono GET `/read?uri=` now works).
+Current state
+- Selection stream + MousePick UI contracts are in place; docs/tests updated. AssemblyInfo.cs now disables xUnit parallelization.
+- Mono inspector + Run-McpMonoSmoke pass; IL2CPP inspector CLI passes. Full IL2CPP contract suite still crashes the game after the first few tests; individual tests pass when run alone.
 
-1) Selection streams contract (core task)
-- Add coverage (prefer contract test) that a selection change emits a `stream_events` `selection` notification with `ActiveId`/`Items` matching `unity://selection` on Mono and CoreCLR.
-- Keep selection snapshot used for `unity://selection` and notifications in sync; document any deltas in `plans/mcp-interface-concept.md`.
-
-2) MousePick UI ordering follow-up
-- Validate that `MousePick(mode="ui")` on Mono returns the ordered multi-hit list and top-most `Id` using `SpawnTestUi`; add harness/test if needed.
-
-3) Docs sync (single source of truth)
-- Update `plans/mcp-interface-concept.md` for any shape/payload changes; refresh `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` only for status/steps (avoid duplicating DTO shapes).
-
-4) Test-VM E2E (after code changes)
-- Build Mono (`dotnet build src/UnityExplorer.csproj -c ML_Mono`), deploy the DLL to `SpaceShooter_Mono/Mods`, restart the Mono game, and verify MCP binds on `:51478`.
-- Rerun ALL baseline gates from step 0.
+Tasks
+0) Run baseline gates on both hosts.
+1) Investigate the IL2CPP crash: check Latest.log, UnityExplorer logs under Mods/sinai-dev-UnityExplorer/Logs, and Player.log. Try to find a minimal repro (possibly stream_events/selection/SetConfig paths). Stop Mono if needed and focus on IL2CPP.
+2) Fix the crash, rebuild/deploy IL2CPP (`pwsh ./build-ml-coreclr.ps1`), restart the game, and rerun full `dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` with `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json`.
+3) Keep allowWrites=false when done; leave the game running if stable.
+4) Sync docs (`plans/...`) and this file, then commit.
 
 Housekeeping
-- Keep `Mods\\UeMcpHeadless.dll` disabled.
-- `allowWrites=false` at rest on both hosts; use SpawnTestUi blocks as safe targets.
-- Commits allowed; keep them small and scoped.
+- Keep `Mods\\UeMcpHeadless.dll` disabled on the Test-VM.
+- Use SpawnTestUi blocks for any writes; prefer PowerShell helpers in `tools/*.ps1`.

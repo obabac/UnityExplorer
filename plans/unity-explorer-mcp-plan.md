@@ -7,6 +7,7 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-14)
+- Selection streams + UI pick parity: `SelectObject` now broadcasts a selection notification using the same snapshot as `unity://selection`, and contract tests lock the stream payload against the resource on CoreCLR/Mono. Added a SpawnTestUi MousePick(UI) contract ensuring the primary `Id` matches the first/top-most hit.
 - Mono MCP stability: MainThread now short-circuits when already on the captured context (fixes selection deadlocks), `MousePick` UI sorts raycast hits (top-most Id), Mono `/read?uri=...` parsing is fixed, and selection notifications reuse the server snapshot. Mono smoke now asserts a `selection` stream event and reads extra stream lines.
 - Mono MCP writes expanded: `SpawnTestUi` now returns block ids; guarded `Reparent` / `DestroyObject` are limited to the SpawnTestUi blocks; write smoke now enables writes → spawn → reparent → destroy block → destroy UI → reset config (`allowWrites=false`). Packaging still copies the Mono DLL into `Release/.../Mods/`; redeployed to `SpaceShooter_Mono`.
 - Inspector CLI + Mono smoke + controlled error tails re-ran and pass on Test-VM IL2CPP (`http://192.168.178.210:51477`) and Mono (`http://192.168.178.210:51478`) after redeploy/restart; `[MCP] error ...` shows up in `unity://logs/tail` after a bad request on both hosts.
@@ -14,7 +15,7 @@ This plan merges the original scope, the current implementation snapshot, and th
 - Added `tools/Run-McpInspectorCli.ps1` (inspector --cli smoke: tools/list, resources/list, resources/read unity://status, tools/call GetStatus with optional auth header) and documented it in `README-mcp.md`.
 - Space Shooter build automation hardened: `BuildCommands` now falls back to a default scene when none are enabled and forces CPU lighting/denoiser-off in batchmode; synced via `Update-SpaceShooter-BuildScripts-Remote.ps1`, and `Build-SpaceShooter-Remote.ps1` produced fresh Mono + IL2CPP outputs under `C:\codex-workspace\space-shooter-build\` (logs in `...\logs`).
 - Mono Space Shooter host (`http://192.168.178.210:51478`) is up: inspector CLI smoke and `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3 -EnableWriteSmoke` pass (Ready=true, Scenes=1). Mono guarded writes (SetConfig/SetActive/SelectObject/TimeScale/SpawnTestUi/DestroyTestUi) remain gated by allowWrites+confirm.
-- IL2CPP dropdown refresh crash is now guarded (warning + continue); `Mods\UeMcpHeadless.dll` is disabled on the Test-VM. IL2CPP host (`http://192.168.178.210:51477`) is back online: inspector CLI + Invoke-McpSmoke pass and contract tests report 47 passed, 1 skipped.
+- IL2CPP dropdown refresh crash is now guarded (warning + continue); `Mods\UeMcpHeadless.dll` is disabled on the Test-VM. IL2CPP host (`http://192.168.178.210:51477`) is back online for inspector CLI, but the full contract suite currently crashes UnityPlayer.dll (0x80000003 / graphics device null) a few tests in. Added `AssemblyInfo.cs` to disable xUnit parallelization; individual tests pass when isolated, needs follow-up to keep the suite green.
 
 ---
 

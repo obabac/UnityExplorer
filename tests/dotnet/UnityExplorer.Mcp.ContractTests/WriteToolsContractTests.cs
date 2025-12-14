@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -220,6 +221,63 @@ public class WriteToolsContractTests
             var selJson = toolSelection.Value;
             selJson.TryGetProperty("ActiveId", out var toolActive).Should().BeTrue();
             toolActive.GetString().Should().Be(activeId);
+        }
+    }
+
+    [Fact]
+    public async Task MousePick_Ui_Uses_First_Item_As_Primary_When_TestUi_Spawned()
+    {
+        var http = TryCreateClient(out var ok);
+        if (!ok || http == null) return;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        try
+        {
+            _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)true, requireConfirm = (bool?)true }, cts.Token);
+
+            var spawn = await CallToolAsync(http, "SpawnTestUi", new { confirm = true }, cts.Token);
+
+            string? knownBlockId = null;
+            if (spawn.HasValue && spawn.Value.TryGetProperty("blocks", out var blocks) &&
+                blocks.ValueKind == JsonValueKind.Array && blocks.GetArrayLength() > 0)
+            {
+                var firstBlock = blocks[0];
+                if (firstBlock.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.String)
+                    knownBlockId = idProp.GetString();
+            }
+
+            var pick = await CallToolAsync(http, "MousePick", new { mode = "ui", x = 0.35, y = 0.5, normalized = true }, cts.Token);
+            if (pick is null)
+                return;
+
+            var pickJson = pick.Value;
+            pickJson.TryGetProperty("Mode", out var modeProp).Should().BeTrue();
+            modeProp.GetString().Should().Be("ui");
+
+            pickJson.TryGetProperty("Items", out var items).Should().BeTrue();
+            items.ValueKind.Should().Be(JsonValueKind.Array);
+
+            if (items.GetArrayLength() == 0)
+                return;
+
+            pickJson.TryGetProperty("Id", out var idEl).Should().BeTrue();
+            var primaryId = idEl.GetString();
+            primaryId.Should().NotBeNullOrWhiteSpace();
+
+            var firstItemId = items[0].GetProperty("Id").GetString();
+            firstItemId.Should().NotBeNullOrWhiteSpace();
+            firstItemId.Should().Be(primaryId);
+
+            if (!string.IsNullOrWhiteSpace(knownBlockId))
+            {
+                var ids = items.EnumerateArray().Select(i => i.GetProperty("Id").GetString()).ToArray();
+                ids.Should().Contain(knownBlockId);
+            }
+        }
+        finally
+        {
+            try { await CallToolAsync(http, "DestroyTestUi", new { confirm = true }, cts.Token); } catch { }
+            try { await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)false, requireConfirm = (bool?)true }, cts.Token); } catch { }
         }
     }
 

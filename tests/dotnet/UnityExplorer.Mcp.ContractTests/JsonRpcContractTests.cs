@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
@@ -7,6 +8,37 @@ namespace UnityExplorer.Mcp.ContractTests;
 
 public class JsonRpcContractTests
 {
+    private static async Task<JsonElement?> CallToolAsync(HttpClient http, string name, object arguments, CancellationToken ct)
+    {
+        var payload = new
+        {
+            jsonrpc = "2.0",
+            id = $"jsonrpc-call-{name}-{Guid.NewGuid():N}",
+            method = "call_tool",
+            @params = new
+            {
+                name,
+                arguments
+            }
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var res = await http.PostAsync("/message", content, ct);
+        res.EnsureSuccessStatusCode();
+
+        var body = await res.Content.ReadAsStringAsync(ct);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("result", out var result))
+            return null;
+        if (!result.TryGetProperty("content", out var contentArr) || contentArr.ValueKind != JsonValueKind.Array || contentArr.GetArrayLength() == 0)
+            return null;
+
+        var first = contentArr[0];
+        return first.TryGetProperty("json", out var jsonEl) ? jsonEl.Clone() : (JsonElement?)null;
+    }
+
     [Fact]
     public async Task ListTools_JsonRpc_Response_If_Server_Available()
     {
@@ -660,6 +692,115 @@ public class JsonRpcContractTests
 
         // If we time out without observing a tool_result, fail for technical validation.
         Assert.Fail("Expected a 'tool_result' notification on stream_events after invoking call_tool.");
+    }
+
+    [Fact]
+    public async Task StreamEvents_Emits_Selection_With_Payload_Matching_Selection_Resource()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        try
+        {
+            _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)true, requireConfirm = (bool?)false }, cts.Token);
+
+            var streamPayload = new
+            {
+                jsonrpc = "2.0",
+                id = "stream-events-selection-test",
+                method = "stream_events",
+                @params = new { }
+            };
+
+            var streamJson = JsonSerializer.Serialize(streamPayload);
+            using var streamContent = new StringContent(streamJson, Encoding.UTF8, "application/json");
+            using var streamRequest = new HttpRequestMessage(HttpMethod.Post, "/message")
+            {
+                Content = streamContent
+            };
+
+            using var streamResponse = await http.SendAsync(streamRequest, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            streamResponse.EnsureSuccessStatusCode();
+
+            await using var stream = await streamResponse.Content.ReadAsStreamAsync(cts.Token);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+
+            var sceneId = await McpTestHelpers.TryGetFirstSceneIdAsync(http, cts.Token);
+            var objectId = await McpTestHelpers.TryGetFirstObjectIdAsync(http, sceneId, cts.Token);
+            if (string.IsNullOrWhiteSpace(objectId))
+                return;
+
+            _ = await CallToolAsync(http, "SelectObject", new { objectId }, cts.Token);
+
+            JsonElement? selectionPayload = null;
+            using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+            waitCts.CancelAfter(TimeSpan.FromSeconds(5));
+
+            while (!waitCts.IsCancellationRequested)
+            {
+                string? line;
+                try { line = await reader.ReadLineAsync(waitCts.Token); }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                using var doc = JsonDocument.Parse(line);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("method", out var methodEl) || methodEl.GetString() != "notification")
+                    continue;
+
+                if (!root.TryGetProperty("params", out var @params))
+                    continue;
+
+                if (!@params.TryGetProperty("event", out var eventEl) || eventEl.GetString() != "selection")
+                    continue;
+
+                if (@params.TryGetProperty("payload", out var payloadEl))
+                {
+                    selectionPayload = payloadEl.Clone();
+                    break;
+                }
+            }
+
+            selectionPayload.Should().NotBeNull("selection notification should be emitted after SelectObject");
+            if (selectionPayload == null)
+                return;
+
+            var res = await http.GetAsync($"/read?uri={Uri.EscapeDataString("unity://selection")}", cts.Token);
+            res.EnsureSuccessStatusCode();
+            var resText = await res.Content.ReadAsStringAsync(cts.Token);
+            using var resDoc = JsonDocument.Parse(resText);
+            var resRoot = resDoc.RootElement;
+
+            selectionPayload.Value.TryGetProperty("ActiveId", out var streamActive).Should().BeTrue();
+            resRoot.TryGetProperty("ActiveId", out var resourceActive).Should().BeTrue();
+            streamActive.GetString().Should().Be(resourceActive.GetString());
+
+            selectionPayload.Value.TryGetProperty("Items", out var streamItems).Should().BeTrue();
+            streamItems.ValueKind.Should().Be(JsonValueKind.Array);
+            resRoot.TryGetProperty("Items", out var resourceItems).Should().BeTrue();
+            resourceItems.ValueKind.Should().Be(JsonValueKind.Array);
+
+            var streamList = streamItems.EnumerateArray().Select(i => i.GetString()).ToArray();
+            var resourceList = resourceItems.EnumerateArray().Select(i => i.GetString()).ToArray();
+            streamList.Should().Equal(resourceList);
+        }
+        finally
+        {
+            try
+            {
+                using var resetCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)false, requireConfirm = (bool?)true }, resetCts.Token);
+            }
+            catch { }
+        }
     }
 
     [Fact]
