@@ -1,360 +1,116 @@
-# Unity Explorer MCP Interface — Concept Draft
+# Unity Explorer MCP Interface — Source of Truth
 
-- Date: 2025-11-09
-- Mode: In‑process server (C# SDK), HTTP transport via `ModelContextProtocol.AspNetCore`
-- Client transport: `HttpClientTransport` with `HttpTransportMode.AutoDetect | StreamableHttp | Sse`
-- Default policy: Read‑only. Writes gated behind config + confirmation + allowlist.
-- Mono (MelonLoader, `net35`): now ships a lightweight in-process MCP host (Newtonsoft.Json + TcpListener) covering initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion plus guarded writes (SetConfig/SetActive/Reparent/DestroyObject/SelectObject/GetTimeScale/SetTimeScale/SpawnTestUi/DestroyTestUi) when `allowWrites=true` (defaults stay read-only; `requireConfirm` is recommended). `Reparent`/`DestroyObject` are limited to the SpawnTestUi blocks for safety, and SpawnTestUi returns the created block ids. `stream_events` streams log/selection/scene/tool_result notifications with cleanup + rate limits. Discovery file is written from Mono builds.
+- Updated: 2025-12-14
+- Hosts: CoreCLR IL2CPP + Mono in-process MCP servers (INTEROP builds)
+- Transport: streamable HTTP via `McpSimpleHttp` (no ASP.NET); JSON-RPC 2.0 on `POST /message`; convenience `GET /read?uri=unity://...`; discovery file `%TEMP%/unity-explorer-mcp.json` advertises `{ pid, baseUrl, port, modeHints: ["streamable-http"], startedAt }`.
+- Default policy: read-only. All mutating tools require `allowWrites=true`; many also require `requireConfirm=true`.
 
----
+## Transport & Handshake
 
-## Primitives Overview
+- Endpoints
+  - `POST /message` — JSON-RPC 2.0 methods: `initialize`, `notifications/initialized`, `ping`, `list_tools`, `list_resources`, `call_tool`, `read_resource`, `stream_events`.
+  - `GET /read?uri=unity://...` — wrappers `unity://...` resources; returns HTTP 200/4xx JSON when available.
+- `initialize` response: `{ protocolVersion: "2024-11-05", capabilities: { tools: { listChanged: true }, resources: { listChanged: true }, experimental: { streamEvents: {} } }, serverInfo: { name, version }, instructions: string }` (CoreCLR name `UnityExplorer.Mcp`, Mono name `UnityExplorer.Mcp.Mono`).
+- `list_tools`: each tool has `name`, `description`, `inputSchema` (JSON Schema; enums for constrained args such as `MousePick.mode`); cancellation tokens are omitted so inspector call forms stay clean.
+- `list_resources`: `resources: [{ uri, name, description, mimeType }]` for every `unity://...` resource listed below.
+- `call_tool` result wrapper: `{ content: [{ type: "text", mimeType: "application/json", text: "<json>", json: <object> }] }`; broadcasts a `tool_result` notification (`ok=true/false`).
+- `read_resource` result wrapper: `{ contents: [{ uri, mimeType: "application/json", text: "<json>" }] }`.
+- `stream_events`: chunked JSON lines; notifications use `{ "jsonrpc":"2.0", "method":"notification", "params":{ "event": "<name>", "payload": { ... } } }`. Disconnects clean up their slots; HTTP connection stays open until client closes.
+- Concurrency: 32 in-flight requests (`RateLimited` error message `"Cannot have more than 32 parallel requests. Please slow down."`).
 
-- Tools: Actionable RPCs (read‑only first; writes later, gated)
-- Resources: URI-addressable, read-only data surfaces (paginated)
-- Streams: Server→client notifications for logs/selection/scene events
-- Prompts: Optional canned prompts (quality-of-life for LLM UIs)
+## Resources (read-only)
 
----
+- `unity://status` — `StatusDto { Version, UnityVersion, Platform, Runtime, ExplorerVersion, Ready, ScenesLoaded, Selection: string[] }` (selection mirrors inspector targets, e.g., `obj:<instanceId>`).
+- `unity://scenes` — `Page<SceneDto> { Total, Items: [{ Id, Name, Index, IsLoaded, RootCount }] }`.
+- `unity://scene/{sceneId}/objects?limit&offset` — `Page<ObjectCardDto> { Total, Items: [{ Id, Name, Path, Tag, Layer, Active, ComponentCount }] }`.
+- `unity://object/{id}` — `ObjectCardDto` (same shape as list items; no transform payload today).
+- `unity://object/{id}/components?limit&offset` — `Page<ComponentCardDto> { Total, Items: [{ Type, Summary }] }`.
+- `unity://search?query=&name=&type=&path=&activeOnly=&limit=&offset=` — `Page<ObjectCardDto>` using the same card shape as `ListObjects`.
+- `unity://selection` — `SelectionDto { ActiveId, Items[] }`; emits a `selection` stream event when selection changes (same payload as the resource).
+- `unity://camera/active` — `CameraInfoDto { IsFreecam, Name, Fov, Pos{X,Y,Z}, Rot{X,Y,Z} }`; falls back to `Camera.main`/first camera or `<none>` when missing.
+- `unity://logs/tail?count=` — `LogTailDto { Items: [{ T, Level, Message, Source, Category? }] }`; `[MCP] error ...` lines are written here when requests fail.
+- `unity://console/scripts` — `Page<ConsoleScriptDto> { Total, Items: [{ Name, Path }] }`.
+- `unity://hooks` — `Page<HookDto> { Total, Items: [{ Signature, Enabled }] }` (Harmony signatures such as `System.Void UnityEngine.GameObject::SetActive(System.Boolean)`).
 
-## Namespacing & Conventions
+## Tools
 
-- Resource scheme: `unity://...`
-- IDs are opaque strings stable across a session; include `instanceId` and scene context.
-- Pagination: `limit`, `offset`; return `{ total, items: [...] }`.
-- Large values truncated with `preview` fields and `hasMore` flags.
+### Read tools (no allowWrites required)
+- `GetStatus()` → `StatusDto` (same as `unity://status`).
+- `ListScenes(limit?, offset?)` → `Page<SceneDto>`.
+- `ListObjects(sceneId?, name?, type?, activeOnly?, limit?, offset?)` → `Page<ObjectCardDto>`.
+- `GetObject(id)` → `ObjectCardDto` by `obj:<instanceId>`.
+- `GetComponents(objectId, limit?, offset?)` → `Page<ComponentCardDto>`.
+- `GetVersion()` → `VersionInfoDto { ExplorerVersion, McpVersion, UnityVersion, Runtime }`.
+- `SearchObjects(query?, name?, type?, path?, activeOnly?, limit?, offset?)` → `Page<ObjectCardDto>`.
+- `GetCameraInfo()` → `CameraInfoDto`.
+- `MousePick(mode="world"|"ui", x?, y?, normalized=false)` → `PickResultDto { Mode, Hit, Id?, Items? }`; UI mode returns `Items` sorted top-most first and `Id` mirrors the first hit.
+- `TailLogs(count=200)` → `LogTailDto`.
+- `GetSelection()` → `SelectionDto { ActiveId, Items[] }`.
+- `GetTimeScale()` → `{ ok: true, value: float, locked: bool }`.
 
----
+### Guarded writes (require `allowWrites=true`; `requireConfirm=true` forces `confirm=true` where supported)
+- Config: `SetConfig(allowWrites?, requireConfirm?, enableConsoleEval?, componentAllowlist?, reflectionAllowlistMembers?, hookAllowlistSignatures?, restart=false)` → `{ ok }`; `GetConfig()` → `{ ok, enabled, bindAddress, port, allowWrites, requireConfirm, exportRoot, logLevel, componentAllowlist, reflectionAllowlistMembers, enableConsoleEval, hookAllowlistSignatures }` (sanitized).
+- Object state: `SetActive(objectId, active, confirm?)` → `{ ok }`; `SelectObject(objectId)` → `{ ok }` and triggers a `selection` notification (still gated by `allowWrites`).
+- Reflection writes: `SetMember(objectId, componentType, member, jsonValue, confirm?)` → `{ ok }`; `CallMethod(objectId, componentType, method, argsJson="[]", confirm?)` → `{ ok, result }`. Both enforce `reflectionAllowlistMembers` entries (`<Type>.<Member>`).
+- Component writes: `AddComponent(objectId, type, confirm?)` / `RemoveComponent(objectId, typeOrIndex, confirm?)` → `{ ok }`; `componentAllowlist` must include the type when removing by type or adding.
+- Hooks: `HookAdd(type, method, confirm?)` / `HookRemove(signature, confirm?)` → `{ ok }`; allowlist via `hookAllowlistSignatures`.
+- Hierarchy: `Reparent(objectId, newParentId, confirm?)` and `DestroyObject(objectId, confirm?)` → `{ ok }`; Mono host restricts these to the `SpawnTestUi` hierarchy, CoreCLR currently allows any object.
+- Console: `ConsoleEval(code, confirm?)` → `{ ok, result }` (requires `enableConsoleEval=true` in config).
+- Time: `SetTimeScale(value, lock?, confirm?)` → `{ ok, value, locked }` (value clamped 0–4; `lock=true` uses the Explorer widget lock when available).
+- Test UI helpers: `SpawnTestUi(confirm?)` → `{ ok, rootId, blocks: [{ name, id }] }` (id strings are `obj:<instanceId>`); `DestroyTestUi(confirm?)` → `{ ok }`.
+- Tool errors: `{ ok: false, error: { kind, message, hint? } }` where `kind` mirrors the JSON-RPC error kinds below.
 
-## Resources (Read‑Only)
+## Streams & Notifications
+
+- `stream_events` emits chunked JSON notifications until the client disconnects. Event names/payloads:
+  - `log`: `{ level, message, source, category?, t }` (mirrors `logs/tail`).
+  - `selection`: `SelectionDto { ActiveId, Items[] }` (same as `unity://selection`).
+  - `scenes_diff`: `{ added: [sceneId], removed: [sceneId] }` when scenes load/unload.
+  - `tool_result`: `{ name, ok: true, result }` or `{ name, ok: false, error: { code, message, data } }` reflecting `call_tool` outcomes.
+- JSON-RPC results and errors for other requests are also mirrored onto the stream for connected clients.
+
+## Error Envelope & Rate Limits
+
+- JSON-RPC errors: `{ error: { code, message, data: { kind, hint?, detail? } } }` with `code` from the JSON-RPC spec or domain codes:
+  - `NotReady` (-32002, HTTP 503)
+  - `PermissionDenied` (-32003, HTTP 403)
+  - `NotFound` (-32004, HTTP 404)
+  - `RateLimited` (-32005, HTTP 429, message `"Cannot have more than 32 parallel requests. Please slow down."`)
+  - `InvalidArgument` (-32602, HTTP 400)
+  - `Internal` (-32603, HTTP 500)
+- Tool-level failures reuse the same `kind/hint` fields inside `{ ok: false, error: { kind, message, hint? } }`.
+- Errors log `[MCP] error <code>: <message>` into the MCP log buffer, visible via `unity://logs/tail` or `TailLogs`.
+
+## Example Payloads (IL2CPP host 192.168.178.210:51477)
 
 - `unity://status`
-  - Shape: `{ Version, UnityVersion, Platform, Runtime: "IL2CPP|Mono", ExplorerVersion, Ready, ScenesLoaded, Selection: string[] }`, with `Selection` coming from the current Inspector targets (`obj:<instanceId>`, active first when present).
-- `unity://scenes`
-  - Shape: `{ Total, Items: [{ Id, Name, Index, IsLoaded, RootCount }] }`
-- `unity://scene/{sceneId}/objects?limit&offset`
-  - Shape: `{ Total, Items: [{ Id, Name, Path, Tag, Layer, Active, ComponentCount }] }`
-- `unity://object/{id}`
-  - Shape: `{ id, name, path, active, tag, layer, transform: { pos, rot, scale }, components: [{ type, idHint }] }`
-- `unity://object/{id}/components`
-  - Shape: `{ total, items: [{ type, summary, values?: { key: valuePreview } }] }`
-- `unity://search?name=&type=&path=&activeOnly=`
-  - Shape: `{ total, items: [{ id, name, type, path }] }`
-- `unity://selection`
-  - Shape: `{ total, items: [objectId...] }`
-  - Behavior: `SelectObject` records the id even when the inspector UI is still initializing or missing; the tool still returns `ok=true` and skips UI inspection in that case so `unity://selection` can round-trip in headless setups.
-- `unity://console/scripts`
-  - Shape: `{ total, items: [{ name, path }] }`
-- `unity://hooks`
-  - Shape: `{ total, items: [{ Signature, Enabled }] }` where `Signature` is a Harmony-style description such as `System.Void UnityEngine.GameObject::SetActive(System.Boolean)`.
-- `unity://camera/active`
-  - Shape: `{ IsFreecam, Name, Fov, Pos: { X, Y, Z }, Rot: { X, Y, Z } }`
-  - Behavior: when the Unity Explorer Freecam is active, returns the freecam camera (or the reused game camera) with `IsFreecam=true`; otherwise falls back to `Camera.main` or the first available camera, and returns `<none>` with zero vectors when no camera exists.
-- `unity://logs/tail?count=200`
-  - Shape: `{ items: [{ t, level, message, source, category? }] }`  
-    - `level`: e.g. `info|warn|error|exception`  
-    - `source`: e.g. `unity` (forwarded logs), `mcp` (server‑side), `explorer` (internal)
-    - `category` is optional (when Unity supplies it)
-
----
-
-## Tools (Phase 1: Read‑Only)
-
-```csharp
-[McpServerToolType]
-public static class UnityReadTools
-{
-    [McpServerTool, Description("Status snapshot of Unity Explorer.")]
-    public static Task<StatusDto> GetStatus(CancellationToken ct);
-
-    [McpServerTool, Description("List scenes.")]
-    public static Task<Page<SceneDto>> ListScenes(int? limit, int? offset, CancellationToken ct);
-
-    [McpServerTool, Description("List objects in a scene or all scenes.")]
-    public static Task<Page<ObjectCardDto>> ListObjects(
-        string? sceneId, string? name, string? type, bool? activeOnly,
-        int? limit, int? offset, CancellationToken ct);
-
-    [McpServerTool, Description("Get object details by id.")]
-    public static Task<ObjectDetailDto> GetObject(string id, CancellationToken ct);
-
-    [McpServerTool, Description("Get components for object.")]
-    public static Task<Page<ComponentCardDto>> GetComponents(string objectId, int? limit, int? offset, CancellationToken ct);
-
-    [McpServerTool, Description("Version info (Explorer/MCP/Unity/runtime).")]
-    public static Task<VersionInfoDto> GetVersion(CancellationToken ct);
-
-    [McpServerTool, Description("Search objects by name/type/path.")]
-    public static Task<Page<SearchResultDto>> SearchObjects(
-        string? query, string? name, string? type, string? path, bool? activeOnly,
-        int? limit, int? offset, CancellationToken ct);
-
-    [McpServerTool, Description("Pick object(s) under mouse (world/ui). For `mode=world` returns a single top‑most hit; for `mode=ui` may return multiple hits.")]
-    public static Task<PickResultDto> MousePick(string mode = "world", float? x = null, float? y = null, bool normalized = false, CancellationToken ct = default);
-
-    [McpServerTool, Description("Get active camera info.")]
-    public static Task<CameraInfoDto> GetCameraInfo(CancellationToken ct);
-
-    [McpServerTool, Description("Tail recent logs.")]
-    public static Task<LogTailDto> TailLogs(int count = 200, CancellationToken ct);
-}
-```
-
-`list_tools` returns an `inputSchema` per tool with JSON Schema primitives for each argument (string, integer, number, boolean, array) and marks non-optional parameters as `required`; `MousePick.mode` advertises an enum of `world|ui`. Cancellation tokens are omitted so inspector call forms stay clean.
-
-- `MousePick` UI mode returns `Items` ordered from the top-most hit first; `Id` mirrors the first hit (null when no hits).
-- `call_tool` responses use `content: [{ type: "text", mimeType: "application/json", text: "<json>", json: <object> }]` so the inspector CLI accepts them while programmatic clients can still consume the raw JSON payload.
-- `GetVersion` returns `VersionInfoDto { ExplorerVersion, McpVersion, UnityVersion, Runtime }` on both CoreCLR and Mono hosts.
-
-Phase‑later write tools exist but are disabled by default; they require allowlist + confirmations. Guarded test-UI helpers (`SpawnTestUi` → `Reparent` → `DestroyObject` → `DestroyTestUi`) return `ok` payloads; `SpawnTestUi` returns `{ ok, rootId, blocks: [{ name, id }] }` so smoke scripts can reparent/destroy the created blocks. Mono host limits `Reparent`/`DestroyObject` to the SpawnTestUi hierarchy and surfaces `PermissionDenied` otherwise.
-
----
-
-## Resources via Attributes
-
-```csharp
-[McpServerResourceType]
-public static class UnityResources
-{
-    [McpServerResource("unity://status")]
-    public static Task<StatusDto> Status(CancellationToken ct) => UnityReadTools.GetStatus(ct);
-
-    [McpServerResource("unity://scenes")]
-    public static Task<Page<SceneDto>> Scenes(int? limit, int? offset, CancellationToken ct)
-        => UnityReadTools.ListScenes(limit, offset, ct);
-
-    [McpServerResource("unity://object/{id}")]
-    public static Task<ObjectDetailDto> ObjectById(string id, CancellationToken ct)
-        => UnityReadTools.GetObject(id, ct);
-}
-```
-
-## Resource Listing
-
-- `resources/list` returns `resources: [{ uri, name, description, mimeType }]` covering all `unity://` surfaces (status, scenes, scene/{sceneId}/objects, object/{id}, object/{id}/components, search, camera/active, selection, logs/tail, console/scripts, hooks).
-
----
-
-## Streaming & Progress
-
-- Streams
-  - `logs/stream`: `{ level, message, t }`
-  - `selection/stream`: `SelectionDto { ActiveId, Items[] }` (same snapshot as `unity://selection` / `GetSelection`), emitted on inspector tab changes and `SelectObject`.
-  - `scene/stream`: `{ event: "loaded|unloaded", scene: { id, name } }`
-
-- Progress Notifications
-  - Long‑running tools accept progress tokens and report incremental updates per SDK guidance.
-
----
-
-## Error Semantics
-
-All JSON‑RPC errors use the standard envelope:
-
-- `error.code` — numeric code (JSON‑RPC built‑in codes for parse/transport errors, `-32603` or `-32000` range for server errors).
-- `error.message` — short human‑readable message.
-- `error.data` — optional object with at least:
-  - `kind`: one of `NotReady`, `NotFound`, `InvalidArgument`, `PermissionDenied`, `RateLimited`, `Internal`.
-  - `hint` (optional): short guidance such as `"resend with confirm=true"`.
-
-Semantic meanings:
-
-- `NotReady`  
-  - Explorer not fully initialized yet (e.g. scenes not populated).  
-  - Typically mapped to HTTP 503 with `error.data.kind = "NotReady"`.
-- `NotFound`  
-  - Missing object/scene/component or unknown URI/tool.  
-  - Typically mapped to HTTP 404.
-- `InvalidArgument`  
-  - Parameter/type coercion failure, invalid IDs, bad enum values, etc.  
-  - Typically mapped to HTTP 400.
-- `PermissionDenied`  
-  - Write tool invoked while writes are disabled, config disallows the action, or confirmation was not provided.  
-  - Often paired with `hint = "resend with confirm=true"`.
-- `RateLimited`  
-  - Too many concurrent requests.  
-  - Message should be: `"Cannot have more than X parallel requests. Please slow down."` with `error.data.kind = "RateLimited"`.
-- `Internal`  
-  - Unexpected server error; internal details may be logged but `error.data` stays minimal (e.g. `{ kind: "Internal" }`).
-
-Tool‑level failures that still return a JSON‑RPC `result` use a consistent pattern:
-
-- `result = { ok: false, error: { code, message, kind, hint? } }`
-- The `kind` and optional `hint` mirror the JSON‑RPC `error.data` fields above.
-
----
-
-## Transport & Hosting
-
-- Server: `AddMcpServer().WithHttpTransport().WithTools<UnityReadTools>().WithResources<UnityResources>();` + `app.MapMcp()`.
-- Bind: `127.0.0.1:0` (ephemeral). Publish discovery file `%TEMP%/unity-explorer-mcp.json` with `{ pid, baseUrl, port, modes }`.
-- Client: `new HttpClientTransport(new() { Endpoint = baseUrl, Mode = AutoDetect })`.
-- Mono/net35 builds: MCP host uses a lightweight TcpListener + Newtonsoft.Json pipeline (no ASP.NET); discovery file is produced; `stream_events` mirrors CoreCLR notifications (log/selection/scene/tool_result) with the same error envelope; writes remain disabled. Use `tools/Run-McpMonoSmoke.ps1` for smoke/CI (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → stream_events tool_result).
-
-## Initialize Handshake
-
-- `initialize` returns `protocolVersion`, `capabilities`, `serverInfo`, and `instructions`.
-- MCP requires every `capabilities.experimental` entry to be an **object**. We advertise `streamEvents` as `{}` (never `true`/`false`) to satisfy the spec.
-- Example:
 ```json
 {
-  "protocolVersion": "2024-11-05",
-  "capabilities": {
-    "tools": { "listChanged": true },
-    "resources": { "listChanged": true },
-    "experimental": { "streamEvents": {} }
-  },
-  "serverInfo": { "name": "UnityExplorer.Mcp", "version": "<semver>" },
-  "instructions": "Unity Explorer MCP exposes Unity scenes, objects, and logs as tools and resources. Use list_tools + call_tool for inspection, and read_resource with unity:// URIs for structured state."
-}
-```
-- Mono host mirrors the same shape; only `serverInfo.name` differs (`UnityExplorer.Mcp.Mono`) and its `instructions` string calls out that writes stay disabled.
-
----
-
-## Threading & Safety
-
-- All Unity calls marshal via `MainThread.Run(...)` to avoid non‑main‑thread access.
-- Read‑only by default; write tools require `allowWrites=true` and per‑call confirmation prompt.
-- Reflection writes limited by allowlist; exports restricted to configured root.
-
----
-
-## Example Payloads
-
-- `get_status()`
-```json
-{
-  "Version":"0.1.0",
-  "UnityVersion":"2021.3.34f1",
-  "Platform":"Windows",
-  "Runtime":"IL2CPP",
-  "ExplorerVersion":"4.12.8",
-  "Ready":true,
-  "ScenesLoaded":2,
-  "Selection":["obj:12345"]
+  "Version": "0.1.0",
+  "UnityVersion": "2021.3.45f1",
+  "Platform": "WindowsPlayer",
+  "Runtime": "IL2CPP",
+  "ExplorerVersion": "4.12.8",
+  "Ready": true,
+  "ScenesLoaded": 1,
+  "Selection": []
 }
 ```
 
-- `list_objects(sceneId, limit=2)`
+- `unity://scene/scn:0/objects?limit=2`
 ```json
 {
-  "Total": 1287,
+  "Total": 2,
   "Items": [
-    {"Id":"scn:Main:obj:12345","Name":"Player","Path":"/Main/Player","Tag":"Player","Layer":0,"Active":true,"ComponentCount":7},
-    {"Id":"scn:Main:obj:67890","Name":"Camera","Path":"/Main/Camera","Tag":"MainCamera","Layer":0,"Active":true,"ComponentCount":3}
+    { "Id": "obj:2134", "Name": "EventSystem", "Path": "/EventSystem", "Tag": "Untagged", "Layer": 0, "Active": true, "ComponentCount": 4 },
+    { "Id": "obj:2136", "Name": "Lighting", "Path": "/Lighting", "Tag": "Untagged", "Layer": 0, "Active": true, "ComponentCount": 1 }
   ]
 }
 ```
 
-- `unity://camera/active` (freecam enabled)
+- `MousePick(mode="ui")` after `SpawnTestUi` (shape)
 ```json
-{
-  "IsFreecam": true,
-  "Name": "UE_Freecam",
-  "Fov": 60.0,
-  "Pos": { "X": 0.0, "Y": 1.2, "Z": -5.0 },
-  "Rot": { "X": 10.0, "Y": 45.0, "Z": 0.0 }
-}
+{ "Mode": "ui", "Hit": true, "Id": "obj:<topHit>", "Items": [{ "Id": "obj:<topHit>", "Name": "McpTestBlock_Left", "Path": "/McpTestCanvas/McpTestBlock_Left" }, { "Id": "obj:<other>", "Name": "McpTestBlock_Right", "Path": "/McpTestCanvas/McpTestBlock_Right" }] }
 ```
 
-- `unity://hooks`
-```json
-{
-  "Total": 1,
-  "Items": [
-    {
-      "Signature": "System.Void UnityEngine.GameObject::SetActive(System.Boolean)",
-      "Enabled": true
-    }
-  ]
-}
-```
-
-- `SpawnTestUi` (guarded; test UI helper)
-```json
-{
-  "ok": true,
-  "rootId": "obj:120000",
-  "blocks": [
-    { "name": "McpTestBlock_Left", "id": "obj:120001" },
-    { "name": "McpTestBlock_Right", "id": "obj:120002" }
-  ]
-}
-```
-
-- `Reparent` / `DestroyObject` (guarded)
-```json
-{ "ok": true }
-```
-Mono host limits these two tools to the SpawnTestUi hierarchy; calling them on anything else returns `ok=false` with `kind="PermissionDenied"`.
-
-Hook lifecycle contract tests run only when `UE_MCP_HOOK_TEST_ENABLED=1`; they expect `hookAllowlistSignatures` to include a safe type such as `UnityEngine.GameObject` and use `confirm=true` while `requireConfirm` is enabled.
-
----
-
-## DTO Sketch
-
-```csharp
-public record Page<T>(int Total, IReadOnlyList<T> Items);
-public record StatusDto(string Version, string UnityVersion, string Platform, string Runtime,
-    string ExplorerVersion, bool Ready, int ScenesLoaded, IReadOnlyList<string> Selection);
-public record SceneDto(string Id, string Name, int Index, bool IsLoaded, int RootCount);
-public record ObjectCardDto(string Id, string Name, string Path, string Tag, int Layer, bool Active, int ComponentCount);
-public record ObjectDetailDto(string Id, string Name, string Path, bool Active, string Tag, int Layer,
-    TransformDto Transform, IReadOnlyList<ComponentCardDto> Components);
-public record ComponentCardDto(string Type, string? Summary);
-public record TransformDto(Vector3Dto Pos, Vector3Dto Rot, Vector3Dto Scale);
-public record Vector3Dto(float X, float Y, float Z);
-public record SearchResultDto(string Id, string Name, string Type, string Path);
-public record PickHit(string Id, string Name, string Path);
-public record PickResultDto(string Mode, bool Hit, string? Id, IReadOnlyList<PickHit>? Items);
-public record CameraInfoDto(bool IsFreecam, string Name, float Fov, Vector3Dto Pos, Vector3Dto Rot);
-public record LogTailDto(IReadOnlyList<LogLine> Items);
-public record LogLine(DateTimeOffset T, string Level, string Message, string Source, string? Category = null);
-```
-
----
-
-Status: Concept draft v0.2 (updated for logs metadata, mouse‑inspect multi‑hit design, error envelope, and DTO sketch for time/log tooling)
-
----
-
-## Agent UX polish checklist (to implement)
-
-- **Discoverability & examples**
-  - Keep descriptions action-oriented in `list_tools` and docs; include example payloads for logs (with `source`), mouse UI multi-hit, time-scale write, guarded writes (`ok=false` with `kind/hint`).
-
-- **Mouse inspect UI multi-hit flow**
-  - UI mode returns `Items` (stable list of `{ id, name, path }`) and `Id` as the top-most hit. Follow-up: call `GetObject`/`GetComponents` on the selected `Id`.
-
-- **Logs ergonomics**
-  - Keep `source` and `level`; if UE exposes `category`, include it, otherwise document its absence. Consider `since`/`cursor` or document `count`-only behavior.
-
-- **Errors / rate limit**
-  - Enforce `error.code/message/data.kind[/hint]` everywhere; tool `ok=false` mirrors `kind/hint`. Rate-limit message: `"Cannot have more than X parallel requests. Please slow down."` (include X). Use consistent codes for domain errors (or document chosen codes).
-
-- **Time-scale writes**
-  - Single tool `SetTimeScale(value, lock?, confirm?)`, guarded by `allowWrites+RequireConfirm`, clear error paths. Add a read path (`GetTimeScale`) for current time scale. Document clamps/rounding.
-
-- **Selection semantics**
-  - Clarify `selection` meaning (Inspector active tabs). Ensure `SelectObject` round-trips: call → selection changes → `unity://selection` shows it → streamed `selection` event. Add a small example.
-
-- **Camera/Freecam**
-  - Include `isFreecam`; if unavailable, use `NotReady/NotFound` with `kind` instead of empty fields.
-
-- **Hooks / Console writes**
-  - Guarded surfaces return structured `kind/hint` for all denial cases. Add one short allow/deny example for `ConsoleEval` and `HookAdd/HookRemove`.
-
-- **Pagination defaults**
-  - Document default `limit` and max `limit`; consider `nextOffset` in responses.
-
-- **Versioning & capabilities**
-  - `initialize` should expose `capabilities` for optional surfaces (e.g., `uiMultiPick`, `timeScaleWrite`, `hooksEnabled`, `consoleEvalEnabled`). Keep `GetVersion` or embed version in `status`.
-
-- **Host assumptions**
-  - Space Shooter is the validation host; no game-specific IDs/paths in examples/tests.
-
-- **Doc/DTO/test sync**
-  - For any shape change, update `mcp-interface-concept.md`, `Dto.cs`, contract tests, and `README-mcp.md`, plus an example payload for every non-trivial shape (logs, mouse UI, errors, time-scale).
-
+Use these examples to keep DTOs, tests, and docs in sync. Any shape change must be reflected here, in DTOs, in contract tests, and in `README-mcp.md`.
