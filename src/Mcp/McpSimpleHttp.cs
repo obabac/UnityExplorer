@@ -43,8 +43,10 @@ namespace UnityExplorer.Mcp
         private readonly TcpListener _listener;
         private readonly CancellationTokenSource _cts = new();
         private readonly ConcurrentDictionary<int, Stream> _httpStreams = new();
+        private readonly ConcurrentDictionary<int, Stream> _sseStreams = new();
         private readonly SemaphoreSlim _requestSlots = new(ConcurrencyLimit, ConcurrencyLimit);
         private int _nextClientId;
+        private int _nextSseClientId;
         public int Port { get; }
 
         // JSON-RPC codes (spec + domain)
@@ -161,6 +163,7 @@ namespace UnityExplorer.Mcp
                         try
                         {
                             var root = doc.RootElement;
+                            var hasId = HasId(root);
                             string methodName = root.TryGetProperty("method", out var m) ? m.GetString() ?? string.Empty : string.Empty;
                             if (string.IsNullOrWhiteSpace(methodName))
                             {
@@ -233,13 +236,17 @@ namespace UnityExplorer.Mcp
                             // Client-side notification after initialize; accept and ignore.
                             if (string.Equals(methodName, "notifications/initialized", StringComparison.OrdinalIgnoreCase))
                             {
-                                var payload = new
+                                if (!hasId)
                                 {
-                                    jsonrpc = "2.0",
-                                    id = (object?)null,
-                                    result = new { ok = true }
-                                };
-                                await WriteJsonResponseAsync(stream, 200, payload, ct).ConfigureAwait(false);
+                                    await WriteEmptyResponseAsync(stream, 202, ct).ConfigureAwait(false);
+                                }
+                                else
+                                {
+                                    var resultObj = new { ok = true };
+                                    await SendJsonRpcResultAsync(root, resultObj, ct).ConfigureAwait(false);
+                                    var responsePayload = BuildJsonRpcResultPayload(root, resultObj);
+                                    await WriteJsonResponseAsync(stream, 200, responsePayload, ct).ConfigureAwait(false);
+                                }
                                 return;
                             }
 
@@ -400,7 +407,7 @@ namespace UnityExplorer.Mcp
                                 int id = Interlocked.Increment(ref _nextClientId);
                                 _httpStreams[id] = stream;
 
-                                await WaitForStreamDisconnectAsync(stream, id, ct).ConfigureAwait(false);
+                                await WaitForStreamDisconnectAsync(stream, id, _httpStreams, ct).ConfigureAwait(false);
                                 return;
                             }
 
@@ -414,6 +421,26 @@ namespace UnityExplorer.Mcp
                             if (acquiredSlot) _requestSlots.Release();
                         }
                     }
+                }
+
+                if (method == "GET" && (target == "/" || target.StartsWith("/?")) && !string.IsNullOrEmpty(acceptHeader) && acceptHeader.IndexOf("text/event-stream", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    stream.ReadTimeout = Timeout.Infinite;
+                    stream.WriteTimeout = Timeout.Infinite;
+
+                    var header = "HTTP/1.1 200 OK\r\n" +
+                                 "Content-Type: text/event-stream\r\n" +
+                                 "Cache-Control: no-cache\r\n" +
+                                 "Connection: keep-alive\r\n\r\n";
+                    var headerBytes = Encoding.UTF8.GetBytes(header);
+                    await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
+                    await stream.FlushAsync(ct).ConfigureAwait(false);
+
+                    int sseId = Interlocked.Increment(ref _nextSseClientId);
+                    _sseStreams[sseId] = stream;
+
+                    await WaitForStreamDisconnectAsync(stream, sseId, _sseStreams, ct).ConfigureAwait(false);
+                    return;
                 }
 
                 if (method == "GET" && target.StartsWith("/read"))
@@ -451,11 +478,14 @@ namespace UnityExplorer.Mcp
         {
             switch (statusCode)
             {
+                case 200: return "OK";
+                case 202: return "Accepted";
                 case 400: return "Bad Request";
                 case 403: return "Forbidden";
                 case 404: return "Not Found";
                 case 429: return "Too Many Requests";
                 case 500: return "Internal Server Error";
+                case 503: return "Service Unavailable";
                 default: return "OK";
             }
         }
@@ -477,6 +507,13 @@ namespace UnityExplorer.Mcp
             var headerBytes = Encoding.UTF8.GetBytes(header);
             await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
             await stream.WriteAsync(body, 0, body.Length, ct).ConfigureAwait(false);
+        }
+
+        private static async Task WriteEmptyResponseAsync(Stream stream, int code, CancellationToken ct)
+        {
+            var header = $"HTTP/1.1 {code} {ReasonPhrase(code)}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            var headerBytes = Encoding.UTF8.GetBytes(header);
+            await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
         }
 
         private async Task BroadcastHttpStreamAsync(string json, CancellationToken ct)
@@ -503,7 +540,32 @@ namespace UnityExplorer.Mcp
             }
         }
 
-        private async Task WaitForStreamDisconnectAsync(Stream stream, int id, CancellationToken ct)
+        private async Task BroadcastSseAsync(string json, CancellationToken ct)
+        {
+            if (_sseStreams.IsEmpty) return;
+            var payload = Encoding.UTF8.GetBytes($"data: {json}\n\n");
+            foreach (var kv in _sseStreams)
+            {
+                var s = kv.Value;
+                try
+                {
+                    await s.WriteAsync(payload, 0, payload.Length, ct).ConfigureAwait(false);
+                    await s.FlushAsync(ct).ConfigureAwait(false);
+                }
+                catch
+                {
+                    _sseStreams.TryRemove(kv.Key, out _);
+                }
+            }
+        }
+
+        private async Task BroadcastAllStreamsAsync(string json, CancellationToken ct)
+        {
+            await BroadcastHttpStreamAsync(json, ct).ConfigureAwait(false);
+            await BroadcastSseAsync(json, ct).ConfigureAwait(false);
+        }
+
+        private async Task WaitForStreamDisconnectAsync(Stream stream, int id, ConcurrentDictionary<int, Stream> store, CancellationToken ct)
         {
             var buffer = ArrayPool<byte>.Shared.Rent(1);
             try
@@ -535,14 +597,14 @@ namespace UnityExplorer.Mcp
             finally
             {
                 ArrayPool<byte>.Shared.Return(buffer);
-                _httpStreams.TryRemove(id, out _);
+                store.TryRemove(id, out _);
             }
         }
 
         public Task BroadcastNotificationAsync(string @event, object payload, CancellationToken ct = default)
         {
             var json = JsonSerializer.Serialize(new { jsonrpc = "2.0", method = "notification", @params = new { @event, payload } });
-            return BroadcastHttpStreamAsync(json, ct);
+            return BroadcastAllStreamsAsync(json, ct);
         }
 
         private async Task SendJsonRpcResultAsync(JsonElement requestRoot, object result, CancellationToken ct)
@@ -553,7 +615,7 @@ namespace UnityExplorer.Mcp
                 try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
             }
             var payload = JsonSerializer.Serialize(new { jsonrpc = "2.0", id = idVal, result });
-            await BroadcastHttpStreamAsync(payload, ct).ConfigureAwait(false);
+            await BroadcastAllStreamsAsync(payload, ct).ConfigureAwait(false);
         }
 
         private async Task SendJsonRpcErrorAsync(JsonElement requestRoot, int code, string message, string kind, string? hint, string? detail, CancellationToken ct)
@@ -579,7 +641,7 @@ namespace UnityExplorer.Mcp
                 id = idVal,
                 error = new { code, message, data = BuildErrorData(kind, hint, detail) }
             });
-            await BroadcastHttpStreamAsync(payload, ct).ConfigureAwait(false);
+            await BroadcastAllStreamsAsync(payload, ct).ConfigureAwait(false);
         }
 
         private async Task SendJsonRpcErrorAsync(int code, string message, string kind, string? hint, string? detail, CancellationToken ct)
@@ -600,7 +662,7 @@ namespace UnityExplorer.Mcp
                 id = (object?)null,
                 error = new { code, message, data = BuildErrorData(kind, hint, detail) }
             });
-            await BroadcastHttpStreamAsync(payload, ct).ConfigureAwait(false);
+            await BroadcastAllStreamsAsync(payload, ct).ConfigureAwait(false);
         }
 
         private static object BuildJsonRpcResultPayload(JsonElement requestRoot, object result)
@@ -643,6 +705,13 @@ namespace UnityExplorer.Mcp
             return detail != null
                 ? new { kind, hint, detail }
                 : new { kind, hint };
+        }
+
+        private static bool HasId(JsonElement root)
+        {
+            if (root.ValueKind != JsonValueKind.Object) return false;
+            if (!root.TryGetProperty("id", out var idEl)) return false;
+            return idEl.ValueKind != JsonValueKind.Null && idEl.ValueKind != JsonValueKind.Undefined;
         }
 
         private static ErrorShape MapExceptionToError(Exception ex)
@@ -987,9 +1056,12 @@ namespace UnityExplorer.Mcp
         private readonly int _streamLimit = 16;
         private readonly Dictionary<int, Stream> _streams = new Dictionary<int, Stream>();
         private readonly object _streamGate = new object();
+        private readonly Dictionary<int, Stream> _sseStreams = new Dictionary<int, Stream>();
+        private readonly object _sseGate = new object();
         private volatile bool _disposed;
         private int _active;
         private int _nextStreamId;
+        private int _nextSseId;
         public int Port { get; private set; }
 
         public McpSimpleHttp(string bindAddress, int port)
@@ -1044,6 +1116,7 @@ namespace UnityExplorer.Mcp
 
                 string? line;
                 long contentLength = 0;
+                string? acceptHeader = null;
                 while (!string.IsNullOrEmpty(line = reader.ReadLine()))
                 {
                     int idx = line.IndexOf(':');
@@ -1051,6 +1124,7 @@ namespace UnityExplorer.Mcp
                     var name = line.Substring(0, idx).Trim();
                     var val = line.Substring(idx + 1).Trim();
                     if (name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)) long.TryParse(val, out contentLength);
+                    if (name.Equals("Accept", StringComparison.OrdinalIgnoreCase)) acceptHeader = val;
                 }
 
                 string body = string.Empty;
@@ -1059,6 +1133,29 @@ namespace UnityExplorer.Mcp
                     var buf = new char[contentLength];
                     int read = reader.ReadBlock(buf, 0, (int)contentLength);
                     body = new string(buf, 0, read);
+                }
+
+                if (method == "GET" && (target == "/" || target.StartsWith("/?")) && !string.IsNullOrEmpty(acceptHeader) && acceptHeader.IndexOf("text/event-stream", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    stream.ReadTimeout = Timeout.Infinite;
+                    stream.WriteTimeout = Timeout.Infinite;
+
+                    var header = "HTTP/1.1 200 OK\r\n" +
+                                 "Content-Type: text/event-stream\r\n" +
+                                 "Cache-Control: no-cache\r\n" +
+                                 "Connection: keep-alive\r\n\r\n";
+                    var headerBytes = Encoding.UTF8.GetBytes(header);
+                    stream.Write(headerBytes, 0, headerBytes.Length);
+                    stream.Flush();
+
+                    var sseId = Interlocked.Increment(ref _nextSseId);
+                    lock (_sseGate)
+                    {
+                        _sseStreams[sseId] = stream;
+                    }
+
+                    WaitForStreamDisconnect(stream, sseId, true);
+                    return;
                 }
 
                 if (method == "POST" && (target.StartsWith("/message") || target == "/" || target.StartsWith("/?")))
@@ -1091,6 +1188,7 @@ namespace UnityExplorer.Mcp
             }
 
             var idToken = root["id"];
+            var hasId = idToken != null && idToken.Type != JTokenType.Null && idToken.Type != JTokenType.Undefined;
             var methodName = root.Value<string>("method") ?? string.Empty;
             if (string.IsNullOrEmpty(methodName))
             {
@@ -1105,7 +1203,14 @@ namespace UnityExplorer.Mcp
 
             if (string.Equals(methodName, "notifications/initialized", StringComparison.OrdinalIgnoreCase))
             {
-                WriteJsonResult(stream, idToken, new { ok = true });
+                if (hasId)
+                {
+                    WriteJsonResult(stream, idToken, new { ok = true });
+                }
+                else
+                {
+                    WriteEmptyResponse(stream, 202);
+                }
                 return;
             }
 
@@ -1314,6 +1419,18 @@ namespace UnityExplorer.Mcp
                 }
             }
             catch { }
+            try
+            {
+                lock (_sseGate)
+                {
+                    foreach (var kv in _sseStreams)
+                    {
+                        try { kv.Value.Dispose(); } catch { }
+                    }
+                    _sseStreams.Clear();
+                }
+            }
+            catch { }
             try { _listener.Stop(); } catch { }
             Current = null;
         }
@@ -1331,24 +1448,40 @@ namespace UnityExplorer.Mcp
             stream.Write(payload, 0, payload.Length);
         }
 
+        private static void WriteEmptyResponse(Stream stream, int statusCode)
+        {
+            var header = "HTTP/1.1 " + statusCode + " " + ReasonPhrase(statusCode) + "\r\n"
+                         + "Content-Length: 0\r\n"
+                         + "Connection: close\r\n\r\n";
+            var headerBytes = Encoding.UTF8.GetBytes(header);
+            stream.Write(headerBytes, 0, headerBytes.Length);
+        }
+
         private void BroadcastPayload(JObject payload)
         {
             if (_disposed)
                 return;
 
             List<KeyValuePair<int, Stream>> snapshot;
+            List<KeyValuePair<int, Stream>> sseSnapshot;
             lock (_streamGate)
             {
                 snapshot = new List<KeyValuePair<int, Stream>>(_streams);
             }
+            lock (_sseGate)
+            {
+                sseSnapshot = new List<KeyValuePair<int, Stream>>(_sseStreams);
+            }
 
-            if (snapshot.Count == 0)
+            if (snapshot.Count == 0 && sseSnapshot.Count == 0)
                 return;
 
-            var json = payload.ToString(Formatting.None) + "\n";
-            var data = Encoding.UTF8.GetBytes(json);
+            var json = payload.ToString(Formatting.None);
+            var chunkData = json + "\n";
+            var data = Encoding.UTF8.GetBytes(chunkData);
             var prefix = Encoding.ASCII.GetBytes(data.Length.ToString("X") + "\r\n");
             var suffix = Encoding.ASCII.GetBytes("\r\n");
+            var sseData = Encoding.UTF8.GetBytes("data: " + json + "\n\n");
 
             foreach (var kv in snapshot)
             {
@@ -1364,6 +1497,21 @@ namespace UnityExplorer.Mcp
                 catch
                 {
                     RemoveStream(kv.Key);
+                }
+            }
+
+            foreach (var kv in sseSnapshot)
+            {
+                if (_disposed) break;
+                var s = kv.Value;
+                try
+                {
+                    s.Write(sseData, 0, sseData.Length);
+                    s.Flush();
+                }
+                catch
+                {
+                    RemoveSseStream(kv.Key);
                 }
             }
         }
@@ -1420,7 +1568,19 @@ namespace UnityExplorer.Mcp
             }
         }
 
-        private void WaitForStreamDisconnect(Stream stream, int id)
+        private void RemoveSseStream(int id)
+        {
+            lock (_sseGate)
+            {
+                if (_sseStreams.TryGetValue(id, out var s))
+                {
+                    try { s.Dispose(); } catch { }
+                    _sseStreams.Remove(id);
+                }
+            }
+        }
+
+        private void WaitForStreamDisconnect(Stream stream, int id, bool isSse = false)
         {
             var buffer = new byte[1];
             try
@@ -1435,7 +1595,10 @@ namespace UnityExplorer.Mcp
             }
             finally
             {
-                RemoveStream(id);
+                if (isSse)
+                    RemoveSseStream(id);
+                else
+                    RemoveStream(id);
             }
         }
 
@@ -1472,11 +1635,14 @@ namespace UnityExplorer.Mcp
         {
             switch (statusCode)
             {
+                case 200: return "OK";
+                case 202: return "Accepted";
                 case 400: return "Bad Request";
                 case 403: return "Forbidden";
                 case 404: return "Not Found";
                 case 429: return "Too Many Requests";
                 case 500: return "Internal Server Error";
+                case 503: return "Service Unavailable";
                 default: return "OK";
             }
         }

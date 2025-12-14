@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -469,6 +470,31 @@ public class JsonRpcContractTests
     }
 
     [Fact]
+    public async Task Notifications_Initialized_Without_Id_Returns_202()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var payload = new
+        {
+            jsonrpc = "2.0",
+            method = "notifications/initialized",
+            @params = new { }
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var res = await http.PostAsync("/message", content, cts.Token);
+
+        res.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        var body = await res.Content.ReadAsStringAsync(cts.Token);
+        body.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
     public async Task StreamEvents_Endpoint_Responds_With_Chunked_Json_When_Server_Available()
     {
         if (!Discovery.TryLoad(out var info))
@@ -498,6 +524,87 @@ public class JsonRpcContractTests
         res.EnsureSuccessStatusCode();
         res.Headers.TransferEncodingChunked.Should().BeTrue();
         res.Content.Headers.ContentType!.MediaType.Should().Be("application/json");
+    }
+
+    [Fact]
+    public async Task Sse_Root_Stream_Emits_ToolResult_When_Tool_Called()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        using var sseRequest = new HttpRequestMessage(HttpMethod.Get, "/");
+        sseRequest.Headers.Accept.Clear();
+        sseRequest.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
+
+        using var sseResponse = await http.SendAsync(sseRequest, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        sseResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        sseResponse.Content.Headers.ContentType!.MediaType.Should().Be("text/event-stream");
+
+        await using var stream = await sseResponse.Content.ReadAsStreamAsync(cts.Token);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+
+        var callPayload = new
+        {
+            jsonrpc = "2.0",
+            id = "sse-tool-call",
+            method = "call_tool",
+            @params = new
+            {
+                name = "GetStatus",
+                arguments = new { }
+            }
+        };
+
+        var callJson = JsonSerializer.Serialize(callPayload);
+        using var callContent = new StringContent(callJson, Encoding.UTF8, "application/json");
+        using var callResponse = await http.PostAsync("/message", callContent, cts.Token);
+        callResponse.EnsureSuccessStatusCode();
+
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        waitCts.CancelAfter(TimeSpan.FromSeconds(5));
+
+        while (!waitCts.IsCancellationRequested)
+        {
+            string? line;
+            try
+            {
+                line = await reader.ReadLineAsync(waitCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var jsonLine = line.Substring("data:".Length).Trim();
+            if (string.IsNullOrWhiteSpace(jsonLine))
+                continue;
+
+            using var doc = JsonDocument.Parse(jsonLine);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("method", out var methodEl) || methodEl.GetString() != "notification")
+                continue;
+
+            if (!root.TryGetProperty("params", out var @params))
+                continue;
+
+            if (!@params.TryGetProperty("event", out var eventEl) || eventEl.GetString() != "tool_result")
+                continue;
+
+            @params.TryGetProperty("payload", out var payload).Should().BeTrue();
+            payload.TryGetProperty("name", out _).Should().BeTrue();
+            return;
+        }
+
+        Assert.Fail("Expected a 'tool_result' notification on SSE stream after calling a tool.");
     }
 
     [Fact]

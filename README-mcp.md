@@ -120,6 +120,8 @@ The in‑process server exposes a minimal HTTP protocol over a loopback TCP list
 - `GET /read?uri=unity://...`  
   - Convenience endpoint for simple read operations.  
   - Returns JSON directly in the HTTP response.
+- `GET /` (or `/?…`) with `Accept: text/event-stream`  
+  - Server-Sent Events (SSE) receive channel; emits the same JSON-RPC results/errors/notifications as `stream_events` using `data: <json>\n\n` frames until the client disconnects (no chunked encoding).
 
 ### MCP Handshake
 
@@ -128,7 +130,7 @@ When connecting with a generic MCP client (including `@modelcontextprotocol/insp
 1. `initialize`  
    - Returns `protocolVersion`, `capabilities` (`tools`, `resources`, `experimental.streamEvents`), `serverInfo`, and a short `instructions` string.
 2. `notifications/initialized`  
-   - Optional client notification; Unity Explorer accepts this method and replies with `{ "ok": true }`.
+   - Optional client notification; when no `id` is provided the server returns HTTP 202 with an empty body (JSON-RPC notification semantics). If an `id` is present, the server replies with `{ "ok": true }`.
 3. `list_tools`, `read_resource`, `call_tool`, and `stream_events`  
    - Use `list_tools` to discover tools, `call_tool` for RPCs, `read_resource` for `unity://...` URIs, and `stream_events` for log/scene/selection/tool_result notifications.
 
