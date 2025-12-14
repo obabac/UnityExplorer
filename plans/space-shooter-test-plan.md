@@ -24,6 +24,13 @@
 - Deployment note: stop `SpaceShooter.exe` before `Update-Mod-Remote.ps1` (SCP fails on locked DLLs), then restart the game.
 - 2025-12-13: Mono host responds on `http://192.168.178.210:51478` (Mono smoke + inspector CLI smoke should pass). IL2CPP host on `http://192.168.178.210:51477` is up after the dropdown guard; inspector CLI smoke, Invoke-McpSmoke, and MCP contract tests (47 passed, 1 skipped) pass without `UeMcpHeadless.dll`.
 - Gate: run `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <baseUrl>` early for any protocol/DTO changes (both hosts).
+- Inspector UI (browser) on the Test‑VM (no manual typing): start inspector in a detached process, read the printed `http://localhost:<port>/` URL from a log file, then open it in Edge.
+  - IL2CPP:
+    - `$log = 'C:\\codex-workspace\\mcp-inspector-il2cpp.log'`
+    - `Remove-Item $log -ErrorAction SilentlyContinue`
+    - `Start-Process -FilePath 'cmd.exe' -ArgumentList '/c','set DANGEROUSLY_OMIT_AUTH=true&& npx --yes @modelcontextprotocol/inspector --transport http --server-url http://192.168.178.210:51477 > "C:\\codex-workspace\\mcp-inspector-il2cpp.log" 2>&1'`
+    - `Start-Sleep 2; Get-Content $log -Tail 50`
+  - Mono: same commands but `--server-url http://192.168.178.210:51478` and a separate log file.
 - Pending: monitor the dropdown guard on other IL2CPP titles and keep `UeMcpHeadless.dll` disabled; maintain repeatable build automation for both outputs.
 
 ## Determinism Hardening
