@@ -11,6 +11,7 @@
   - `POST /message` — JSON-RPC 2.0 methods: `initialize`, `notifications/initialized`, `ping`, `list_tools`, `list_resources`, `call_tool`, `read_resource`, `stream_events`.
   - `GET /read?uri=unity://...` — wrappers `unity://...` resources; returns HTTP 200/4xx JSON when available.
   - `GET /` (or `/?…`) with `Accept: text/event-stream` — Server-Sent Events channel that mirrors JSON-RPC notifications/results/errors as `data: <json>\n\n` frames until the client disconnects (no chunked encoding).
+- CORS: All responses include `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Headers: Content-Type, Authorization`, and `Access-Control-Allow-Methods: GET, POST, OPTIONS` (max-age 86400). `OPTIONS /message` (and other paths) returns HTTP 204 + these headers for browser preflights (inspector UI, SSE).
 - `initialize` response: `{ protocolVersion: "2024-11-05", capabilities: { tools: { listChanged: true }, resources: { listChanged: true }, experimental: { streamEvents: {} } }, serverInfo: { name, version }, instructions: string }` (CoreCLR name `UnityExplorer.Mcp`, Mono name `UnityExplorer.Mcp.Mono`).
 - JSON-RPC notifications that omit `id` return HTTP 202 with an empty body (e.g., `notifications/initialized` from inspector); when an `id` is present, the server returns a normal JSON-RPC `{ result: { ok: true } }` body.
 - `list_tools`: each tool has `name`, `description`, `inputSchema` (JSON Schema; enums for constrained args such as `MousePick.mode`); cancellation tokens are omitted so inspector call forms stay clean.

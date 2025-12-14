@@ -59,6 +59,11 @@ namespace UnityExplorer.Mcp
         private const int ErrorNotFound = -32004;
         private const int ErrorRateLimited = -32005;
         private const int ConcurrencyLimit = 32;
+        private const string CorsHeaders =
+            "Access-Control-Allow-Origin: *\r\n" +
+            "Access-Control-Allow-Headers: Content-Type, Authorization\r\n" +
+            "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
+            "Access-Control-Max-Age: 86400\r\n";
 
         private readonly record struct ErrorShape(int Code, int HttpStatus, string Kind, string Message, string? Hint, string? Detail);
 
@@ -138,6 +143,12 @@ namespace UnityExplorer.Mcp
                         body = new string(buf, 0, read);
                     }
                     finally { ArrayPool<char>.Shared.Return(buf); }
+                }
+
+                if (string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
+                {
+                    await WriteCorsPreflightAsync(stream, ct).ConfigureAwait(false);
+                    return;
                 }
 
                 if (method == "POST" && (target.StartsWith("/message") || target == "/" || target.StartsWith("/?")))
@@ -397,6 +408,7 @@ namespace UnityExplorer.Mcp
                                 stream.WriteTimeout = Timeout.Infinite;
 
                                 var header = "HTTP/1.1 200 OK\r\n" +
+                                             CorsHeaders +
                                              "Content-Type: application/json\r\n" +
                                              "Transfer-Encoding: chunked\r\n" +
                                              "Connection: keep-alive\r\n\r\n";
@@ -429,6 +441,7 @@ namespace UnityExplorer.Mcp
                     stream.WriteTimeout = Timeout.Infinite;
 
                     var header = "HTTP/1.1 200 OK\r\n" +
+                                 CorsHeaders +
                                  "Content-Type: text/event-stream\r\n" +
                                  "Cache-Control: no-cache\r\n" +
                                  "Connection: keep-alive\r\n\r\n";
@@ -480,6 +493,7 @@ namespace UnityExplorer.Mcp
             {
                 case 200: return "OK";
                 case 202: return "Accepted";
+                case 204: return "No Content";
                 case 400: return "Bad Request";
                 case 403: return "Forbidden";
                 case 404: return "Not Found";
@@ -493,7 +507,9 @@ namespace UnityExplorer.Mcp
         private static async Task WriteResponseAsync(Stream stream, int code, string text, CancellationToken ct)
         {
             var body = Encoding.UTF8.GetBytes(text);
-            var header = $"HTTP/1.1 {code} {ReasonPhrase(code)}\r\nContent-Type: text/plain\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n";
+            var header = $"HTTP/1.1 {code} {ReasonPhrase(code)}\r\n" +
+                         CorsHeaders +
+                         $"Content-Type: text/plain\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n";
             var headerBytes = Encoding.UTF8.GetBytes(header);
             await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
             await stream.WriteAsync(body, 0, body.Length, ct).ConfigureAwait(false);
@@ -503,7 +519,9 @@ namespace UnityExplorer.Mcp
         {
             var json = JsonSerializer.Serialize(payload);
             var body = Encoding.UTF8.GetBytes(json);
-            var header = $"HTTP/1.1 {code} {ReasonPhrase(code)}\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n";
+            var header = $"HTTP/1.1 {code} {ReasonPhrase(code)}\r\n" +
+                         CorsHeaders +
+                         $"Content-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n";
             var headerBytes = Encoding.UTF8.GetBytes(header);
             await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
             await stream.WriteAsync(body, 0, body.Length, ct).ConfigureAwait(false);
@@ -511,7 +529,18 @@ namespace UnityExplorer.Mcp
 
         private static async Task WriteEmptyResponseAsync(Stream stream, int code, CancellationToken ct)
         {
-            var header = $"HTTP/1.1 {code} {ReasonPhrase(code)}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            var header = $"HTTP/1.1 {code} {ReasonPhrase(code)}\r\n" +
+                         CorsHeaders +
+                         $"Content-Length: 0\r\nConnection: close\r\n\r\n";
+            var headerBytes = Encoding.UTF8.GetBytes(header);
+            await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
+        }
+
+        private static async Task WriteCorsPreflightAsync(Stream stream, CancellationToken ct)
+        {
+            var header = $"HTTP/1.1 204 {ReasonPhrase(204)}\r\n" +
+                         CorsHeaders +
+                         "Content-Length: 0\r\nConnection: close\r\n\r\n";
             var headerBytes = Encoding.UTF8.GetBytes(header);
             await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
         }
@@ -1054,6 +1083,11 @@ namespace UnityExplorer.Mcp
         private readonly MonoMcpHandlers _handlers = new MonoMcpHandlers();
         private readonly int _concurrencyLimit = 16;
         private readonly int _streamLimit = 16;
+        private const string CorsHeaders =
+            "Access-Control-Allow-Origin: *\r\n" +
+            "Access-Control-Allow-Headers: Content-Type, Authorization\r\n" +
+            "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
+            "Access-Control-Max-Age: 86400\r\n";
         private readonly Dictionary<int, Stream> _streams = new Dictionary<int, Stream>();
         private readonly object _streamGate = new object();
         private readonly Dictionary<int, Stream> _sseStreams = new Dictionary<int, Stream>();
@@ -1135,12 +1169,19 @@ namespace UnityExplorer.Mcp
                     body = new string(buf, 0, read);
                 }
 
+                if (string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
+                {
+                    WriteCorsPreflight(stream);
+                    return;
+                }
+
                 if (method == "GET" && (target == "/" || target.StartsWith("/?")) && !string.IsNullOrEmpty(acceptHeader) && acceptHeader.IndexOf("text/event-stream", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     stream.ReadTimeout = Timeout.Infinite;
                     stream.WriteTimeout = Timeout.Infinite;
 
                     var header = "HTTP/1.1 200 OK\r\n" +
+                                 CorsHeaders +
                                  "Content-Type: text/event-stream\r\n" +
                                  "Cache-Control: no-cache\r\n" +
                                  "Connection: keep-alive\r\n\r\n";
@@ -1329,6 +1370,7 @@ namespace UnityExplorer.Mcp
                 stream.WriteTimeout = Timeout.Infinite;
 
                 var header = "HTTP/1.1 200 OK\r\n" +
+                             CorsHeaders +
                              "Content-Type: application/json\r\n" +
                              "Transfer-Encoding: chunked\r\n" +
                              "Connection: keep-alive\r\n\r\n";
@@ -1440,6 +1482,7 @@ namespace UnityExplorer.Mcp
             if (body == null) body = string.Empty;
             var payload = Encoding.UTF8.GetBytes(body);
             var header = "HTTP/1.1 " + statusCode + " " + ReasonPhrase(statusCode) + "\r\n"
+                         + CorsHeaders
                          + "Content-Type: " + contentType + "\r\n"
                          + "Content-Length: " + payload.Length + "\r\n"
                          + "Connection: close\r\n\r\n";
@@ -1451,6 +1494,17 @@ namespace UnityExplorer.Mcp
         private static void WriteEmptyResponse(Stream stream, int statusCode)
         {
             var header = "HTTP/1.1 " + statusCode + " " + ReasonPhrase(statusCode) + "\r\n"
+                         + CorsHeaders
+                         + "Content-Length: 0\r\n"
+                         + "Connection: close\r\n\r\n";
+            var headerBytes = Encoding.UTF8.GetBytes(header);
+            stream.Write(headerBytes, 0, headerBytes.Length);
+        }
+
+        private static void WriteCorsPreflight(Stream stream)
+        {
+            var header = "HTTP/1.1 204 " + ReasonPhrase(204) + "\r\n"
+                         + CorsHeaders
                          + "Content-Length: 0\r\n"
                          + "Connection: close\r\n\r\n";
             var headerBytes = Encoding.UTF8.GetBytes(header);
@@ -1637,6 +1691,7 @@ namespace UnityExplorer.Mcp
             {
                 case 200: return "OK";
                 case 202: return "Accepted";
+                case 204: return "No Content";
                 case 400: return "Bad Request";
                 case 403: return "Forbidden";
                 case 404: return "Not Found";

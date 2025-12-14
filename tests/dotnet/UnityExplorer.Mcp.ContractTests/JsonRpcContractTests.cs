@@ -495,6 +495,62 @@ public class JsonRpcContractTests
     }
 
     [Fact]
+    public async Task Cors_Preflight_Allows_Message_Posts()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+
+        using var req = new HttpRequestMessage(HttpMethod.Options, "/message");
+        req.Headers.Add("Origin", "http://example.com");
+        req.Headers.Add("Access-Control-Request-Method", "POST");
+        req.Headers.Add("Access-Control-Request-Headers", "Content-Type, Authorization");
+
+        using var res = await http.SendAsync(req);
+        res.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        res.Headers.TryGetValues("Access-Control-Allow-Origin", out var origins).Should().BeTrue();
+        origins.Should().Contain("*");
+        res.Headers.TryGetValues("Access-Control-Allow-Methods", out var methods).Should().BeTrue();
+        methods.Should().Contain(m => m.Contains("POST"));
+        res.Headers.TryGetValues("Access-Control-Allow-Headers", out var headers).Should().BeTrue();
+        headers.Should().Contain(h => h.IndexOf("content-type", StringComparison.OrdinalIgnoreCase) >= 0);
+    }
+
+    [Fact]
+    public async Task Cors_Headers_Are_Present_On_Message_And_Sse()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+
+        var payload = new
+        {
+            jsonrpc = "2.0",
+            id = "cors-ping",
+            method = "ping",
+            @params = new { }
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var res = await http.PostAsync("/message", content);
+        res.EnsureSuccessStatusCode();
+        res.Headers.TryGetValues("Access-Control-Allow-Origin", out var origins).Should().BeTrue();
+        origins.Should().Contain("*");
+
+        using var sseRequest = new HttpRequestMessage(HttpMethod.Get, "/");
+        sseRequest.Headers.Accept.Clear();
+        sseRequest.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
+
+        using var sseResponse = await http.SendAsync(sseRequest, HttpCompletionOption.ResponseHeadersRead);
+        sseResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        sseResponse.Headers.TryGetValues("Access-Control-Allow-Origin", out var sseOrigins).Should().BeTrue();
+        sseOrigins.Should().Contain("*");
+    }
+
+    [Fact]
     public async Task StreamEvents_Endpoint_Responds_With_Chunked_Json_When_Server_Available()
     {
         if (!Discovery.TryLoad(out var info))
