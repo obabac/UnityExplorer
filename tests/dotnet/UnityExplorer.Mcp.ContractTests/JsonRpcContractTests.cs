@@ -551,6 +551,20 @@ public class JsonRpcContractTests
     }
 
     [Fact]
+    public async Task Read_Endpoint_Includes_Cors_Headers()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+
+        using var res = await http.GetAsync("/read?uri=unity://status");
+        res.EnsureSuccessStatusCode();
+        res.Headers.TryGetValues("Access-Control-Allow-Origin", out var origins).Should().BeTrue();
+        origins.Should().Contain("*");
+    }
+
+    [Fact]
     public async Task StreamEvents_Endpoint_Responds_With_Chunked_Json_When_Server_Available()
     {
         if (!Discovery.TryLoad(out var info))

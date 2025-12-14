@@ -1,15 +1,15 @@
 # Unity Explorer MCP Integration Plan (Updated)
 
-- Updated: 2025-12-15  
+- Updated: 2025-12-14  
 - Owner: Unity Explorer MCP (p-unity-explorer-mcp)  
 - Goal: Expose Unity Explorer’s runtime capabilities through an in‑process MCP server with **streamable HTTP** transport, making game state and safe controls available as MCP resources, tools, and streams.
 
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
-### Latest iteration snapshot (2025-12-15)
+### Latest iteration snapshot (2025-12-14)
 - Streamable HTTP now exposes SSE on `GET /` with `Accept: text/event-stream`; JSON-RPC notifications without `id` return HTTP 202 so the inspector client opens SSE, and SSE frames mirror `stream_events` notifications/results/errors. Inspector UI should now populate notifications on IL2CPP/Mono (previously empty on IL2CPP); CLI smokes still green.
 - Browser inspector is unblocked via CORS: all responses include `Access-Control-Allow-Origin:*` + allow headers/methods and `OPTIONS` preflight returns 204; added contract tests covering preflight, JSON-RPC responses, and SSE headers.
-- Synced `plans/mcp-interface-concept.md` with SSE + 202 notification behavior; contract suite updated with SSE/tool_result + notification-without-id coverage: `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` → 53 passed, 1 skipped (host http://192.168.178.210:51477, Ready=true).
+- Synced `plans/mcp-interface-concept.md` with SSE + 202 notification behavior; contract suite updated with SSE/tool_result + notification-without-id coverage and CORS headers on `GET /read` for browser inspector: `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` → 54 passed, 1 skipped (host http://192.168.178.210:51477, Ready=true).
 - Selection streams + UI pick parity: `SelectObject` now broadcasts a selection notification using the same snapshot as `unity://selection`, and contract tests lock the stream payload against the resource on CoreCLR/Mono. Added a SpawnTestUi MousePick(UI) contract ensuring the primary `Id` matches the first/top-most hit.
 - Mono MCP stability: MainThread now short-circuits when already on the captured context (fixes selection deadlocks), `MousePick` UI sorts raycast hits (top-most Id), Mono `/read?uri=...` parsing is fixed, and selection notifications reuse the server snapshot. Mono smoke now asserts a `selection` stream event and reads extra stream lines.
 - Mono MCP writes expanded: `SpawnTestUi` now returns block ids; guarded `Reparent` / `DestroyObject` are limited to the SpawnTestUi blocks; write smoke now enables writes → spawn → reparent → destroy block → destroy UI → reset config (`allowWrites=false`). Packaging still copies the Mono DLL into `Release/.../Mods/`; redeployed to `SpaceShooter_Mono`.
