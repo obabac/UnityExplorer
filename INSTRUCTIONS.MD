@@ -1,23 +1,25 @@
-# Iteration 6/10 — Stabilize IL2CPP contract tests
+# Iteration 7/10 — Inspector UI validation + IL2CPP stability
 
 Rule
-- Focus on the IL2CPP contract suite crash (UnityPlayer.dll 0x80000003 / "Graphics device is null"). Fix before adding new behavior.
-- Run baseline gates (inspector CLI both hosts, Mono smoke with writes, bad read_resource) before and after changes.
+- Keep Space Shooter running in an interactive GPU session (avoid headless ssh launches that use Microsoft Basic Render Driver and trigger "Graphics device is null").
+- Run baseline gates before/after changes: inspector CLI on both hosts, Mono smoke with writes, bad read_resource, IL2CPP contract suite with UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json.
+- Leave allowWrites=false and requireConfirm=true when done.
 
 Hosts
 - IL2CPP/CoreCLR: http://192.168.178.210:51477
 - Mono:          http://192.168.178.210:51478
 
 Current state
-- Selection stream + MousePick UI contracts are in place; docs/tests updated. AssemblyInfo.cs now disables xUnit parallelization.
-- Mono inspector + Run-McpMonoSmoke pass; IL2CPP inspector CLI passes. Full IL2CPP contract suite still crashes the game after the first few tests; individual tests pass when run alone.
+- IL2CPP contract suite ran clean twice after restarting Space Shooter in an interactive GPU session; Player-prev.log from the crash showed Microsoft Basic Render Driver -> Graphics device is null.
+- Inspector CLI and Mono smoke (write flow) pass on both hosts; allowWrites reset to false on both.
+- Bad read_resource returns structured NotFound and `[MCP] error ...` shows in logs.
 
 Tasks
-0) Run baseline gates on both hosts.
-1) Investigate the IL2CPP crash: check Latest.log, UnityExplorer logs under Mods/sinai-dev-UnityExplorer/Logs, and Player.log. Try to find a minimal repro (possibly stream_events/selection/SetConfig paths). Stop Mono if needed and focus on IL2CPP.
-2) Fix the crash, rebuild/deploy IL2CPP (`pwsh ./build-ml-coreclr.ps1`), restart the game, and rerun full `dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` with `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json`.
-3) Keep allowWrites=false when done; leave the game running if stable.
-4) Sync docs (`plans/...`) and this file, then commit.
+0) Ensure game is running with NVIDIA GPU (interactive session). Tail Latest.log/Player.log for any Basic Render Driver entry; restart via interactive session if needed.
+1) Run inspector UI (not just --cli) against both hosts; fix any schema/input issues surfaced by the UI. Document deltas in plans/mcp-interface-concept.md if shapes change.
+2) Keep IL2CPP contract suite green: `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` after changes; monitor for graphics device warnings.
+3) Leave allowWrites=false/requireConfirm=true; keep game running if stable.
+4) Sync docs (`plans/...`, README/INSTRUCTIONS) and commit.
 
 Housekeeping
 - Keep `Mods\\UeMcpHeadless.dll` disabled on the Test-VM.
