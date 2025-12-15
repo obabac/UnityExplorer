@@ -8,9 +8,9 @@ This plan merges the original scope, the current implementation snapshot, and th
 
 ### Latest iteration snapshot (2025-12-15)
 - UnityExplorer MCP game hosts remain up on the Test-VM: IL2CPP `http://192.168.178.210:51477` and Mono `http://192.168.178.210:51478` (`/message` returns 200).
-- win-dev control plane patched: `McpProxy8082` (desktop-commander) and `McpProxy8083` (mcp-control) now create a transport even when `mcp-session-id` is provided on the first `initialize`; the session binds to that id. After a proxy restart, seed the session with one initialize (use the client’s session id) and the harness tools work again (`get_config` on 8082, `get_screen_size` on 8083). Requests still need `Accept: application/json, text/event-stream` and the modern method names `tools/list` / `tools/call` (logs under `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`).
+- win-dev control plane alias surface validated: `McpProxy8083` (mcp-control) now exposes the harness tool names; seed the session after a restart with `initialize` that includes `Accept: application/json, text/event-stream` plus a `clientInfo` payload (e.g., `protocolVersion=2024-11-05`, `capabilities={}`) and the `win-dev-vm-ui/State-Tool` + `win-dev-vm-ui/Powershell-Tool` succeed. Logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`.
 - Contract tests pass against IL2CPP (55 passed / 1 skipped). Mono world MousePick parity gap persists (`Items=[]` vs `null`).
-- Next: run real inspector UI flows (browser) on IL2CPP + Mono via the restored win-dev UI automation path, then fix the remaining parity gaps.
+- Inspector UI (IL2CPP) launched via `Start-McpInspectorUi.ps1`; headless Edge capture saved to `C:\codex-workspace\inspector-il2cpp-ui.png` (interactive page still needs a visible render through win-dev UI). Next: rerun the UI flow on IL2CPP + Mono with visible rendering, then close remaining parity gaps.
 
 ---
 
