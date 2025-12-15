@@ -7,10 +7,10 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-15)
-- Fresh IL2CPP + ML_Mono builds deployed to the Test-VM; fixed Mono DTO instantiation in `MonoReadTools` (use property initializers for `CameraInfoDto`/`PickResultDto`/`PickHit`) so ML_Mono builds again cleanly.
-- Inspector gate re-run: `tools/Run-McpInspectorCli.ps1` passes on IL2CPP 51477 and Mono 51478; `tools/Run-McpMonoSmoke.ps1 -EnableWriteSmoke` passes on 51478 (SpawnTestUi → SetMember(Image.color) → Reparent → DestroyObject → SetTimeScale). allowWrites/requireConfirm reset after smoke.
-- Contract tests via `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` now 55 passed / 1 skipped; streams log-notification coverage remains.
-- Mono read parity from the prior iteration stands (MousePick UI ordering/primaryId and CameraInfo mirror IL2CPP using `InputManager` coords, world mode omits `Items`); Space Shooter IL2CPP + Mono outputs remain stable, dropdown refresh guard enabled, `UeMcpHeadless.dll` stays disabled, inspector UI helper still valid.
+- IL2CPP + ML_Mono rebuilt/deployed to the Test-VM; SpaceShooter IL2CPP (51477) and Mono (51478) relaunched; configs restored to `allowWrites=false` / `requireConfirm=true` after checks.
+- Inspector CLI smokes green on both hosts (`tools/Run-McpInspectorCli.ps1`), and Mono write smoke (`tools/Run-McpMonoSmoke.ps1 -EnableWriteSmoke`) passes end-to-end (SpawnTestUi → SetMember(Image.color) → Reparent → DestroyObject → DestroyTestUi → SetTimeScale) with selection/log/tool_result events observed.
+- JSON-RPC checks standing in for the browser UI (win-dev-vm UI MCP on :8083 is offline): `GetCameraInfo` shape matches spec on both hosts; `MousePick` UI at normalized (0.5,0.5) returns GameOverText with primary Id == Items[0]; world mode returns Id with `Items=null` on IL2CPP and an empty array on Mono (parity note); SpawnTestUi is cleaned up afterward.
+- Contract tests via `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` remain 55 passed / 1 skipped.
 
 ---
 
