@@ -7,9 +7,10 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-15)
+- Test-VM validation rerun (iteration 1): IL2CPP 51477 inspector CLI PASS; contract suite via `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` → 54 passed, 1 skipped. Mono 51478 inspector CLI PASS; `pwsh ./tools/Run-McpMonoSmoke.ps1 -EnableWriteSmoke` PASS (spawn/reparent/destroy/time-scale path with selection/log/tool_result stream events). Configs left at `allowWrites=false`, `requireConfirm=true`.
 - Added `tools/Start-McpInspectorUi.ps1` to launch the browser inspector with prefilled `transport=streamable-http&serverUrl=...` (no typing, keeps `MCP_PROXY_AUTH_TOKEN`, sets `DANGEROUSLY_OMIT_AUTH=true`). Validated on the Test-VM: IL2CPP (`http://192.168.178.210:51477`) and Mono (`:51478`) inspector UI instances start via the script and emit `tool_result`/log activity; inspector CLI smokes pass on both hosts.
 - Mono write surface fixed: ML_Mono now copies the built DLL/PDB into `Release/.../Mods/` via a new post-build target; `sha256sum Release/.../UnityExplorer.ML.Mono.dll Release/.../Mods/UnityExplorer.ML.Mono.dll` matches after `dotnet build -c ML_Mono`. Deployed to `SpaceShooter_Mono` and reran `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` → PASS (spawn/reparent/destroy/reset all succeed; selection/log/tool_result events seen). allowWrites/requireConfirm were restored to safe defaults.
-- Browser inspector remains CORS-unblocked; contract suite stays green (`UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` → 54 passed, 1 skipped). SSE/tool_result + notification-without-id coverage stays in place.
+- Browser inspector remains CORS-unblocked; SSE/tool_result + notification-without-id coverage stays in place.
 - Selection streams + UI pick parity, Mono read fixes (MousePick ordering, `/read?uri=` parsing), and main-thread short-circuit remain in effect; selection notifications mirror `unity://selection` on both runtimes.
 - Space Shooter builds remain stable (IL2CPP + Mono outputs under `C:\codex-workspace\space-shooter-build\`); dropdown refresh guard stays enabled; `Mods\UeMcpHeadless.dll` remains disabled on the Test-VM.
 

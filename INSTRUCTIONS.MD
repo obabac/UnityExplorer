@@ -1,20 +1,26 @@
-# Iteration — Contract sweep + Mono parity follow-up
+# Iteration 2/10 — Mono parity + stream notification test
 
-Context
-- `tools/Start-McpInspectorUi.ps1` launches the inspector UI with prefilled `transport=streamable-http&serverUrl=...` (no typing). Ran on the Test-VM for IL2CPP (:51477) and Mono (:51478); CLI smokes pass on both hosts.
-- ML_Mono adds a post-build copy into `Release/.../Mods/`; `sha256sum Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll` matches after `dotnet build -c ML_Mono`. Deployed to `SpaceShooter_Mono`; `pwsh ./tools/Run-McpMonoSmoke.ps1 -EnableWriteSmoke` now passes end-to-end.
-- Contract suite stays green (54 passed, 1 skipped). Games are stopped on the Test-VM; allowWrites/requireConfirm should stay false/true when you finish.
+Goal
+- Push Mono MCP toward CoreCLR parity by adding one guarded write with allowlist/confirm parity (e.g., SetMember or equivalent) and extend Mono smoke coverage.
+- Add a contract test for a non-tool stream notification (log or selection) while keeping IL2CPP contract suite green.
 
 Rules
-- Validate on the Test-VM in the same iteration for any behavior change; keep `allowWrites=false` and `requireConfirm=true` when done.
+- Any behavior change => validate on the Test-VM in the SAME iteration.
+- Inspector is a gate: run `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477` (IL2CPP) and `-BaseUrl http://192.168.178.210:51478` (Mono) after changes.
+- Keep `allowWrites=false` and `requireConfirm=true` when you finish.
 - Keep `Mods\\UeMcpHeadless.dll` disabled; launch games in an interactive GPU session.
-- Prefer PowerShell one-liners; keep plans (`plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`) in sync.
+- Keep docs in sync: `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and (if shapes change) `plans/mcp-interface-concept.md`.
 
-Tasks (suggested)
-1) Re-run contract tests on IL2CPP host using the discovery file: `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release`; record results in the plan/todo.
-2) Tackle one Mono parity gap (e.g., console/scripts/hooks coverage or stream coverage) without regressing IL2CPP; document any shape changes in `plans/mcp-interface-concept.md` and add tests.
-3) Use `tools/Start-McpInspectorUi.ps1` on the host you touched and confirm UI can list tools/resources, call `GetStatus`, read `unity://status`/`unity://scenes`, and show at least one `tool_result` notification; note findings in the plan/todo.
+Test-VM hosts
+- IL2CPP/CoreCLR: `http://192.168.178.210:51477`
+- Mono:          `http://192.168.178.210:51478`
 
-Hosts
-- IL2CPP: http://192.168.178.210:51477
-- Mono:   http://192.168.178.210:51478
+Tasks
+1) Implement the next safe Mono write toward parity (e.g., `SetMember` with allowlists) with CoreCLR error envelope + `allowWrites`/`requireConfirm` gating; update DTOs/docs/tests as needed.
+2) Extend `tools/Run-McpMonoSmoke.ps1` to cover the new write path; rerun `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -EnableWriteSmoke` and ensure config resets to safe defaults.
+3) Add a contract test for at least one non-tool `stream_events` notification (selection or log); rerun `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release`.
+4) Run inspector CLI on both hosts after changes. If anything fails, fix it and rerun the same gate(s) in this iteration.
+
+Finish
+- Update `plans/unity-explorer-mcp-plan.md` snapshot + `plans/unity-explorer-mcp-todo.md` status (and `plans/mcp-interface-concept.md` if shapes changed).
+- Write next iteration instructions into `INSTRUCTIONS.MD` (Iteration 3/10) based on the roadmap, then commit.
