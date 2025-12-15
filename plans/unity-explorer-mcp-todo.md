@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-15): Test-VM validation rerun. IL2CPP 51477 inspector CLI PASS; `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` → 55 passed, 1 skipped (includes log-notification stream_events contract). Mono 51478 inspector CLI PASS; `pwsh ./tools/Run-McpMonoSmoke.ps1 -EnableWriteSmoke` PASS (SpawnTestUi + SetMember(Image.color) + reparent/destroy/time-scale with selection/log/tool_result events). `allowWrites=false` / `requireConfirm=true` restored after smoke. `tools/Start-McpInspectorUi.ps1` remains the fastest way to launch the browser inspector with prefilled transport/serverUrl.
+Status (2025-12-15): Test-VM validation rerun. Mono MousePick UI ordering/primary Id and CameraInfo now match IL2CPP (Mono handler uses `InputManager` pointer coords; world mode omits `Items`). IL2CPP 51477 inspector CLI PASS; `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` → 55 passed, 1 skipped (includes log-notification stream_events contract). Mono 51478 inspector CLI PASS; `pwsh ./tools/Run-McpMonoSmoke.ps1 -EnableWriteSmoke` PASS (SpawnTestUi + SetMember(Image.color) + reparent/destroy/time-scale with selection/log/tool_result events). `allowWrites=false` / `requireConfirm=true` restored after smoke. `tools/Start-McpInspectorUi.ps1` remains the fastest way to launch the browser inspector with prefilled transport/serverUrl.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -168,7 +168,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Implement guarded writes on Mono (start with `SetActive`, `SelectObject`, `GetTimeScale`/`SetTimeScale`) behind `allowWrites` + `requireConfirm`; keep the same error envelope as CoreCLR (needs live validation on hosts).
   - [x] Add `SpawnTestUi` / `DestroyTestUi` guarded tools to Mono and cover them in `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` (config enable → spawn/destroy → reset).
   - [x] Add guarded `Reparent` / `DestroyObject` for Mono (limited to SpawnTestUi blocks) and surface SpawnTestUi block ids for write smoke reparent/destroy coverage.
-  - [ ] Expand Mono coverage toward CoreCLR parity (selection, MousePick, camera, console/scripts, hooks) and log known gaps vs. IL2CPP/Test-VM.
+  - [ ] Expand Mono coverage toward CoreCLR parity (selection, console/scripts, hooks); MousePick UI ordering/primary Id and CameraInfo now match IL2CPP; log remaining gaps vs. IL2CPP/Test-VM.
   
   - [x] Fix Mono notification broadcast compile issue (net35 has no Tasks): remove discards on void `BroadcastNotificationAsync` or reintroduce a Task-compatible wrapper.
   - [x] Run Mono smoke + inspector CLI against a real Mono host and record results (Test‑VM base URL: `http://192.168.178.210:51478`). See `README-mcp.md` Mono Host Validation Checklist. (Ran `Run-McpMonoSmoke.ps1`, inspector tools/list + resources/read now green after redeploy.)
