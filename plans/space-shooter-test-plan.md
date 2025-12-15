@@ -15,7 +15,7 @@
 - Allowed: modify this Unity project to keep IL2CPP + Mono builds repeatable and as similar as possible.
 - Game build (IL2CPP/CoreCLR host): `C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP` (Unity 2021.3.45f1, IL2CPP, x86_64).
 - Mono host: `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono` running at `http://192.168.178.210:51478`; `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3` should pass (2 streamed lines including `tool_result`). Mono exposes `SpawnTestUi` / `DestroyTestUi` behind `allowWrites+confirm` and `Reparent` / `DestroyObject` gated to those test blocks.
-  - Gotcha: `dotnet build src/UnityExplorer.csproj -c ML_Mono` updates `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll`, but the game loads `Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll`. If you deploy a stale `Mods/` DLL, Mono write smoke may fail with `Tool not found: Reparent`.
+  - Note: MelonLoader loads from `Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll`. `dotnet build src/UnityExplorer.csproj -c ML_Mono` now copies into `Mods/`, but if Mono seems stale run: `sha256sum Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll`.
 - Unity Editor installed at `C:\Program Files\Unity 2021.3.45f1` (product version `2021.3.45f1_0da89fac8e79`).
 - Loader/Mods: MelonLoader 0.7.2-ci (nightly) + `Mods\UnityExplorer.ML.IL2CPP.CoreCLR.dll` 4.12.8.
 - MCP config: `Mods\sinai-dev-UnityExplorer\mcp.config.json` (`Enabled=true`, `BindAddress=0.0.0.0`, `Port=51477`, `AuthToken=changeme`, writes disabled).

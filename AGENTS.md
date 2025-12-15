@@ -46,11 +46,12 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
   - Automatically call `./tools/Update-Mod-Remote.ps1` to copy the
     freshly built mod files to the Windows Test-VM.
 
-### Mono build/deploy gotcha (ML_Mono)
+### Mono build/deploy note (ML_Mono)
 
-- `dotnet build src/UnityExplorer.csproj -c ML_Mono` writes `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll`, but MelonLoader loads the mod from `Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll`.
-- Keep these in sync before deploying to the Test-VM (run `pwsh ./build.ps1` which moves the DLL into `Mods/`, or copy the built DLL into `Release/UnityExplorer.MelonLoader.Mono/Mods/`).
-- If you deploy a stale `Mods/` DLL, the Mono host can look like it “misses” tools (e.g., `Reparent`) even when the code exists.
+- MelonLoader loads the mod from `Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll` (not the root folder).
+- `dotnet build src/UnityExplorer.csproj -c ML_Mono` now copies the built DLL/PDB into `Mods/` automatically.
+- Sanity check: `sha256sum Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll` should match.
+- If you still see stale behavior (missing tools like `Reparent`), redeploy after a clean build or run `pwsh ./build.ps1` (packaging) and re-copy mods.
 
 ### Checking MelonLoader logs on the Test-VM
 
