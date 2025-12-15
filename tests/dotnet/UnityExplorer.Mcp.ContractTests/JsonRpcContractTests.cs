@@ -981,6 +981,91 @@ public class JsonRpcContractTests
     }
 
     [Fact]
+    public async Task StreamEvents_Emits_Log_Notification_When_Error_Logged()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+
+        var streamPayload = new
+        {
+            jsonrpc = "2.0",
+            id = "stream-events-log-test",
+            method = "stream_events",
+            @params = new { }
+        };
+
+        var streamJson = JsonSerializer.Serialize(streamPayload);
+        using var streamContent = new StringContent(streamJson, Encoding.UTF8, "application/json");
+        using var streamRequest = new HttpRequestMessage(HttpMethod.Post, "/message")
+        {
+            Content = streamContent
+        };
+
+        using var streamResponse = await http.SendAsync(streamRequest, HttpCompletionOption.ResponseHeadersRead);
+        streamResponse.EnsureSuccessStatusCode();
+
+        await using var stream = await streamResponse.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+
+        var badPayload = new
+        {
+            jsonrpc = "2.0",
+            id = "call-tool-invalid",
+            method = "call_tool",
+            @params = new
+            {
+                name = "NonExistentTool",
+                arguments = new { }
+            }
+        };
+
+        var badJson = JsonSerializer.Serialize(badPayload);
+        using var badContent = new StringContent(badJson, Encoding.UTF8, "application/json");
+        using var badResponse = await http.PostAsync("/message", badContent);
+        badResponse.StatusCode.Should().NotBe(HttpStatusCode.InternalServerError);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        while (!cts.IsCancellationRequested)
+        {
+            string? line;
+            try { line = await reader.ReadLineAsync(cts.Token); }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            using var doc = JsonDocument.Parse(line);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("method", out var methodEl) || methodEl.GetString() != "notification")
+                continue;
+
+            if (!root.TryGetProperty("params", out var @params))
+                continue;
+
+            if (!@params.TryGetProperty("event", out var eventEl) || eventEl.GetString() != "log")
+                continue;
+
+            @params.TryGetProperty("payload", out var payload).Should().BeTrue();
+            payload.TryGetProperty("level", out var level).Should().BeTrue();
+            level.GetString().Should().NotBeNullOrWhiteSpace();
+            payload.TryGetProperty("message", out var message).Should().BeTrue();
+            message.GetString().Should().NotBeNullOrWhiteSpace();
+            payload.TryGetProperty("source", out var source).Should().BeTrue();
+            source.GetString().Should().NotBeNullOrWhiteSpace();
+
+            return;
+        }
+
+        Assert.Fail("Expected a 'log' notification on stream_events after triggering an MCP error.");
+    }
+
+    [Fact]
     public async Task StreamEvents_Notification_Has_Generic_Shape_When_Present()
     {
         if (!Discovery.TryLoad(out var info))

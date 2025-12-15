@@ -7,12 +7,10 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-15)
-- Test-VM validation rerun (iteration 1): IL2CPP 51477 inspector CLI PASS; contract suite via `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` → 54 passed, 1 skipped. Mono 51478 inspector CLI PASS; `pwsh ./tools/Run-McpMonoSmoke.ps1 -EnableWriteSmoke` PASS (spawn/reparent/destroy/time-scale path with selection/log/tool_result stream events). Configs left at `allowWrites=false`, `requireConfirm=true`.
-- Added `tools/Start-McpInspectorUi.ps1` to launch the browser inspector with prefilled `transport=streamable-http&serverUrl=...` (no typing, keeps `MCP_PROXY_AUTH_TOKEN`, sets `DANGEROUSLY_OMIT_AUTH=true`). Validated on the Test-VM: IL2CPP (`http://192.168.178.210:51477`) and Mono (`:51478`) inspector UI instances start via the script and emit `tool_result`/log activity; inspector CLI smokes pass on both hosts.
-- Mono write surface fixed: ML_Mono now copies the built DLL/PDB into `Release/.../Mods/` via a new post-build target; `sha256sum Release/.../UnityExplorer.ML.Mono.dll Release/.../Mods/UnityExplorer.ML.Mono.dll` matches after `dotnet build -c ML_Mono`. Deployed to `SpaceShooter_Mono` and reran `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` → PASS (spawn/reparent/destroy/reset all succeed; selection/log/tool_result events seen). allowWrites/requireConfirm were restored to safe defaults.
-- Browser inspector remains CORS-unblocked; SSE/tool_result + notification-without-id coverage stays in place.
-- Selection streams + UI pick parity, Mono read fixes (MousePick ordering, `/read?uri=` parsing), and main-thread short-circuit remain in effect; selection notifications mirror `unity://selection` on both runtimes.
-- Space Shooter builds remain stable (IL2CPP + Mono outputs under `C:\codex-workspace\space-shooter-build\`); dropdown refresh guard stays enabled; `Mods\UeMcpHeadless.dll` remains disabled on the Test-VM.
+- Mono guarded write parity: added `SetMember` (allowWrites + confirm + `reflectionAllowlistMembers`) and updated `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` to cover `Image.color` writes alongside spawn/reparent/destroy/time-scale; configs reset to `allowWrites=false` / `requireConfirm=true` after the run. Built ML_Mono and redeployed to `SpaceShooter_Mono` via `Update-Mod-Remote.ps1`; Mono inspector CLI (`http://192.168.178.210:51478`) now lists `SetMember` and passes smoke.
+- Streams coverage: new contract test `StreamEvents_Emits_Log_Notification_When_Error_Logged` validates non-tool `log` notifications on `stream_events`; IL2CPP contract suite via `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` → 55 passed, 1 skipped.
+- Inspector gate: reran `tools/Run-McpInspectorCli.ps1` on IL2CPP 51477 and Mono 51478 after deployments; both PASS. Browser inspector helper (`tools/Start-McpInspectorUi.ps1`) remains valid for UI checks.
+- Space Shooter builds remain stable (IL2CPP + Mono outputs under `C:\codex-workspace\space-shooter-build\`); dropdown refresh guard stays enabled; `Mods\UeMcpHeadless.dll` remains disabled on the Test-VM. Selection streams + UI pick parity and prior Mono read fixes (MousePick ordering, `/read?uri=` parsing) remain in effect.
 
 ---
 
@@ -28,9 +26,9 @@ This plan merges the original scope, the current implementation snapshot, and th
 Pre-reqs already done (2025-12-13): inspector CLI gate (`tools/Run-McpInspectorCli.ps1`), removed the `UeMcpHeadless.dll` workaround, Mono baseline guarded writes, and repeatable Space Shooter IL2CPP+Mono rebuilds.
 
 1) Mono writes E2E gate: run `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -EnableWriteSmoke` and `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478`; ensure config resets (`allowWrites=false`) after the write smoke.
-2) Expand Mono writes (tier 1): add the next safest mutations (e.g., `DestroyObject`, `Reparent`, `SetMember` with allowlists), keeping `allowWrites+confirm` gating and CoreCLR error envelope parity; extend Mono smoke to cover at least one new write.
+2) Expand Mono writes (tier 1): `SetMember` with allowlists is in; keep `allowWrites+confirm` parity while adding any remaining safe mutations and extend Mono smoke alongside each addition.
 3) Mono read parity: align selection, camera/freecam, and `MousePick` UI multi-hit behavior with IL2CPP; document any deltas in `plans/mcp-interface-concept.md`.
-4) Streams/testing: add a contract test for at least one non-tool stream notification (`selection` or `log`) and keep rate-limit tests stable.
+4) Streams/testing: log notification contract coverage is in; keep rate-limit tests stable and maintain non-tool notification coverage.
 5) Inspector UX pass: run the inspector UI (not only CLI) against IL2CPP + Mono and fix any `inputSchema` / resource metadata issues; record results in `plans/unity-explorer-mcp-todo.md`.
 6) Space Shooter env hardening: keep Mono/IL2CPP builds as similar as possible; improve determinism (`-seed`) only if needed for flaky tests; keep rebuild scripts working.
 7) CoreCLR/IL2CPP write hardening: expand allowlists + confirm flows and keep contract tests green.

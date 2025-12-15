@@ -1779,6 +1779,7 @@ namespace UnityExplorer.Mcp
             list.Add(new { name = "TailLogs", description = "Tail recent logs.", inputSchema = Schema(new Dictionary<string, object> { { "count", Integer(200) } }) });
             list.Add(new { name = "GetSelection", description = "Current selection / inspected tabs.", inputSchema = Schema(new Dictionary<string, object>()) });
             list.Add(new { name = "SetActive", description = "Set GameObject active state (guarded by allowWrites/confirm).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "active", Bool() }, { "confirm", Bool(false) } }, new[] { "objectId", "active" }) });
+            list.Add(new { name = "SetMember", description = "Set a field or property on a component (allowlist enforced).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "componentType", String() }, { "member", String() }, { "jsonValue", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "componentType", "member", "jsonValue" }) });
             list.Add(new { name = "Reparent", description = "Reparent a GameObject under a new parent (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "newParentId", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "newParentId" }) });
             list.Add(new { name = "DestroyObject", description = "Destroy a GameObject (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "confirm", Bool(false) } }, new[] { "objectId" }) });
             list.Add(new { name = "SelectObject", description = "Select a GameObject in the inspector (requires allowWrites).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() } }, new[] { "objectId" }) });
@@ -1859,6 +1860,14 @@ namespace UnityExplorer.Mcp
                         if (active == null)
                             throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'active' is required.");
                         return _write.SetActive(oid, active.Value, GetBool(args, "confirm") ?? false);
+                    }
+                case "setmember":
+                    {
+                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
+                        var type = RequireString(args, "componentType", "Invalid params: 'componentType' is required.");
+                        var member = RequireString(args, "member", "Invalid params: 'member' is required.");
+                        var jsonValue = RequireString(args, "jsonValue", "Invalid params: 'jsonValue' is required.");
+                        return _write.SetMember(oid, type, member, jsonValue, GetBool(args, "confirm") ?? false);
                     }
                 case "reparent":
                     {
@@ -2550,6 +2559,41 @@ namespace UnityExplorer.Mcp
             return ToolError("Internal", ex.Message);
         }
 
+        private static bool IsAllowed(string typeFullName, string member)
+        {
+            var cfg = McpConfig.Load();
+            if (cfg.ReflectionAllowlistMembers == null || cfg.ReflectionAllowlistMembers.Length == 0) return false;
+            var key = typeFullName + "." + member;
+            foreach (var entry in cfg.ReflectionAllowlistMembers)
+            {
+                if (string.Equals(entry, key, StringComparison.Ordinal))
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool TryGetComponent(GameObject go, string typeFullName, out UnityEngine.Component comp)
+        {
+            comp = null;
+            var comps = go.GetComponents<UnityEngine.Component>();
+            foreach (var c in comps)
+            {
+                if (c != null && string.Equals(c.GetType().FullName, typeFullName, StringComparison.Ordinal))
+                {
+                    comp = c;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static object DeserializeTo(string json, Type type)
+        {
+            try { return JsonConvert.DeserializeObject(json, type); } catch { }
+            try { return Convert.ChangeType(json, type); } catch { }
+            return null;
+        }
+
         public object SetConfig(
             bool? allowWrites = null,
             bool? requireConfirm = null,
@@ -2627,6 +2671,48 @@ namespace UnityExplorer.Mcp
                     var go = _read.FindByInstanceId(iid);
                     if (go == null) throw new InvalidOperationException("NotFound");
                     go.SetActive(active);
+                });
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        public object SetMember(string objectId, string componentType, string member, string jsonValue, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+            if (!IsAllowed(componentType, member)) return ToolError("PermissionDenied", "Denied by allowlist");
+            if (!int.TryParse(objectId.StartsWith("obj:") ? objectId.Substring(4) : string.Empty, out var iid))
+                return ToolError("InvalidArgument", "Invalid id");
+
+            try
+            {
+                MainThread.Run(() =>
+                {
+                    var go = _read.FindByInstanceId(iid);
+                    if (go == null) throw new InvalidOperationException("NotFound");
+                    UnityEngine.Component comp;
+                    if (!TryGetComponent(go, componentType, out comp) || comp == null)
+                        throw new InvalidOperationException("Component not found");
+
+                    var t = comp.GetType();
+                    var fi = t.GetField(member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (fi != null)
+                    {
+                        var val = DeserializeTo(jsonValue, fi.FieldType);
+                        fi.SetValue(comp, val);
+                        return;
+                    }
+
+                    var pi = t.GetProperty(member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (pi == null || !pi.CanWrite)
+                        throw new InvalidOperationException("Member not writable");
+                    var valProp = DeserializeTo(jsonValue, pi.PropertyType);
+                    pi.SetValue(comp, valProp, null);
                 });
                 return new { ok = true };
             }

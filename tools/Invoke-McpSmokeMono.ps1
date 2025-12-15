@@ -135,16 +135,17 @@ try {
 
     $writeResult = $null
     if ($EnableWriteSmoke) {
-        Write-Host "[mono-smoke] guarded write smoke (SpawnTestUi -> Reparent -> DestroyObject -> DestroyTestUi + SetTimeScale)"
-        $resetParams = @{ name = "SetConfig"; arguments = @{ allowWrites = $false; requireConfirm = $true } }
+        Write-Host "[mono-smoke] guarded write smoke (SpawnTestUi -> SetMember(Image.color) -> Reparent -> DestroyObject -> DestroyTestUi + SetTimeScale)"
+        $resetParams = @{ name = "SetConfig"; arguments = @{ allowWrites = $false; requireConfirm = $true; reflectionAllowlistMembers = @() } }
         $spawned = $false
         $destroyUiJson = $null
         $destroyBlockJson = $null
         $reparentJson = $null
+        $setMemberJson = $null
         $selectionEvent = $null
         $blockIds = @()
         try {
-            Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+            Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true; reflectionAllowlistMembers = @("UnityEngine.UI.Image.color") } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
 
             $spawn = Invoke-McpRpc -Id "spawn-testui" -Method "call_tool" -Params @{ name = "SpawnTestUi"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $spawnJson = Get-JsonContent -Result $spawn
@@ -172,6 +173,11 @@ try {
 
             $childId = $blockIds[1]
             $parentId = $blockIds[0]
+
+            $colorJson = (@{ r = 0.25; g = 0.5; b = 0.75; a = 0.9 } | ConvertTo-Json -Compress)
+            $setMember = Invoke-McpRpc -Id "set-member" -Method "call_tool" -Params @{ name = "SetMember"; arguments = @{ objectId = $parentId; componentType = "UnityEngine.UI.Image"; member = "color"; jsonValue = $colorJson; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $setMemberJson = Get-JsonContent -Result $setMember
+            if (-not $setMemberJson -or -not $setMemberJson.ok) { throw "SetMember returned ok=false" }
 
             $reparent = Invoke-McpRpc -Id "reparent" -Method "call_tool" -Params @{ name = "Reparent"; arguments = @{ objectId = $childId; newParentId = $parentId; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $reparentJson = Get-JsonContent -Result $reparent
@@ -229,6 +235,7 @@ try {
             $writeResult = [ordered]@{
                 blocks         = $blockIds
                 spawn          = $spawnJson
+                setMember      = $setMemberJson
                 reparent       = $reparentJson
                 destroyBlock   = $destroyBlockJson
                 destroyUi      = $destroyUiJson
@@ -299,6 +306,7 @@ try {
     Write-Host "Logs (read): $($readLogsDoc.Items.Count) items"
     if ($EnableWriteSmoke) {
         $spawnOk = if ($writeResult) { $writeResult.spawn.ok } else { $false }
+        $setMemberOk = if ($writeResult) { $writeResult.setMember.ok } else { $false }
         $reparentOk = if ($writeResult) { $writeResult.reparent.ok } else { $false }
         $destroyBlockOk = if ($writeResult) { $writeResult.destroyBlock.ok } else { $false }
         $destroyUiOk = if ($writeResult) { $writeResult.destroyUi.ok } else { $false }
@@ -306,7 +314,7 @@ try {
         $timeValue = if ($writeResult) { $writeResult.time.value } else { $null }
         $timeLocked = if ($writeResult) { $writeResult.time.locked } else { $null }
         $selectionSeen = if ($writeResult) { $writeResult.selectionEvent -ne $null } else { $false }
-        Write-Host "Write smoke: blocks=$blockCount spawnOk=$spawnOk reparentOk=$reparentOk destroyBlockOk=$destroyBlockOk destroyUiOk=$destroyUiOk timeValue=$timeValue locked=$timeLocked selectionEvent=$selectionSeen"
+        Write-Host "Write smoke: blocks=$blockCount spawnOk=$spawnOk setMemberOk=$setMemberOk reparentOk=$reparentOk destroyBlockOk=$destroyBlockOk destroyUiOk=$destroyUiOk timeValue=$timeValue locked=$timeLocked selectionEvent=$selectionSeen"
     }
     Write-Host "Stream events captured: $($events.Count) (tool_result observed=$($toolResultEvent -ne $null))"
     Write-Host "[mono-smoke] Done"
