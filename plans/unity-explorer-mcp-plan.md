@@ -7,10 +7,10 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-15)
-- IL2CPP + ML_Mono rebuilt/deployed to the Test-VM; SpaceShooter IL2CPP (51477) and Mono (51478) relaunched; configs restored to `allowWrites=false` / `requireConfirm=true` after checks.
-- Inspector CLI smokes green on both hosts (`tools/Run-McpInspectorCli.ps1`), and Mono write smoke (`tools/Run-McpMonoSmoke.ps1 -EnableWriteSmoke`) passes end-to-end (SpawnTestUi → SetMember(Image.color) → Reparent → DestroyObject → DestroyTestUi → SetTimeScale) with selection/log/tool_result events observed.
-- JSON-RPC checks standing in for the browser UI (win-dev-vm UI MCP on :8083 is offline): `GetCameraInfo` shape matches spec on both hosts; `MousePick` UI at normalized (0.5,0.5) returns GameOverText with primary Id == Items[0]; world mode returns Id with `Items=null` on IL2CPP and an empty array on Mono (parity note); SpawnTestUi is cleaned up afterward.
-- Contract tests via `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` remain 55 passed / 1 skipped.
+- MCP control plane on the Test-VM is already listening on 8083 (`node .../mcp-control/build/index.js --sse --port 8083`); curl to `/mcp` returns an SSE response but blocks (needs a proper client handshake).
+- Started `Start-McpInspectorUi.ps1` for IL2CPP (51477) and Mono (51478); proxies spun up on localhost:6274/6277, but the browser UI stayed disconnected (Edge headless shows localhost refused/default forms). No UI tool calls were exercised yet; needs follow-up debugging of proxy/args.
+- IL2CPP `unity://status` reachable at 51477 and Mono at 51478; configs untouched this run. Contract tests still pass locally (`UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` → 55 passed / 1 skipped).
+- MousePick world/UI parity on Mono vs IL2CPP not rechecked this run; last known gap: world mode returns `Items=[]` on Mono vs `Items=null` on IL2CPP.
 
 ---
 
