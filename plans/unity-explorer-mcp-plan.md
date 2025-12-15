@@ -7,11 +7,10 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-15)
-- Mono read parity: MousePick UI ordering/primary Id and CameraInfo now mirror IL2CPP; Mono handler now uses `InputManager` coordinates and world mode omits `Items` to keep the DTO shape consistent across hosts.
-- Mono guarded write parity: added `SetMember` (allowWrites + confirm + `reflectionAllowlistMembers`) and updated `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` to cover `Image.color` writes alongside spawn/reparent/destroy/time-scale; configs reset to `allowWrites=false` / `requireConfirm=true` after the run. Built ML_Mono and redeployed to `SpaceShooter_Mono` via `Update-Mod-Remote.ps1`; Mono inspector CLI (`http://192.168.178.210:51478`) now lists `SetMember` and passes smoke.
-- Streams coverage: new contract test `StreamEvents_Emits_Log_Notification_When_Error_Logged` validates non-tool `log` notifications on `stream_events`; IL2CPP contract suite via `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` → 55 passed, 1 skipped.
-- Inspector gate: reran `tools/Run-McpInspectorCli.ps1` on IL2CPP 51477 and Mono 51478 after deployments; both PASS. Browser inspector helper (`tools/Start-McpInspectorUi.ps1`) remains valid for UI checks.
-- Space Shooter builds remain stable (IL2CPP + Mono outputs under `C:\codex-workspace\space-shooter-build\`); dropdown refresh guard stays enabled; `Mods\UeMcpHeadless.dll` remains disabled on the Test-VM. Selection streams and `/read?uri=` parsing fixes remain in effect.
+- Fresh IL2CPP + ML_Mono builds deployed to the Test-VM; fixed Mono DTO instantiation in `MonoReadTools` (use property initializers for `CameraInfoDto`/`PickResultDto`/`PickHit`) so ML_Mono builds again cleanly.
+- Inspector gate re-run: `tools/Run-McpInspectorCli.ps1` passes on IL2CPP 51477 and Mono 51478; `tools/Run-McpMonoSmoke.ps1 -EnableWriteSmoke` passes on 51478 (SpawnTestUi → SetMember(Image.color) → Reparent → DestroyObject → SetTimeScale). allowWrites/requireConfirm reset after smoke.
+- Contract tests via `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` now 55 passed / 1 skipped; streams log-notification coverage remains.
+- Mono read parity from the prior iteration stands (MousePick UI ordering/primaryId and CameraInfo mirror IL2CPP using `InputManager` coords, world mode omits `Items`); Space Shooter IL2CPP + Mono outputs remain stable, dropdown refresh guard enabled, `UeMcpHeadless.dll` stays disabled, inspector UI helper still valid.
 
 ---
 

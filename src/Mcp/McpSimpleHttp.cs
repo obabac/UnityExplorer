@@ -2405,13 +2405,25 @@ namespace UnityExplorer.Mcp
                     cam = Camera.allCameras[0];
 
                 if (cam == null)
-                    return new CameraInfoDto(freecam, "<none>", 0f, new Vector3Dto(0, 0, 0), new Vector3Dto(0, 0, 0));
+                    return new CameraInfoDto
+                    {
+                        IsFreecam = freecam,
+                        Name = "<none>",
+                        Fov = 0f,
+                        Pos = new Vector3Dto { X = 0f, Y = 0f, Z = 0f },
+                        Rot = new Vector3Dto { X = 0f, Y = 0f, Z = 0f }
+                    };
 
                 var pos = cam.transform.position;
                 var rot = cam.transform.eulerAngles;
-                return new CameraInfoDto(freecam, cam.name, cam.fieldOfView,
-                    new Vector3Dto(pos.x, pos.y, pos.z),
-                    new Vector3Dto(rot.x, rot.y, rot.z));
+                return new CameraInfoDto
+                {
+                    IsFreecam = freecam,
+                    Name = cam.name,
+                    Fov = cam.fieldOfView,
+                    Pos = new Vector3Dto { X = pos.x, Y = pos.y, Z = pos.z },
+                    Rot = new Vector3Dto { X = rot.x, Y = rot.y, Z = rot.z }
+                };
             });
         }
 
@@ -2440,7 +2452,13 @@ namespace UnityExplorer.Mcp
                 {
                     var eventSystem = EventSystem.current;
                     if (eventSystem == null)
-                        return new PickResultDto("ui", false, null, new List<PickHit>());
+                        return new PickResultDto
+                        {
+                            Mode = "ui",
+                            Hit = false,
+                            Id = null,
+                            Items = new List<PickHit>()
+                        };
 
                     var pointer = new PointerEventData(eventSystem)
                     {
@@ -2455,18 +2473,30 @@ namespace UnityExplorer.Mcp
                         if (go == null) continue;
                         var id = "obj:" + go.GetInstanceID();
                         var path = BuildPath(go.transform);
-                        items.Add(new PickHit(id, go.name, path));
+                        items.Add(new PickHit { Id = id, Name = go.name, Path = path });
                     }
 
                     var primaryId = items.Count > 0 ? items[0].Id : null;
-                    return new PickResultDto("ui", items.Count > 0, primaryId, items);
+                    return new PickResultDto
+                    {
+                        Mode = "ui",
+                        Hit = items.Count > 0,
+                        Id = primaryId,
+                        Items = items
+                    };
                 }
 
                 var cam = Camera.main;
                 if (cam == null && Camera.allCamerasCount > 0)
                     cam = Camera.allCameras[0];
                 if (cam == null)
-                    return new PickResultDto("world", false, null, null);
+                    return new PickResultDto
+                    {
+                        Mode = "world",
+                        Hit = false,
+                        Id = null,
+                        Items = new List<PickHit>()
+                    };
 
                 var ray = cam.ScreenPointToRay(pos);
                 RaycastHit hit;
@@ -2474,10 +2504,22 @@ namespace UnityExplorer.Mcp
                 {
                     var go = hit.collider != null ? hit.collider.gameObject : null;
                     var id = go != null ? "obj:" + go.GetInstanceID() : null;
-                    return new PickResultDto("world", go != null, id, null);
+                    return new PickResultDto
+                    {
+                        Mode = "world",
+                        Hit = go != null,
+                        Id = id,
+                        Items = new List<PickHit>()
+                    };
                 }
 
-                return new PickResultDto("world", false, null, null);
+                return new PickResultDto
+                {
+                    Mode = "world",
+                    Hit = false,
+                    Id = null,
+                    Items = new List<PickHit>()
+                };
             });
         }
 
