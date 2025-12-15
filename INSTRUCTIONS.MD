@@ -1,23 +1,30 @@
-# Iteration 9/10 — Run Inspector UI flows via restored win-dev control plane
+# Iteration 10/10 — Inspector UI flows after mcp-proxy session fix
 
 Context
-- win-dev control plane is back: scheduled tasks `McpProxy8082` (desktop-commander) and `McpProxy8083` (mcp-control) wrap `mcp-proxy` on ports 8082/8083. Health check: `curl -I http://192.168.178.210:808{2,3}/mcp` → 200. Requests need `Accept: application/json, text/event-stream`, the `mcp-session-id` header from `initialize`, and method names `tools/list` + `tools/call` (e.g., `get_config`, `get_screen_size`). Logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`.
-- UnityExplorer MCP hosts stay up: IL2CPP `http://192.168.178.210:51477`, Mono `http://192.168.178.210:51478`; contract tests 55 passed / 1 skipped. Mono MousePick world still returns `Items=[]` (IL2CPP null).
+- Test-VM `mcp-proxy` patched to create a transport even when `mcp-session-id` is present on the first `initialize`; it binds to that session id.
+- After a proxy restart, seed the client session once with `initialize` so the harness tools work:
+  - Watch `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log` to grab the session id emitted by the client (8082 = win-dev-vm-command, 8083 = win-dev-vm-ui).
+  - Send `initialize` with that `mcp-session-id` header and `protocolVersion=2024-11-05`. After seeding, `win-dev-vm-command/get_config` and `win-dev-vm-ui/get_screen_size` succeed.
+  - Current seeded sessions (if still running): 8082 `25932817-8547-47ec-9c83-64b52d71e9f7`, 8083 `0f363e73-95f0-4a96-b480-a83e5fe582ff`.
+- UnityExplorer MCP hosts are up: IL2CPP `http://192.168.178.210:51477`, Mono `http://192.168.178.210:51478`; Mono MousePick world still returns `Items=[]` vs IL2CPP `null`.
 
-Goal
-1) Validate Inspector UI (browser) end-to-end on IL2CPP + Mono using the restored win-dev UI/command endpoints.
-2) Capture evidence (logs and/or screenshot under `C:\codex-workspace\`) and sync plan/todo/test-plan with results.
-3) If time remains, outline the fix/test plan for Mono MousePick parity.
+Goals
+1) Run Inspector UI (browser) flows on IL2CPP + Mono via the win-dev proxies and capture evidence.
+2) Keep plan/todo/docs in sync with the proxy seeding note and UI validation.
+3) Leave the harness usable (proxies running, sessions seeded, logs recorded).
 
 Tasks
-A) Healthcheck win-dev control plane: confirm tasks running (`Get-ScheduledTask -TaskName McpProxy8082/8083` or `Start-ScheduledTask` if needed); `curl -I` on 8082/8083; run sample `tools/list` + `tools/call get_config/get_screen_size` with the `mcp-session-id` header.
-B) Inspector UI validation:
-   - Launch inspector UI on the Test-VM with `Start-McpInspectorUi.ps1` for IL2CPP (`-BaseUrl http://192.168.178.210:51477`) and Mono (`-BaseUrl http://192.168.178.210:51478`, `-Port 6278` if needed).
-   - Drive the UI via win-dev-vm-ui (streamable HTTP on 8083): ensure initialize → notifications/initialized → tools/resources render → call `GetStatus`/`TailLogs` → read `unity://status`/`unity://scenes` → open stream and see at least one `tool_result` notification (no schema errors).
-   - Save evidence (log lines + screenshot) under `C:\codex-workspace\` and note paths in docs.
-C) Update docs: refresh `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` with validation results and any control-plane changes; update `plans/mcp-interface-concept.md` only if payload shapes change.
-D) If time: sketch the Mono MousePick `Items=null` parity fix + contract test plan.
+A) Control plane health
+- If proxies were restarted, tail the logs to capture the client session ids and seed with one `initialize` (curl with `mcp-session-id` and `protocolVersion: 2024-11-05`).
+- Verify `win-dev-vm-command/get_config` (8082) and `win-dev-vm-ui/get_screen_size` (8083) return 200 via the harness.
+
+B) Inspector UI validation
+- IL2CPP: `pwsh C:\codex-workspace\Start-McpInspectorUi.ps1 -BaseUrl http://192.168.178.210:51477 -LogPath C:\codex-workspace\mcp-inspector-il2cpp-ui.log`
+- Mono: `pwsh C:\codex-workspace\Start-McpInspectorUi.ps1 -BaseUrl http://192.168.178.210:51478 -LogPath C:\codex-workspace\mcp-inspector-mono-ui.log -Port 6278`
+- Drive with `win-dev-vm-ui`: initialize → notifications/initialized → list tools/resources → call `GetStatus` + `TailLogs` → read `unity://status`/`unity://scenes` → open `stream_events` and observe a `tool_result`. Save a screenshot under `C:\codex-workspace\` for each host.
+
+C) Documentation
+- Update `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`, and `plans/space-shooter-test-plan.md` with proxy seeding and Inspector UI results (logs + screenshot paths).
 
 Finish
-- Keep plan/todo in sync with code and validation results.
-- Commit changes.
+- Keep plan/todo in sync and commit all changes.

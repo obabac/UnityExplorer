@@ -8,7 +8,7 @@ This plan merges the original scope, the current implementation snapshot, and th
 
 ### Latest iteration snapshot (2025-12-15)
 - UnityExplorer MCP game hosts remain up on the Test-VM: IL2CPP `http://192.168.178.210:51477` and Mono `http://192.168.178.210:51478` (`/message` returns 200).
-- win-dev control plane restored: `McpProxy8082` (desktop-commander) and `McpProxy8083` (mcp-control) run as scheduled tasks via `mcp-proxy` (ports 8082/8083, logs under `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`). Requests need `Accept: application/json, text/event-stream`, the `mcp-session-id` header from `initialize`, and the modern method names `tools/list` and `tools/call`.
+- win-dev control plane patched: `McpProxy8082` (desktop-commander) and `McpProxy8083` (mcp-control) now create a transport even when `mcp-session-id` is provided on the first `initialize`; the session binds to that id. After a proxy restart, seed the session with one initialize (use the client’s session id) and the harness tools work again (`get_config` on 8082, `get_screen_size` on 8083). Requests still need `Accept: application/json, text/event-stream` and the modern method names `tools/list` / `tools/call` (logs under `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`).
 - Contract tests pass against IL2CPP (55 passed / 1 skipped). Mono world MousePick parity gap persists (`Items=[]` vs `null`).
 - Next: run real inspector UI flows (browser) on IL2CPP + Mono via the restored win-dev UI automation path, then fix the remaining parity gaps.
 
