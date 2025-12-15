@@ -46,6 +46,12 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
   - Automatically call `./tools/Update-Mod-Remote.ps1` to copy the
     freshly built mod files to the Windows Test-VM.
 
+### Mono build/deploy gotcha (ML_Mono)
+
+- `dotnet build src/UnityExplorer.csproj -c ML_Mono` writes `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll`, but MelonLoader loads the mod from `Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll`.
+- Keep these in sync before deploying to the Test-VM (run `pwsh ./build.ps1` which moves the DLL into `Mods/`, or copy the built DLL into `Release/UnityExplorer.MelonLoader.Mono/Mods/`).
+- If you deploy a stale `Mods/` DLL, the Mono host can look like it “misses” tools (e.g., `Reparent`) even when the code exists.
+
 ### Checking MelonLoader logs on the Test-VM
 
 - To verify that MelonLoader and UnityExplorer loaded correctly, tail the

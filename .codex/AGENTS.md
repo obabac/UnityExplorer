@@ -41,6 +41,7 @@ Speak a simple language so you are easier to understand
 - Basic e2e path demonstrable (start → handshake → tool call → response).
 - Test-VM validation is a gate: for any behavior change, validate on the Test-VM in the same iteration (not after). See `plans/unity-explorer-mcp-todo.md` → Pitfalls.
 - Include minimal docs: feature overview + how to run/dev test.
+- Mono build/deploy gotcha: `dotnet build src/UnityExplorer.csproj -c ML_Mono` updates `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll`, but the game loads `Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll`.
 
 Docs map (single source of truth, no duplication)
 - `.plans/unity-explorer-mcp-plan.md`: High-level plan, architecture, current status.
