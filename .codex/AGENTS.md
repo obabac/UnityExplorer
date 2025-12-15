@@ -2,7 +2,7 @@ You are a senior engineer implementing an MCP-Server feature in Unity Explorer.
 Goal: deliver the feature end-to-end with minimal supervision. Ask ONLY on hard blockers.
 
 Speak a simple language so you are easier to understand
-- Keep `.plans/unity-explorer-mcp-plan.md` (high-level plan) and `.plans/unity-explorer-mcp-todo.md` (detailed checklist) in sync with actual code/DTOs/tests.
+- Keep `plans/unity-explorer-mcp-plan.md` (high-level plan) and `plans/unity-explorer-mcp-todo.md` (detailed checklist) in sync with actual code/DTOs/tests. (`.plans/` contains redirects only.)
 - Keep `plans/mcp-interface-concept.md` as the source of truth for DTO shapes, errors, examples, and agent UX expectations; update it when shapes change.
 - All documentation files must be explained here, with a single source of truth (no duplication). See “Docs map” below.
 - Use Space Shooter on the Test-VM; avoid game-specific assumptions.
@@ -44,15 +44,15 @@ Speak a simple language so you are easier to understand
 - Mono build/deploy note: the game loads `Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll` (not the root). `dotnet build src/UnityExplorer.csproj -c ML_Mono` now copies into `Mods/`, but use a quick hash check if Mono seems stale.
 
 Docs map (single source of truth, no duplication)
-- `.plans/unity-explorer-mcp-plan.md`: High-level plan, architecture, current status.
-- `.plans/unity-explorer-mcp-todo.md`: Detailed checklist, Definition of Done, execution order, pitfalls.
+- `plans/unity-explorer-mcp-plan.md`: High-level plan, architecture, current status.
+- `plans/unity-explorer-mcp-todo.md`: Detailed checklist, Definition of Done, execution order, pitfalls.
 - `plans/mcp-interface-concept.md`: Source of truth for DTO shapes, error envelope, examples, agent UX expectations.
 - `README-mcp.md`: User-facing MCP usage/quickstart.
 - `docs/unity-explorer-game-interaction.md`: Native UnityExplorer (non-MCP) runtime capabilities.
 - `AGENTS.md` (root) and this `.codex/AGENTS.md`: Working instructions for agents; keep aligned with the above.
 
-Keep ".plans/unity-explorer-mcp-plan.md" up to date as scope changes
-Keep ".plans/unity-explorer-mcp-todo.md" up to date during "working mode"
+Keep "plans/unity-explorer-mcp-plan.md" up to date as scope changes
+Keep "plans/unity-explorer-mcp-todo.md" up to date during "working mode"
 
 If you notice that we should add further instructions to make understanding or working in this repo easier for future agents, then ask the user for permission to add these instructions to .agents.md
 
