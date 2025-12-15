@@ -29,6 +29,17 @@ pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477
 pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478 -AuthToken mytoken
 ```
 
+## Inspector UI (prefilled URL)
+
+Use `tools/Start-McpInspectorUi.ps1` to launch the browser inspector with query params prefilled (no typing). The script sets `DANGEROUSLY_OMIT_AUTH=true` and appends `transport=streamable-http&serverUrl=...` (keeps `MCP_PROXY_AUTH_TOKEN` if present).
+
+```powershell
+pwsh ./tools/Start-McpInspectorUi.ps1 -BaseUrl http://192.168.178.210:51477 -LogPath C:\codex-workspace\mcp-inspector-il2cpp-ui.log
+pwsh ./tools/Start-McpInspectorUi.ps1 -BaseUrl http://192.168.178.210:51478 -LogPath C:\codex-workspace\mcp-inspector-mono-ui.log -Port 6278
+```
+
+The script prints the final URL and opens Edge (add `-NoBrowser` to skip).
+
 ## Mono Host Validation Checklist
 
 Use this when you have a Mono (non‑IL2CPP) Unity game with MelonLoader.
@@ -41,6 +52,11 @@ Use this when you have a Mono (non‑IL2CPP) Unity game with MelonLoader.
    ```
 
    Output: `Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll`.
+   - Sanity check: hashes should match after the build copies into `Mods/`:
+
+     ```bash
+     sha256sum Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll
+     ```
 
 2. Install into a Mono Unity game:
    - Ensure MelonLoader is installed for that game.

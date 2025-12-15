@@ -1,15 +1,20 @@
-# Next Iteration — Fix Inspector UI + Mono smoke
+# Iteration — Contract sweep + Mono parity follow-up
 
-Priorities
-- Rerun the browser inspector UI on the Test-VM for both hosts (IL2CPP 51477, Mono 51478): tools/list, resources/list, call GetStatus, read unity://status + unity://scenes, and confirm Server Notifications shows a tool_result via SSE. Fix the current UI URL garbling/proxy issue that prevented notifications on IL2CPP; then repeat on Mono.
-- Keep Space Shooter running in an interactive GPU session; stop the game before copying mods. Leave allowWrites=false and requireConfirm=true when done; UeMcpHeadless.dll stays disabled.
-- Mono write smoke failed (Tool not found: Reparent). Either expose Reparent/DestroyObject on the Mono tool surface or adjust the smoke to the supported set, then rerun `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 3 -EnableWriteSmoke` and reset config.
-- After fixes, rerun inspector CLI smokes on both hosts (`pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477` and `...:51478`) and record results in `plans/unity-explorer-mcp-plan.md` and `plans/unity-explorer-mcp-todo.md`.
+Context
+- `tools/Start-McpInspectorUi.ps1` launches the inspector UI with prefilled `transport=streamable-http&serverUrl=...` (no typing). Ran on the Test-VM for IL2CPP (:51477) and Mono (:51478); CLI smokes pass on both hosts.
+- ML_Mono adds a post-build copy into `Release/.../Mods/`; `sha256sum Release/UnityExplorer.MelonLoader.Mono/UnityExplorer.ML.Mono.dll Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll` matches after `dotnet build -c ML_Mono`. Deployed to `SpaceShooter_Mono`; `pwsh ./tools/Run-McpMonoSmoke.ps1 -EnableWriteSmoke` now passes end-to-end.
+- Contract suite stays green (54 passed, 1 skipped). Games are stopped on the Test-VM; allowWrites/requireConfirm should stay false/true when you finish.
 
-Reference commands
-- Build + deploy IL2CPP: `pwsh ./build-ml-coreclr.ps1`
-- Build Mono DLL: `dotnet build src/UnityExplorer.csproj -c ML_Mono`
-- Deploy Mono: `pwsh ./tools/Update-Mod-Remote.ps1 -LocalSource './Release/UnityExplorer.MelonLoader.Mono/*' -RemoteTarget 'C:/codex-workspace/space-shooter-build/SpaceShooter_Mono/'`
-- Start IL2CPP game: `Start-Process 'C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe'`
-- Start Mono game: `Start-Process 'C:\codex-workspace\space-shooter-build\SpaceShooter_Mono\SpaceShooter.exe'`
-- Inspector UI log example: `C:\codex-workspace\mcp-inspector-il2cpp.log`
+Rules
+- Validate on the Test-VM in the same iteration for any behavior change; keep `allowWrites=false` and `requireConfirm=true` when done.
+- Keep `Mods\\UeMcpHeadless.dll` disabled; launch games in an interactive GPU session.
+- Prefer PowerShell one-liners; keep plans (`plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`) in sync.
+
+Tasks (suggested)
+1) Re-run contract tests on IL2CPP host using the discovery file: `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release`; record results in the plan/todo.
+2) Tackle one Mono parity gap (e.g., console/scripts/hooks coverage or stream coverage) without regressing IL2CPP; document any shape changes in `plans/mcp-interface-concept.md` and add tests.
+3) Use `tools/Start-McpInspectorUi.ps1` on the host you touched and confirm UI can list tools/resources, call `GetStatus`, read `unity://status`/`unity://scenes`, and show at least one `tool_result` notification; note findings in the plan/todo.
+
+Hosts
+- IL2CPP: http://192.168.178.210:51477
+- Mono:   http://192.168.178.210:51478

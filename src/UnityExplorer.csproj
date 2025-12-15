@@ -365,5 +365,17 @@
     </Reference>
   </ItemGroup>
 
+  <Target Name="CopyMlMonoToMods" AfterTargets="Build" Condition="'$(Configuration)'=='ML_Mono'">
+    <PropertyGroup>
+      <MonoOutputDir>$(OutputPath)</MonoOutputDir>
+      <MonoModsDir>$(MonoOutputDir)Mods\</MonoModsDir>
+      <MonoAssembly>$(MonoOutputDir)UnityExplorer.ML.Mono.dll</MonoAssembly>
+      <MonoPdb>$(MonoOutputDir)UnityExplorer.ML.Mono.pdb</MonoPdb>
+    </PropertyGroup>
+    <MakeDir Directories="$(MonoModsDir)" />
+    <Copy SourceFiles="$(MonoAssembly)" DestinationFiles="$(MonoModsDir)UnityExplorer.ML.Mono.dll" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MonoPdb)" DestinationFiles="$(MonoModsDir)UnityExplorer.ML.Mono.pdb" SkipUnchangedFiles="true" Condition="Exists('$(MonoPdb)')" />
+  </Target>
+
   <!-- MCP server: custom lightweight HTTP streaming transport; no external MCP SDK package required at runtime -->
 </Project>
