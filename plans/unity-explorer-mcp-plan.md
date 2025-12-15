@@ -7,10 +7,10 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-15)
-- MCP control plane on the Test-VM is already listening on 8083 (`node .../mcp-control/build/index.js --sse --port 8083`); curl to `/mcp` returns an SSE response but blocks (needs a proper client handshake).
-- Started `Start-McpInspectorUi.ps1` for IL2CPP (51477) and Mono (51478); proxies spun up on localhost:6274/6277, but the browser UI stayed disconnected (Edge headless shows localhost refused/default forms). No UI tool calls were exercised yet; needs follow-up debugging of proxy/args.
-- IL2CPP `unity://status` reachable at 51477 and Mono at 51478; configs untouched this run. Contract tests still pass locally (`UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release` → 55 passed / 1 skipped).
-- MousePick world/UI parity on Mono vs IL2CPP not rechecked this run; last known gap: world mode returns `Items=[]` on Mono vs `Items=null` on IL2CPP.
+- UnityExplorer MCP game hosts remain up on the Test-VM: IL2CPP `http://192.168.178.210:51477` and Mono `http://192.168.178.210:51478` (`/message` returns 200).
+- win-dev control plane restored: `McpProxy8082` (desktop-commander) and `McpProxy8083` (mcp-control) run as scheduled tasks via `mcp-proxy` (ports 8082/8083, logs under `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`). Requests need `Accept: application/json, text/event-stream`, the `mcp-session-id` header from `initialize`, and the modern method names `tools/list` and `tools/call`.
+- Contract tests pass against IL2CPP (55 passed / 1 skipped). Mono world MousePick parity gap persists (`Items=[]` vs `null`).
+- Next: run real inspector UI flows (browser) on IL2CPP + Mono via the restored win-dev UI automation path, then fix the remaining parity gaps.
 
 ---
 
@@ -23,18 +23,18 @@ This plan merges the original scope, the current implementation snapshot, and th
 
 ### Planned next 10 iterations (planner)
 
-Pre-reqs already done (2025-12-13): inspector CLI gate (`tools/Run-McpInspectorCli.ps1`), removed the `UeMcpHeadless.dll` workaround, Mono baseline guarded writes, and repeatable Space Shooter IL2CPP+Mono rebuilds.
+Pre-reqs done: inspector CLI gate (`tools/Run-McpInspectorCli.ps1`), removed the `UeMcpHeadless.dll` workaround, Mono baseline guarded writes, repeatable Space Shooter IL2CPP+Mono rebuilds, and the win-dev control plane restored via `McpProxy8082/8083` on 8082/8083.
 
-1) Mono writes E2E gate: run `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -EnableWriteSmoke` and `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478`; ensure config resets (`allowWrites=false`) after the write smoke.
-2) Expand Mono writes (tier 1): `SetMember` with allowlists is in; keep `allowWrites+confirm` parity while adding any remaining safe mutations and extend Mono smoke alongside each addition.
-3) Mono read parity: align selection, camera/freecam, and `MousePick` UI multi-hit behavior with IL2CPP; document any deltas in `plans/mcp-interface-concept.md`.
-4) Streams/testing: log notification contract coverage is in; keep rate-limit tests stable and maintain non-tool notification coverage.
-5) Inspector UX pass: run the inspector UI (not only CLI) against IL2CPP + Mono and fix any `inputSchema` / resource metadata issues; record results in `plans/unity-explorer-mcp-todo.md`.
-6) Space Shooter env hardening: keep Mono/IL2CPP builds as similar as possible; improve determinism (`-seed`) only if needed for flaky tests; keep rebuild scripts working.
-7) CoreCLR/IL2CPP write hardening: expand allowlists + confirm flows and keep contract tests green.
-8) Mono console/scripts + hooks: enable and validate parity (or document why disabled) with guarded writes + allowlists.
-9) Cross-title IL2CPP regression: validate the dropdown refresh guard on another IL2CPP title without headless workarounds.
-10) Final DoD sweep: run IL2CPP inspector CLI + Invoke-McpSmoke + contract tests and Mono inspector CLI + Mono smoke (with writes); check every TODO.
+1) Inspector UI gate: run `tools/Start-McpInspectorUi.ps1` against IL2CPP + Mono via the restored win-dev command/UI endpoints and exercise a minimal UI flow (tools list, read `unity://status`, call `GetStatus`/`TailLogs`, observe one `tool_result` on stream).
+2) Fix Mono MousePick world parity (`Items` should be null/omitted like IL2CPP) and add a contract test to lock the shape.
+3) Add Mono discovery helper + contract run: add `ue-mcp-mono-discovery.json` and run `UnityExplorer.Mcp.ContractTests` against the Mono host.
+4) Expand Mono guarded writes (tier 2): implement safe `AddComponent`/`RemoveComponent`/`CallMethod` behind allowlists + confirm and extend `Run-McpMonoSmoke.ps1 -EnableWriteSmoke`.
+5) Mono console + hooks parity: enable behind `enableConsoleEval`/allowlists, add a small gated test (mirror existing IL2CPP hook tests).
+6) Streams parity: add/extend contract tests for at least one non-tool notification on both hosts (selection/scenes/log) and keep rate-limit behavior stable.
+7) Space Shooter env hardening: keep IL2CPP + Mono builds as similar as possible, keep build scripts stable, and document any required Unity project changes.
+8) Cross-title IL2CPP regression: validate the dropdown refresh guard on another IL2CPP title (or document why not available).
+9) Final DoD sweep: run IL2CPP inspector CLI + Invoke-McpSmoke + contract tests and Mono inspector CLI + Mono smoke (with writes); check every TODO.
+10) Add a lightweight healthcheck/watchdog for the win-dev MCP proxies (8082/8083) so failures are detected and restarted quickly (document the commands + log paths).
 
 ## 1) Context & Assumptions
 
