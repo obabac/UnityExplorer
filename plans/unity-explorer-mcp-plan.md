@@ -1,15 +1,16 @@
 # Unity Explorer MCP Integration Plan (Updated)
 
-- Updated: 2025-12-15  
+- Updated: 2025-12-16  
 - Owner: Unity Explorer MCP (p-unity-explorer-mcp)  
 - Goal: Expose Unity Explorer’s runtime capabilities through an in‑process MCP server with **streamable HTTP** transport, making game state and safe controls available as MCP resources, tools, and streams.
 
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
-### Latest iteration snapshot (2025-12-15)
-- UnityExplorer MCP game hosts remain up on the Test-VM: IL2CPP `http://192.168.178.210:51477` and Mono `http://192.168.178.210:51478` (`/message` and `/mcp` return 200).
-- win-dev control plane alias surface validated: `McpProxy8083` (mcp-control) now exposes the harness tool names; seed the session after a restart with `initialize` that includes `Accept: application/json, text/event-stream` plus a `clientInfo` payload (e.g., `protocolVersion=2024-11-05`, `capabilities={}`) and the `win-dev-vm-ui/State-Tool` + `win-dev-vm-ui/Powershell-Tool` succeed. Logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`.
-- GET `/read` now reuses the shared JSON responder with CORS headers; IL2CPP build deployed to the Test-VM. Contract suite still fails because the IL2CPP host drops connections (connection reset/refused during runs). Mono world MousePick parity gap persists (`Items=[]` vs `null`).
+### Latest iteration snapshot (2025-12-16)
+- IL2CPP MCP host on the Test-VM (`http://192.168.178.210:51477` and `/mcp`) now survives malformed JSON-RPC: invalid requests return HTTP 400 with structured errors, and the host stays alive. MainThread dispatch falls back to UniverseLib main-thread invoke when no `SynchronizationContext` is captured.
+- IL2CPP contract suite passes (55/56 passed, 1 skipped) via `UE_MCP_DISCOVERY=/home/onur/p-unity-explorer-mcp/ue-mcp-il2cpp-discovery.json`. Inspector CLI smoke and `Invoke-McpSmoke.ps1` both succeed against the running Space Shooter host.
+- win-dev control plane alias surface validated: `McpProxy8083` (mcp-control) exposes the harness tool names; seed the session after a restart with `initialize` that includes `Accept: application/json, text/event-stream` plus a `clientInfo` payload (e.g., `protocolVersion=2024-11-05`, `capabilities={}`) and the `win-dev-vm-ui/State-Tool` + `win-dev-vm-ui/Powershell-Tool` succeed. Logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`.
+- Mono world MousePick parity gap persists (`Items=[]` vs `null`).
 - Inspector validation is CLI-only: use `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <url>` (accepts bases with or without `/mcp`) or direct `npx @modelcontextprotocol/inspector --cli` one-liners; the Inspector UI helper is deprecated (see `README-mcp.md`).
 
 ---

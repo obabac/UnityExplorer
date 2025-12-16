@@ -2,6 +2,9 @@ using System;
 using System.Threading;
 #if INTEROP
 using System.Threading.Tasks;
+#if CPP
+using UniverseLib.Runtime.Il2Cpp;
+#endif
 #endif
 
 #nullable enable
@@ -22,72 +25,172 @@ namespace UnityExplorer.Mcp
 
         public static Task Run(Action action)
         {
-            if (_context == null)
+            if (_context != null)
             {
-                action();
-                return Task.CompletedTask;
+                if (SynchronizationContext.Current == _context)
+                {
+                    action();
+                    return Task.CompletedTask;
+                }
+
+                var tcs = CreateCompletionSource();
+                _context.Post(_ => Execute(action, tcs), null);
+                return tcs.Task;
             }
-            if (SynchronizationContext.Current == _context)
-            {
-                action();
-                return Task.CompletedTask;
-            }
-            var tcs = new TaskCompletionSource<object?>();
-            _context.Post(_ =>
-            {
-                try { action(); tcs.SetResult(null); }
-                catch (Exception ex) { tcs.SetException(ex); }
-            }, null);
-            return tcs.Task;
+
+            return DispatchToUnity(action);
         }
 
         public static Task<T> Run<T>(Func<T> func)
         {
-            if (_context == null)
+            if (_context != null)
             {
-                return Task.FromResult(func());
+                if (SynchronizationContext.Current == _context)
+                {
+                    return Task.FromResult(func());
+                }
+
+                var tcs = CreateCompletionSource<T>();
+                _context.Post(_ => Execute(func, tcs), null);
+                return tcs.Task;
             }
-            if (SynchronizationContext.Current == _context)
-            {
-                return Task.FromResult(func());
-            }
-            var tcs = new TaskCompletionSource<T>();
-            _context.Post(_ =>
-            {
-                try { tcs.SetResult(func()); }
-                catch (Exception ex) { tcs.SetException(ex); }
-            }, null);
-            return tcs.Task;
+
+            return DispatchToUnity(func);
         }
 
         public static Task<T> RunAsync<T>(Func<Task<T>> func)
         {
-            if (_context == null)
+            if (_context != null)
             {
-                return func();
+                if (SynchronizationContext.Current == _context)
+                {
+                    return func();
+                }
+
+                var tcs = CreateCompletionSource<T>();
+                _context.Post(async _ => { await ExecuteAsync(func, tcs).ConfigureAwait(false); }, null);
+                return tcs.Task;
             }
-            var tcs = new TaskCompletionSource<T>();
-            _context.Post(async _ =>
-            {
-                try { tcs.SetResult(await func().ConfigureAwait(false)); }
-                catch (Exception ex) { tcs.SetException(ex); }
-            }, null);
-            return tcs.Task;
+
+            return DispatchToUnityAsync(func);
         }
 
         public static Task RunAsync(Func<Task> func)
         {
-            if (_context == null)
+            if (_context != null)
             {
-                return func();
+                if (SynchronizationContext.Current == _context)
+                {
+                    return func();
+                }
+
+                var tcs = CreateCompletionSource();
+                _context.Post(async _ => { await ExecuteAsync(func, tcs).ConfigureAwait(false); }, null);
+                return tcs.Task;
             }
-            var tcs = new TaskCompletionSource<object?>();
-            _context.Post(async _ =>
+
+            return DispatchToUnityAsync(func);
+        }
+
+        private static TaskCompletionSource<object?> CreateCompletionSource()
+            => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private static TaskCompletionSource<T> CreateCompletionSource<T>()
+            => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private static void Execute(Action action, TaskCompletionSource<object?> tcs)
+        {
+            try
             {
-                try { await func().ConfigureAwait(false); tcs.SetResult(null); }
-                catch (Exception ex) { tcs.SetException(ex); }
-            }, null);
+                action();
+                tcs.TrySetResult(null);
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+        }
+
+        private static void Execute<T>(Func<T> func, TaskCompletionSource<T> tcs)
+        {
+            try
+            {
+                tcs.TrySetResult(func());
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+        }
+
+        private static async Task ExecuteAsync(Func<Task> func, TaskCompletionSource<object?> tcs)
+        {
+            try
+            {
+                await func().ConfigureAwait(false);
+                tcs.TrySetResult(null);
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+        }
+
+        private static async Task ExecuteAsync<T>(Func<Task<T>> func, TaskCompletionSource<T> tcs)
+        {
+            try
+            {
+                var result = await func().ConfigureAwait(false);
+                tcs.TrySetResult(result);
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+        }
+
+        private static Task DispatchToUnity(Action action)
+        {
+#if CPP
+            var tcs = CreateCompletionSource();
+            Il2CppThreadingHelper.InvokeOnMainThread(new Action(() => Execute(action, tcs)));
             return tcs.Task;
+#else
+            return Task.Run(action);
+#endif
+        }
+
+        private static Task<T> DispatchToUnity<T>(Func<T> func)
+        {
+#if CPP
+            var tcs = CreateCompletionSource<T>();
+            Il2CppThreadingHelper.InvokeOnMainThread(new Action(() => Execute(func, tcs)));
+            return tcs.Task;
+#else
+            return Task.FromResult(func());
+#endif
+        }
+
+        private static Task DispatchToUnityAsync(Func<Task> func)
+        {
+#if CPP
+            var tcs = CreateCompletionSource();
+            Il2CppThreadingHelper.InvokeOnMainThread(new Action(async () => await ExecuteAsync(func, tcs).ConfigureAwait(false)));
+            return tcs.Task;
+#else
+            return Task.Run(func);
+#endif
+        }
+
+        private static Task<T> DispatchToUnityAsync<T>(Func<Task<T>> func)
+        {
+#if CPP
+            var tcs = CreateCompletionSource<T>();
+            Il2CppThreadingHelper.InvokeOnMainThread(new Action(async () => await ExecuteAsync(func, tcs).ConfigureAwait(false)));
+            return tcs.Task;
+#else
+            return Task.Run(func);
+#endif
         }
     }
 #elif MONO
