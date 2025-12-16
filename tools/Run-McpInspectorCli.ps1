@@ -12,12 +12,23 @@ function Assert-NpxExists {
     }
 }
 
+function Normalize-InspectorBaseUrl {
+    param(
+        [string]$Url
+    )
+
+    $trimmed = $Url.TrimEnd('/')
+    if ($trimmed -match '/mcp($|/)') { return $trimmed }
+    if ($trimmed -match '/message($|/)') { return $trimmed }
+    return "$trimmed/mcp"
+}
+
 function Invoke-InspectorCli {
     param(
         [string]$Method,
         [string[]]$ExtraArgs = @()
     )
-    $args = @("--yes", "@modelcontextprotocol/inspector", "--cli", "--transport", "http", $BaseUrl.TrimEnd('/'), "--method", $Method)
+    $args = @("--yes", "@modelcontextprotocol/inspector", "--cli", "--transport", "http", $script:InspectorBaseUrl, "--method", $Method)
     if ($AuthToken) {
         $args += @("--header", "Authorization: Bearer $AuthToken")
     }
@@ -32,18 +43,22 @@ function Invoke-InspectorCli {
 
 try {
     Assert-NpxExists
-    $target = $BaseUrl.TrimEnd('/')
-    Write-Host "Inspector CLI smoke target: $target" -ForegroundColor Green
+    $script:InspectorBaseUrl = Normalize-InspectorBaseUrl $BaseUrl
+    $inputBase = $BaseUrl.TrimEnd('/')
+    if ($script:InspectorBaseUrl -ne $inputBase) {
+        Write-Host "Normalized base URL to $script:InspectorBaseUrl (input: $inputBase)" -ForegroundColor DarkGray
+    }
+    Write-Host "Inspector CLI smoke target: $script:InspectorBaseUrl" -ForegroundColor Green
 
     Invoke-InspectorCli -Method "tools/list"
     Invoke-InspectorCli -Method "resources/list"
     Invoke-InspectorCli -Method "resources/read" -ExtraArgs @("--uri", "unity://status")
     Invoke-InspectorCli -Method "tools/call" -ExtraArgs @("--tool-name", "GetStatus")
 
-    Write-Host "PASS: inspector CLI smoke succeeded against $target" -ForegroundColor Green
+    Write-Host "PASS: inspector CLI smoke succeeded against $script:InspectorBaseUrl" -ForegroundColor Green
 }
 catch {
     Write-Error $_
-    Write-Host "FAIL: inspector CLI smoke failed against $BaseUrl" -ForegroundColor Red
+    Write-Host "FAIL: inspector CLI smoke failed against $script:InspectorBaseUrl" -ForegroundColor Red
     exit 1
 }

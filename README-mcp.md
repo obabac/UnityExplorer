@@ -24,21 +24,27 @@ Mono/net35 builds: MCP host exposes initialize/list_tools/read_resource/call_too
 Run this non-interactive CLI smoke to validate the MCP surface via `@modelcontextprotocol/inspector --cli` (runs tools/list, resources/list, read status, and call GetStatus). Fails fast if `npx` is missing or the host is down.
 
 ```powershell
-pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477
+pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477/mcp
 # Mono host example (optional auth header)
-pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478 -AuthToken mytoken
+pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478/mcp -AuthToken mytoken
 ```
 
-## Inspector UI (prefilled URL)
+The helper accepts BaseUrl values with or without `/mcp` and normalizes to the JSON-RPC path.
 
-Use `tools/Start-McpInspectorUi.ps1` to launch the browser inspector with query params prefilled (no typing). The script sets `DANGEROUSLY_OMIT_AUTH=true` and appends `transport=streamable-http&serverUrl=...` (keeps `MCP_PROXY_AUTH_TOKEN` if present).
+## Inspector CLI (direct one-liners)
 
-```powershell
-pwsh ./tools/Start-McpInspectorUi.ps1 -BaseUrl http://192.168.178.210:51477 -LogPath C:\codex-workspace\mcp-inspector-il2cpp-ui.log
-pwsh ./tools/Start-McpInspectorUi.ps1 -BaseUrl http://192.168.178.210:51478 -LogPath C:\codex-workspace\mcp-inspector-mono-ui.log -Port 6278
+We do not use the Inspector UI for validation; use the CLI.
+
+```bash
+npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51477/mcp --method tools/list
+npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51477/mcp --method tools/call --tool-name GetStatus
 ```
 
-The script prints the final URL and opens Edge (add `-NoBrowser` to skip).
+Mono host example:
+
+```bash
+npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51478/mcp --method tools/list
+```
 
 ## Mono Host Validation Checklist
 
@@ -87,10 +93,10 @@ Use this when you have a Mono (non‑IL2CPP) Unity game with MelonLoader.
 
    Expect PASS. Add `-EnableWriteSmoke` to toggle `allowWrites` temporarily and exercise SpawnTestUi + `SetMember` (Image.color) + Reparent/DestroyObject + `SetTimeScale` (config resets afterward). If you see “Connection refused”, MCP is not enabled or the port differs.
 
-6. (Optional) Inspector check:
+6. (Optional) Inspector CLI check:
 
    ```bash
-   npx @modelcontextprotocol/inspector --transport http --server-url http://127.0.0.1:51477
+   npx @modelcontextprotocol/inspector --cli --transport http http://127.0.0.1:51477 --method tools/list
    ```
 
 ## Configuration
@@ -120,7 +126,7 @@ The config file is created at `{ExplorerFolder}/mcp.config.json` (Explorer folde
 
 The in‑process server exposes a minimal HTTP protocol over a loopback TCP listener:
 
-- `POST /message` (JSON body)  
+- `POST /message` (alias `POST /mcp`, JSON body)  
   - JSON‑RPC‑style envelope:
     - `{"jsonrpc":"2.0","id":1,"method":"list_tools","params":{}}`
     - `{"jsonrpc":"2.0","id":2,"method":"call_tool","params":{"name":"ListScenes","arguments":{...}}}`
@@ -137,7 +143,7 @@ The in‑process server exposes a minimal HTTP protocol over a loopback TCP list
   - Convenience endpoint for simple read operations.  
   - Returns JSON directly in the HTTP response.
 - `GET /` (or `/?…`) with `Accept: text/event-stream`  
-  - Server-Sent Events (SSE) receive channel; emits the same JSON-RPC results/errors/notifications as `stream_events` using `data: <json>\n\n` frames until the client disconnects (no chunked encoding).
+  - Server-Sent Events (SSE) receive channel; emits the same JSON-RPC results/errors/notifications as `stream_events` using `data: <json>\n\n` frames until the client disconnects (no chunked encoding). `/mcp` (or `/mcp?...`) accepts the same stream for pathful bases.
 
 ### MCP Handshake
 
@@ -294,7 +300,8 @@ class Program
 
         var json = JsonSerializer.Serialize(payload);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/message") { Content = content };
+        var rpcPath = "/mcp"; // alias of /message
+        using var req = new HttpRequestMessage(HttpMethod.Post, rpcPath) { Content = content };
         req.Headers.Accept.Clear();
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
@@ -317,20 +324,22 @@ class Program
 
 This matches the `stream_events` behavior and will print JSON‑RPC `notification`, `result`, and `error` objects as one JSON object per line.
 
-## Inspector Quick‑Start (`@modelcontextprotocol/inspector`)
+## Inspector CLI Quick‑Start (`@modelcontextprotocol/inspector --cli`)
 
-1. Start a CoreCLR Unity title with Unity Explorer and ensure the MCP server is enabled (`mcp.config.json: { "enabled": true }`).
+1. Start a CoreCLR Unity title with Unity Explorer and ensure MCP is enabled (`mcp.config.json: { "enabled": true }`).
 2. From your dev machine, run:
 
    ```bash
-   npx @modelcontextprotocol/inspector --transport http --server-url http://<TestVM-IP>:51477
+   npx @modelcontextprotocol/inspector --cli --transport http http://<TestVM-IP>:51477 --method tools/list
+   npx @modelcontextprotocol/inspector --cli --transport http http://<TestVM-IP>:51477 --method resources/read --uri unity://status
+   npx @modelcontextprotocol/inspector --cli --transport http http://<TestVM-IP>:51477 --method tools/call --tool-name GetStatus
    ```
 
-3. In the inspector UI:
-   - Call `initialize` and then `notifications/initialized`.
-   - Use “List Tools” to discover `GetStatus`, `ListScenes`, `SearchObjects`, etc.
-   - Use “Read Resource” with URIs such as `unity://status`, `unity://scenes`, `unity://scene/{sceneId}/objects?limit=10` (take `Id` from `unity://scenes`), `unity://selection`, `unity://logs/tail?count=100`.
-   - Open `stream_events` to watch `log`, `selection`, `scenes`, and `tool_result` notifications while you interact with the game.
+3. Or use the repo helper:
+
+   ```powershell
+   pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://<TestVM-IP>:51477
+   ```
 
 ## Smoke CLI (PowerShell)
 
@@ -357,7 +366,7 @@ This matches the `stream_events` behavior and will print JSON‑RPC `notificatio
   - Verify `baseUrl` and `port` values in the discovery file match what you expect.
 - No events on stream_events:
   - Confirm `modeHints` includes `"streamable-http"` in the discovery file.
-  - Use the C# snippet above or `curl -N -H "Content-Type: application/json" -d '{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"stream_events\"}' http://<host>:<port>/message`.
+  - Use the C# snippet above or `curl -N -H "Content-Type: application/json" -d '{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"stream_events\"}' http://<host>:<port>/mcp`.
   - Trigger activity in the Unity game (logs, selection changes, scene changes, or tool calls) and verify JSON lines appear.
 
 ## Notes

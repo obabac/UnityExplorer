@@ -1,16 +1,21 @@
-# Next iteration instructions (Iteration 11)
+# Next iteration instructions (Iteration 13)
 
 Focus
-- Get Inspector UI rendering visibly via win-dev UI for IL2CPP + Mono. Start via `Start-McpInspectorUi.ps1` (IL2CPP base URL :51477, Mono :51478 -Port 6278). Seed `mcp-proxy` session after restart with `initialize` (headers: `Accept: application/json, text/event-stream`, include `clientInfo`, e.g., `protocolVersion=2024-11-05`, `capabilities={}`) so `win-dev-vm-ui` alias tools work.
-- Validate `win-dev-vm-ui/State-Tool` and `win-dev-vm-ui/Powershell-Tool` again post-restart; keep log refs `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`.
-- Run Inspector UI minimal flow (initialize → notifications/initialized → list_tools → call GetStatus/TailLogs → read unity://status → stream_events tool_result) on both hosts; capture visible screenshots under `C:\codex-workspace\` and log paths.
-- If UI still blank, debug (other Edge window, zoom, devtools, alternate browser, headless screenshot already at `C:\codex-workspace\inspector-il2cpp-ui.png`).
-- Keep plans/docs in sync (plan/todo snapshot, space-shooter test plan evidence) after validation.
+- Validate `/mcp` alias and inspector CLI-only flows on both IL2CPP and Mono hosts.
 
-Context
-- Hosts up: IL2CPP http://192.168.178.210:51477, Mono http://192.168.178.210:51478 (`/message` 200).
-- Contract tests: IL2CPP 55 pass / 1 skip; Mono MousePick parity gap persists (Items=[] vs null).
-- Headless IL2CPP Inspector UI capture: `C:\codex-workspace\inspector-il2cpp-ui.png`.
+Tasks
+- Run inspector CLI one-liners against IL2CPP using `/mcp`:
+  - `npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51477/mcp --method tools/list`
+  - `npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51477/mcp --method tools/call --tool-name GetStatus`
+- Run `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477/mcp` and ensure it also works when `BaseUrl` omits `/mcp`.
+- Run IL2CPP smoke: `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477 -LogCount 10` (use the `/mcp` alias as needed).
+- Run Mono inspector + smoke:
+  - `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478/mcp`
+  - `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 5 -StreamLines 2 -EnableWriteSmoke`
+  - `npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51478/mcp --method tools/list`
+- Rerun contract tests with a running host using `UE_MCP_DISCOVERY=<path to active discovery> dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests -c Release`; note any failures if the host is unavailable.
+- After any write smoke, reset MCP config to safe defaults (`allowWrites=false`, `requireConfirm=true`).
 
-Safety
-- Use PowerShell for Windows commands; avoid Playwright installs. No destructive git resets.
+Validation
+- Confirm `/mcp` returns 200 for JSON-RPC and SSE (`Accept: text/event-stream`) on both hosts.
+- Ensure `tools/Start-McpInspectorUi.ps1` prints the deprecation message and exits non-zero.

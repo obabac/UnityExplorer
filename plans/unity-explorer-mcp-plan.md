@@ -7,10 +7,10 @@
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
 ### Latest iteration snapshot (2025-12-15)
-- UnityExplorer MCP game hosts remain up on the Test-VM: IL2CPP `http://192.168.178.210:51477` and Mono `http://192.168.178.210:51478` (`/message` returns 200).
+- UnityExplorer MCP game hosts remain up on the Test-VM: IL2CPP `http://192.168.178.210:51477` and Mono `http://192.168.178.210:51478` (`/message` and `/mcp` return 200).
 - win-dev control plane alias surface validated: `McpProxy8083` (mcp-control) now exposes the harness tool names; seed the session after a restart with `initialize` that includes `Accept: application/json, text/event-stream` plus a `clientInfo` payload (e.g., `protocolVersion=2024-11-05`, `capabilities={}`) and the `win-dev-vm-ui/State-Tool` + `win-dev-vm-ui/Powershell-Tool` succeed. Logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`.
 - Contract tests pass against IL2CPP (55 passed / 1 skipped). Mono world MousePick parity gap persists (`Items=[]` vs `null`).
-- Inspector UI (IL2CPP) launched via `Start-McpInspectorUi.ps1`; headless Edge capture saved to `C:\codex-workspace\inspector-il2cpp-ui.png` (interactive page still needs a visible render through win-dev UI). Next: rerun the UI flow on IL2CPP + Mono with visible rendering, then close remaining parity gaps.
+- Inspector validation is CLI-only: use `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <url>` (accepts bases with or without `/mcp`) or direct `npx @modelcontextprotocol/inspector --cli` one-liners; the Inspector UI helper is deprecated (see `README-mcp.md`).
 
 ---
 
@@ -25,7 +25,7 @@ This plan merges the original scope, the current implementation snapshot, and th
 
 Pre-reqs done: inspector CLI gate (`tools/Run-McpInspectorCli.ps1`), removed the `UeMcpHeadless.dll` workaround, Mono baseline guarded writes, repeatable Space Shooter IL2CPP+Mono rebuilds, and the win-dev control plane restored via `McpProxy8082/8083` on 8082/8083.
 
-1) Inspector UI gate: run `tools/Start-McpInspectorUi.ps1` against IL2CPP + Mono via the restored win-dev command/UI endpoints and exercise a minimal UI flow (tools list, read `unity://status`, call `GetStatus`/`TailLogs`, observe one `tool_result` on stream).
+1) Inspector CLI gate hardening: ensure `npx @modelcontextprotocol/inspector --cli` commands work reliably (including common `/mcp` URL forms) on both hosts; remove/deprecate Inspector UI helpers and keep docs aligned.
 2) Fix Mono MousePick world parity (`Items` should be null/omitted like IL2CPP) and add a contract test to lock the shape.
 3) Add Mono discovery helper + contract run: add `ue-mcp-mono-discovery.json` and run `UnityExplorer.Mcp.ContractTests` against the Mono host.
 4) Expand Mono guarded writes (tier 2): implement safe `AddComponent`/`RemoveComponent`/`CallMethod` behind allowlists + confirm and extend `Run-McpMonoSmoke.ps1 -EnableWriteSmoke`.
@@ -251,9 +251,9 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
   - `Start-Process "C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe"`
 - Logs:
   - `pwsh ./tools/Get-ML-Log.ps1` (with `-Stream` for live tail).
-- Inspector:
-  - `npx @modelcontextprotocol/inspector --transport http --server-url http://192.168.178.210:51477`
-  - Use “List Tools”, “Call Tool”, and “Read Resource” to smoke‑test the surface.
+- Inspector CLI:
+  - `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477`
+  - Or: `npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51477 --method tools/list`
 - Smoke CLI:
   - `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477 -LogCount 20`
   - Falls back to `%TEMP%/unity-explorer-mcp.json` or `UE_MCP_DISCOVERY` when `-BaseUrl` is omitted; runs initialize → notifications/initialized → list_tools → GetStatus/TailLogs → read status/scenes/logs and exits non-zero on errors.
@@ -268,7 +268,7 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
 ### 5.4 Mono host validation checklist
 
 - Step‑by‑step human checklist lives in `README-mcp.md` (Mono Host Validation Checklist).
-- Current blocker: no Mono MCP host is running on this dev machine, so smoke/inspector validation is pending until a Mono game is available.
+- Test-VM Mono host is available at `http://192.168.178.210:51478`; validate with `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -EnableWriteSmoke` and `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478`.
 
 ---
 

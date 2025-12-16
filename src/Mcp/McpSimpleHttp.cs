@@ -68,6 +68,23 @@ namespace UnityExplorer.Mcp
 
         private readonly record struct ErrorShape(int Code, int HttpStatus, string Kind, string Message, string? Hint, string? Detail);
 
+        private static bool IsJsonRpcPath(string target)
+        {
+            if (string.IsNullOrEmpty(target)) return false;
+            return target == "/"
+                || target.StartsWith("/?", StringComparison.Ordinal)
+                || target.StartsWith("/message", StringComparison.OrdinalIgnoreCase)
+                || target.StartsWith("/mcp", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsStreamPath(string target)
+        {
+            if (string.IsNullOrEmpty(target)) return false;
+            return target == "/"
+                || target.StartsWith("/?", StringComparison.Ordinal)
+                || target.StartsWith("/mcp", StringComparison.OrdinalIgnoreCase);
+        }
+
         public McpSimpleHttp(string bindAddress, int port)
         {
             var ip = IPAddress.Parse(string.IsNullOrWhiteSpace(bindAddress) ? "127.0.0.1" : bindAddress);
@@ -152,7 +169,7 @@ namespace UnityExplorer.Mcp
                     return;
                 }
 
-                if (method == "POST" && (target.StartsWith("/message") || target == "/" || target.StartsWith("/?")))
+                if (method == "POST" && IsJsonRpcPath(target))
                 {
                     // Minimal JSON-RPC over HTTP. Results and errors are returned in the HTTP body
                     // and also broadcast on any open streaming connections.
@@ -436,7 +453,7 @@ namespace UnityExplorer.Mcp
                     }
                 }
 
-                if (method == "GET" && (target == "/" || target.StartsWith("/?")) && !string.IsNullOrEmpty(acceptHeader) && acceptHeader.IndexOf("text/event-stream", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (method == "GET" && IsStreamPath(target) && !string.IsNullOrEmpty(acceptHeader) && acceptHeader.IndexOf("text/event-stream", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     stream.ReadTimeout = Timeout.Infinite;
                     stream.WriteTimeout = Timeout.Infinite;
@@ -1099,6 +1116,23 @@ namespace UnityExplorer.Mcp
         private int _nextSseId;
         public int Port { get; private set; }
 
+        private static bool IsJsonRpcPath(string target)
+        {
+            if (string.IsNullOrEmpty(target)) return false;
+            return target == "/"
+                || target.StartsWith("/?", StringComparison.Ordinal)
+                || target.StartsWith("/message", StringComparison.OrdinalIgnoreCase)
+                || target.StartsWith("/mcp", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsStreamPath(string target)
+        {
+            if (string.IsNullOrEmpty(target)) return false;
+            return target == "/"
+                || target.StartsWith("/?", StringComparison.Ordinal)
+                || target.StartsWith("/mcp", StringComparison.OrdinalIgnoreCase);
+        }
+
         public McpSimpleHttp(string bindAddress, int port)
         {
             IPAddress ip = IPAddress.Any;
@@ -1176,7 +1210,7 @@ namespace UnityExplorer.Mcp
                     return;
                 }
 
-                if (method == "GET" && (target == "/" || target.StartsWith("/?")) && !string.IsNullOrEmpty(acceptHeader) && acceptHeader.IndexOf("text/event-stream", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (method == "GET" && IsStreamPath(target) && !string.IsNullOrEmpty(acceptHeader) && acceptHeader.IndexOf("text/event-stream", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     stream.ReadTimeout = Timeout.Infinite;
                     stream.WriteTimeout = Timeout.Infinite;
@@ -1200,7 +1234,7 @@ namespace UnityExplorer.Mcp
                     return;
                 }
 
-                if (method == "POST" && (target.StartsWith("/message") || target == "/" || target.StartsWith("/?")))
+                if (method == "POST" && IsJsonRpcPath(target))
                 {
                     ProcessJsonRpc(stream, body);
                     return;
