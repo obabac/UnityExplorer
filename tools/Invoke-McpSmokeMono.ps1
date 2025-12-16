@@ -278,6 +278,10 @@ try {
     $mousePick = Get-JsonContent -Result $mousePickTool
     if (-not $mousePick) { throw "MousePick returned no payload" }
     if (-not $mousePick.Mode) { throw "MousePick returned empty Mode" }
+    $hasItemsProp = $mousePick.PSObject.Properties.Name -contains "Items"
+    if ($mousePick.Mode -eq "world" -and $hasItemsProp -and $mousePick.Items -ne $null) {
+        throw "MousePick world Items should be null or omitted"
+    }
 
     $readStatusDoc = ($readStatus.result.contents[0].text | ConvertFrom-Json)
     $readScenesDoc = ($readScenes.result.contents[0].text | ConvertFrom-Json)

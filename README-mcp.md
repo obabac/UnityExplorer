@@ -209,7 +209,7 @@ Read‑only tools (no `allowWrites` required):
 - `GetObject`
 - `GetComponents`
 - `SearchObjects`
-- `MousePick` (`world` = top-most hit; `ui` = ordered `Items` + primary `Id`; optional `x`,`y`, `normalized=true` override the live mouse)
+- `MousePick` (`world` = top-most hit, returns `Items=null` when no world hit; `ui` = ordered `Items` + primary `Id`; optional `x`,`y`, `normalized=true` override the live mouse)
 - `GetCameraInfo`
 - `GetSelection`
 - `TailLogs`

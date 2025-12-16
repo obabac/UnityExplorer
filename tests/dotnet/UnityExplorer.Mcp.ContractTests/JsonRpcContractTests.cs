@@ -1178,7 +1178,8 @@ public class JsonRpcContractTests
         pick.TryGetProperty("Hit", out var hit).Should().BeTrue();
         (hit.ValueKind == JsonValueKind.True || hit.ValueKind == JsonValueKind.False).Should().BeTrue();
         pick.TryGetProperty("Id", out _).Should().BeTrue();
-        pick.TryGetProperty("Items", out _).Should().BeTrue();
+        pick.TryGetProperty("Items", out var items).Should().BeTrue();
+        items.ValueKind.Should().Be(JsonValueKind.Null);
     }
 
     [Fact]

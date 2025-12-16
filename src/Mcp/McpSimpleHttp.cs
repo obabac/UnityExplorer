@@ -2525,7 +2525,7 @@ namespace UnityExplorer.Mcp
                         Mode = "world",
                         Hit = false,
                         Id = null,
-                        Items = new List<PickHit>()
+                        Items = null
                     };
 
                 var ray = cam.ScreenPointToRay(pos);
@@ -2539,7 +2539,7 @@ namespace UnityExplorer.Mcp
                         Mode = "world",
                         Hit = go != null,
                         Id = id,
-                        Items = new List<PickHit>()
+                        Items = null
                     };
                 }
 
@@ -2548,7 +2548,7 @@ namespace UnityExplorer.Mcp
                     Mode = "world",
                     Hit = false,
                     Id = null,
-                    Items = new List<PickHit>()
+                    Items = null
                 };
             });
         }

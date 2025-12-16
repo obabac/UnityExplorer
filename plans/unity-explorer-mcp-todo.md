@@ -11,7 +11,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 
-Status (2025-12-16): IL2CPP MCP host now returns HTTP 400 with structured JSON on malformed requests and stays alive (MainThread falls back to UniverseLib main-thread invoke when no `SynchronizationContext` is captured). Contract suite (IL2CPP) passes (55 passed, 1 skipped) via `UE_MCP_DISCOVERY=/home/onur/p-unity-explorer-mcp/ue-mcp-il2cpp-discovery.json` while Space Shooter is running; inspector CLI smoke and `Invoke-McpSmoke.ps1` both succeed against `http://192.168.178.210:51477` (`/mcp` also works). win-dev-vm MCP control plane alias tools remain valid after restart when seeding `initialize` with `Accept: application/json, text/event-stream` + `clientInfo` (logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`). Mono world MousePick parity gap persists (Mono world returns `Items=[]` vs IL2CPP `Items=null`).
+Status (2025-12-16): IL2CPP MCP host now returns HTTP 400 with structured JSON on malformed requests and stays alive (MainThread falls back to UniverseLib main-thread invoke when no `SynchronizationContext` is captured). Contract suite (IL2CPP) passes (55 passed, 1 skipped) via `UE_MCP_DISCOVERY=/home/onur/p-unity-explorer-mcp/ue-mcp-il2cpp-discovery.json` while Space Shooter is running; inspector CLI smoke and `Invoke-McpSmoke.ps1` both succeed against `http://192.168.178.210:51477` (`/mcp` also works). win-dev-vm MCP control plane alias tools remain valid after restart when seeding `initialize` with `Accept: application/json, text/event-stream` + `clientInfo` (logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`). Mono MousePick world now mirrors IL2CPP (`Items=null`); parity is guarded by smoke + contract tests.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -167,8 +167,9 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Implement guarded writes on Mono (start with `SetActive`, `SelectObject`, `GetTimeScale`/`SetTimeScale`) behind `allowWrites` + `requireConfirm`; keep the same error envelope as CoreCLR (needs live validation on hosts).
   - [x] Add `SpawnTestUi` / `DestroyTestUi` guarded tools to Mono and cover them in `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` (config enable → spawn/destroy → reset).
   - [x] Add guarded `Reparent` / `DestroyObject` for Mono (limited to SpawnTestUi blocks) and surface SpawnTestUi block ids for write smoke reparent/destroy coverage.
-  - [ ] Expand Mono coverage toward CoreCLR parity (selection, console/scripts, hooks); MousePick UI ordering/primary Id and CameraInfo now match IL2CPP; log remaining gaps vs. IL2CPP/Test-VM.
+  - [ ] Expand Mono coverage toward CoreCLR parity (selection, console/scripts, hooks); MousePick UI ordering/primary Id, world Items=null, and CameraInfo now match IL2CPP; log remaining gaps vs. IL2CPP/Test-VM.
   
   - [x] Fix Mono notification broadcast compile issue (net35 has no Tasks): remove discards on void `BroadcastNotificationAsync` or reintroduce a Task-compatible wrapper.
   - [x] Run Mono smoke + inspector CLI against a real Mono host and record results (Test‑VM base URL: `http://192.168.178.210:51478`). See `README-mcp.md` Mono Host Validation Checklist. (Ran `Run-McpMonoSmoke.ps1`, inspector tools/list + resources/read now green after redeploy.)
   - [x] Add Mono-specific contract/CI entry (`tools/Run-McpMonoSmoke.ps1`); run against a Mono host when available and keep IL2CPP behavior unchanged.
+  

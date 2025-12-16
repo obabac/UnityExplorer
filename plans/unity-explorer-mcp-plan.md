@@ -10,7 +10,7 @@ This plan merges the original scope, the current implementation snapshot, and th
 - IL2CPP MCP host on the Test-VM (`http://192.168.178.210:51477` and `/mcp`) now survives malformed JSON-RPC: invalid requests return HTTP 400 with structured errors, and the host stays alive. MainThread dispatch falls back to UniverseLib main-thread invoke when no `SynchronizationContext` is captured.
 - IL2CPP contract suite passes (55/56 passed, 1 skipped) via `UE_MCP_DISCOVERY=/home/onur/p-unity-explorer-mcp/ue-mcp-il2cpp-discovery.json`. Inspector CLI smoke and `Invoke-McpSmoke.ps1` both succeed against the running Space Shooter host.
 - win-dev control plane alias surface validated: `McpProxy8083` (mcp-control) exposes the harness tool names; seed the session after a restart with `initialize` that includes `Accept: application/json, text/event-stream` plus a `clientInfo` payload (e.g., `protocolVersion=2024-11-05`, `capabilities={}`) and the `win-dev-vm-ui/State-Tool` + `win-dev-vm-ui/Powershell-Tool` succeed. Logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`.
-- Mono world MousePick parity gap persists (`Items=[]` vs `null`).
+- Mono MousePick world Items now mirror IL2CPP (`Items=null` instead of an empty array); smoke and contract checks cover the shape.
 - Inspector validation is CLI-only: use `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <url>` (accepts bases with or without `/mcp`) or direct `npx @modelcontextprotocol/inspector --cli` one-liners; the Inspector UI helper is deprecated (see `README-mcp.md`).
 
 ---
@@ -27,8 +27,8 @@ This plan merges the original scope, the current implementation snapshot, and th
 Pre-reqs done: inspector CLI gate (`tools/Run-McpInspectorCli.ps1`), removed the `UeMcpHeadless.dll` workaround, Mono baseline guarded writes, repeatable Space Shooter IL2CPP+Mono rebuilds, and the win-dev control plane restored via `McpProxy8082/8083` on 8082/8083.
 
 1) Inspector CLI gate hardening: ensure `npx @modelcontextprotocol/inspector --cli` commands work reliably (including common `/mcp` URL forms) on both hosts; remove/deprecate Inspector UI helpers and keep docs aligned.
-2) Fix Mono MousePick world parity (`Items` should be null/omitted like IL2CPP) and add a contract test to lock the shape.
-3) Add Mono discovery helper + contract run: add `ue-mcp-mono-discovery.json` and run `UnityExplorer.Mcp.ContractTests` against the Mono host.
+2) Add Mono discovery helper + contract run: add `ue-mcp-mono-discovery.json` and run `UnityExplorer.Mcp.ContractTests` against the Mono host (lock in MousePick/world null Items shape).
+3) Expand Mono parity coverage (selection, console/scripts, hooks) after the MousePick world null fix; document any remaining deltas vs. IL2CPP/Test-VM.
 4) Expand Mono guarded writes (tier 2): implement safe `AddComponent`/`RemoveComponent`/`CallMethod` behind allowlists + confirm and extend `Run-McpMonoSmoke.ps1 -EnableWriteSmoke`.
 5) Mono console + hooks parity: enable behind `enableConsoleEval`/allowlists, add a small gated test (mirror existing IL2CPP hook tests).
 6) Streams parity: add/extend contract tests for at least one non-tool notification on both hosts (selection/scenes/log) and keep rate-limit behavior stable.

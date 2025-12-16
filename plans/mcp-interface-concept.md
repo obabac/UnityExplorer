@@ -1,6 +1,6 @@
 # Unity Explorer MCP Interface — Source of Truth
 
-- Updated: 2025-12-14
+- Updated: 2025-12-17
 - Hosts: CoreCLR IL2CPP + Mono in-process MCP servers (INTEROP builds)
 - Transport: streamable HTTP via `McpSimpleHttp` (no ASP.NET); JSON-RPC 2.0 on `POST /message` (alias `POST /mcp`); convenience `GET /read?uri=unity://...`; discovery file `%TEMP%/unity-explorer-mcp.json` advertises `{ pid, baseUrl, port, modeHints: ["streamable-http"], startedAt }`.
 - Default policy: read-only. All mutating tools require `allowWrites=true`; many also require `requireConfirm=true`.
@@ -110,6 +110,11 @@
     { "Id": "obj:2136", "Name": "Lighting", "Path": "/Lighting", "Tag": "Untagged", "Layer": 0, "Active": true, "ComponentCount": 1 }
   ]
 }
+```
+
+- `MousePick(mode="world")` when no world hit is under the cursor
+```json
+{ "Mode": "world", "Hit": false, "Id": null, "Items": null }
 ```
 
 - `MousePick(mode="ui")` after `SpawnTestUi` (shape)

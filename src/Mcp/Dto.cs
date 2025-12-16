@@ -214,12 +214,12 @@ namespace UnityExplorer.Mcp
         public string Mode { get; set; }
         public bool Hit { get; set; }
         public string? Id { get; set; }
-        public IList<PickHit> Items { get; set; }
+        public IList<PickHit>? Items { get; set; }
 
         public PickResultDto()
         {
             Mode = string.Empty;
-            Items = new List<PickHit>();
+            Items = null;
             Id = null;
         }
     }
