@@ -1,17 +1,19 @@
-# Next iteration instructions (Iteration 17)
+# Next iteration instructions (Iteration 18)
 
 Focus
-- Deploy the Mono MousePick Items=null fix and validate live on the Test-VM (Space Shooter Mono host).
+- Fix the Mono contract failure: `Write_Tools_Respond_With_Expected_Errors_By_Default` fails because `AddComponent`/`RemoveComponent` are missing (404). Bring Mono parity or adjust expectations while keeping safety gating.
 
 Repro
-- Test-VM Mono host: http://192.168.178.210:51478 (Space Shooter Mono).
-- Call `MousePick` in `world` mode with no hit via inspector CLI or curl; expected JSON has `Items=null` (not `[]`).
-- Use `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478` and `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478`; keep writes off unless explicitly needed.
+- Mono host: http://192.168.178.210:51478 (Space Shooter Mono).
+- Discovery: `ue-mcp-mono-discovery.json` in repo.
+- Smoke: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 5` (writes off by default).
+- Contract: `UE_MCP_DISCOVERY=/home/onur/p-unity-explorer-mcp/ue-mcp-mono-discovery.json dotnet test tests/dotnet/UnityExplorer.Mcp.ContractTests/UnityExplorer.Mcp.ContractTests.csproj -c Release` (current: 54 passed / 1 failed AddComponent 404 / 1 skipped).
 
 Tasks
-- Build/deploy ML_Mono (or reuse the latest deploy) and validate `MousePick` world Items=null on the Test-VM (inspector CLI + smoke output).
-- Add or refresh `ue-mcp-mono-discovery.json` pointing at the Mono host and run `UnityExplorer.Mcp.ContractTests` against it; record any skips/failures.
-- Keep `plans/mcp-interface-concept.md`, `plans/unity-explorer-mcp-plan.md`, and `plans/unity-explorer-mcp-todo.md` in sync if discovery steps or validation outcomes change.
+- Implement or guard Mono `AddComponent`/`RemoveComponent` so `call_tool` returns structured PermissionDenied (allowWrites=false) instead of 404; keep `allowWrites` + `requireConfirm` enforcement.
+- Update `list_tools` schema and docs (`plans/mcp-interface-concept.md`, `plans/unity-explorer-mcp-plan.md`, `plans/unity-explorer-mcp-todo.md`) to match the Mono surface.
+- Re-run Mono contract suite + inspector CLI + `Run-McpMonoSmoke`; record results and reset writes (allowWrites=false, requireConfirm=true).
 
 Safety
-- Keep writes off by default; if you enable them for smoke, reset `allowWrites=false` and `requireConfirm=true` afterward.
+- Keep writes off unless explicitly needed; if enabled for tests, reset to `allowWrites=false`, `requireConfirm=true` afterward.
+- If Mono build looks stale, rebuild with `dotnet build src/UnityExplorer.csproj -c ML_Mono` and redeploy to `C:/codex-workspace/space-shooter-build/SpaceShooter_Mono/Mods/` (stop the game before copying).
