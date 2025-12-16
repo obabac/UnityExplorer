@@ -486,11 +486,7 @@ namespace UnityExplorer.Mcp
                     try
                     {
                         var obj = await McpReflection.ReadResourceAsync(uriParam).ConfigureAwait(false);
-                        var json = JsonSerializer.Serialize(obj);
-                        var header = $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {Encoding.UTF8.GetByteCount(json)}\r\nConnection: close\r\n\r\n";
-                        var headerBytes = Encoding.UTF8.GetBytes(header);
-                        await stream.WriteAsync(headerBytes, 0, headerBytes.Length, ct).ConfigureAwait(false);
-                        await stream.WriteAsync(Encoding.UTF8.GetBytes(json), 0, Encoding.UTF8.GetByteCount(json), ct).ConfigureAwait(false);
+                        await WriteJsonResponseAsync(stream, 200, obj!, ct).ConfigureAwait(false);
                         return;
                     }
                     catch (Exception ex)
