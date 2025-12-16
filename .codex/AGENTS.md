@@ -40,6 +40,7 @@ Speak a simple language so you are easier to understand
 - Build passes locally.
 - Basic e2e path demonstrable (start → handshake → tool call → response).
 - Test-VM validation is a gate: for any behavior change, validate on the Test-VM in the same iteration (not after). See `plans/unity-explorer-mcp-todo.md` → Pitfalls.
+- Inspector validation is CLI-only (no browser UI). Prefer `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <baseUrl>` or `npx @modelcontextprotocol/inspector --cli --transport http <baseUrl> --method tools/list`.
 - Include minimal docs: feature overview + how to run/dev test.
 - Mono build/deploy note: the game loads `Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll` (not the root). `dotnet build src/UnityExplorer.csproj -c ML_Mono` now copies into `Mods/`, but use a quick hash check if Mono seems stale.
 

@@ -127,10 +127,12 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
   - `pwsh ./build-ml-coreclr.ps1`
 - **Launch the game on the Test‑VM:**
   - Use the Windows MCP tools (PowerShell) to kill any running `Space Shooter.exe` (adjust name if different) and start it again.
-- **Connect an MCP inspector:**
-  - From your dev machine, run  
-    `npx @modelcontextprotocol/inspector --transport http --server-url http://<TestVM-IP>:51477`
-  - Use `initialize` → `notifications/initialized` → `list_tools` / `read_resource` / `stream_events`.
+- **Inspector CLI (no UI):**
+  - Prefer the repo helper:
+    - `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://<TestVM-IP>:51477`
+  - Or run direct one-liners:
+    - `npx @modelcontextprotocol/inspector --cli --transport http http://<TestVM-IP>:51477 --method tools/list`
+    - `npx @modelcontextprotocol/inspector --cli --transport http http://<TestVM-IP>:51477 --method tools/call --tool-name GetStatus`
 - **Guarded writes and config:**
   - By default `allowWrites` is `false`; do not enable this casually on shared machines.
   - To experiment with write tools on the Test‑VM, use the `SetConfig` tool to toggle `allowWrites` / `requireConfirm` (and `enableConsoleEval` / allowlists) and always reset them to safe values when you are done.
