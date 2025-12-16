@@ -46,7 +46,7 @@
 - `GetVersion()` → `VersionInfoDto { ExplorerVersion, McpVersion, UnityVersion, Runtime }`.
 - `SearchObjects(query?, name?, type?, path?, activeOnly?, limit?, offset?)` → `Page<ObjectCardDto>`.
 - `GetCameraInfo()` → `CameraInfoDto`.
-- `MousePick(mode="world"|"ui", x?, y?, normalized=false)` → `PickResultDto { Mode, Hit, Id?, Items? }`; world mode omits `Items` (null); UI mode uses EventSystem ordering (top-most first) and `Id` mirrors the first hit on both IL2CPP and Mono.
+- `MousePick(mode="world"|"ui", x?, y?, normalized=false)` → `PickResultDto { Mode, Hit, Id?, Items? }`; world mode omits `Items` (null); UI mode uses EventSystem ordering (top-most first) and `Id` mirrors the first resolvable hit (hits are filtered to GameObjects that `GetObject` can resolve; if none, Items is empty/Id null) on both IL2CPP and Mono.
 - `TailLogs(count=200)` → `LogTailDto`.
 - `GetSelection()` → `SelectionDto { ActiveId, Items[] }`.
 - `GetTimeScale()` → `{ ok: true, value: float, locked: bool }`.

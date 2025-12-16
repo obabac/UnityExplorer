@@ -47,6 +47,17 @@ namespace UnityExplorer.Mcp
                         return go;
                 }
             }
+
+            try
+            {
+                foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
+                {
+                    if (go != null && go.GetInstanceID() == instanceId)
+                        return go;
+                }
+            }
+            catch { }
+
             return null;
         }
 

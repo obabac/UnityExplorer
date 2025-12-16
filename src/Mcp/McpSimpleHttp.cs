@@ -21,14 +21,18 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
 using System.Threading;
+using HarmonyLib;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityExplorer.CSConsole;
+using UnityExplorer.Hooks;
 using UnityExplorer.ObjectExplorer;
 using UnityExplorer.UI.Panels;
 using UnityExplorer.UI.Widgets;
 using UniverseLib.Input;
+using UniverseLib.Utility;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 #endif
@@ -1778,7 +1782,7 @@ namespace UnityExplorer.Mcp
                 experimental = new { streamEvents = new { } }
                 
             };
-            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, logs, camera, and mouse pick over streamable-http. Guarded writes (SetActive, Reparent, DestroyObject, SelectObject, SetTimeScale, SpawnTestUi, DestroyTestUi) are available when allowWrites=true (requireConfirm recommended; use SpawnTestUi blocks as safe targets). stream_events provides log/scene/selection/tool_result notifications.";
+            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, logs, camera, and mouse pick over streamable-http. Guarded writes (SetActive, SetMember, ConsoleEval, AddComponent, RemoveComponent, HookAdd, HookRemove, Reparent, DestroyObject, SelectObject, SetTimeScale, SpawnTestUi, DestroyTestUi) are available when allowWrites=true (requireConfirm recommended; use SpawnTestUi blocks as safe targets and keep the component/hook allowlists configured). stream_events provides log/scene/selection/tool_result notifications.";
             return new { protocolVersion, capabilities, serverInfo, instructions };
         }
 
@@ -1811,6 +1815,11 @@ namespace UnityExplorer.Mcp
             list.Add(new { name = "GetSelection", description = "Current selection / inspected tabs.", inputSchema = Schema(new Dictionary<string, object>()) });
             list.Add(new { name = "SetActive", description = "Set GameObject active state (guarded by allowWrites/confirm).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "active", Bool() }, { "confirm", Bool(false) } }, new[] { "objectId", "active" }) });
             list.Add(new { name = "SetMember", description = "Set a field or property on a component (allowlist enforced).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "componentType", String() }, { "member", String() }, { "jsonValue", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "componentType", "member", "jsonValue" }) });
+            list.Add(new { name = "ConsoleEval", description = "Evaluate a small C# snippet in the UnityExplorer console context (guarded by config).", inputSchema = Schema(new Dictionary<string, object> { { "code", String() }, { "confirm", Bool(false) } }, new[] { "code" }) });
+            list.Add(new { name = "AddComponent", description = "Add a component by full type name to a GameObject (guarded by allowlist).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "type", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "type" }) });
+            list.Add(new { name = "RemoveComponent", description = "Remove a component by full type name or index from a GameObject (allowlist enforced when by type).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "typeOrIndex", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "typeOrIndex" }) });
+            list.Add(new { name = "HookAdd", description = "Add a Harmony hook for the given type and method (guarded by hook allowlist).", inputSchema = Schema(new Dictionary<string, object> { { "type", String() }, { "method", String() }, { "confirm", Bool(false) } }, new[] { "type", "method" }) });
+            list.Add(new { name = "HookRemove", description = "Remove a previously added Harmony hook by signature.", inputSchema = Schema(new Dictionary<string, object> { { "signature", String() }, { "confirm", Bool(false) } }, new[] { "signature" }) });
             list.Add(new { name = "Reparent", description = "Reparent a GameObject under a new parent (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "newParentId", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "newParentId" }) });
             list.Add(new { name = "DestroyObject", description = "Destroy a GameObject (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "confirm", Bool(false) } }, new[] { "objectId" }) });
             list.Add(new { name = "SelectObject", description = "Select a GameObject in the inspector (requires allowWrites).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() } }, new[] { "objectId" }) });
@@ -1843,6 +1852,7 @@ namespace UnityExplorer.Mcp
         public object CallTool(string name, JObject? args)
         {
             var key = (name ?? string.Empty).ToLowerInvariant();
+            try { LogBuffer.Add("debug", "call_tool:" + key, "mcp"); } catch { }
             switch (key)
             {
                 case "setconfig":
@@ -1899,6 +1909,34 @@ namespace UnityExplorer.Mcp
                         var member = RequireString(args, "member", "Invalid params: 'member' is required.");
                         var jsonValue = RequireString(args, "jsonValue", "Invalid params: 'jsonValue' is required.");
                         return _write.SetMember(oid, type, member, jsonValue, GetBool(args, "confirm") ?? false);
+                    }
+                case "consoleeval":
+                    {
+                        var code = RequireString(args, "code", "Invalid params: 'code' is required.");
+                        return _write.ConsoleEval(code, GetBool(args, "confirm") ?? false);
+                    }
+                case "addcomponent":
+                    {
+                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
+                        var type = RequireString(args, "type", "Invalid params: 'type' is required.");
+                        return _write.AddComponent(oid, type, GetBool(args, "confirm") ?? false);
+                    }
+                case "removecomponent":
+                    {
+                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
+                        var typeOrIndex = RequireString(args, "typeOrIndex", "Invalid params: 'typeOrIndex' is required.");
+                        return _write.RemoveComponent(oid, typeOrIndex, GetBool(args, "confirm") ?? false);
+                    }
+                case "hookadd":
+                    {
+                        var type = RequireString(args, "type", "Invalid params: 'type' is required.");
+                        var method = RequireString(args, "method", "Invalid params: 'method' is required.");
+                        return _write.HookAdd(type, method, GetBool(args, "confirm") ?? false);
+                    }
+                case "hookremove":
+                    {
+                        var signature = RequireString(args, "signature", "Invalid params: 'signature' is required.");
+                        return _write.HookRemove(signature, GetBool(args, "confirm") ?? false);
                     }
                 case "reparent":
                     {
@@ -2095,6 +2133,17 @@ namespace UnityExplorer.Mcp
                     }
                 }
             }
+
+            try
+            {
+                foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
+                {
+                    if (go != null && go.GetInstanceID() == instanceId)
+                        return go;
+                }
+            }
+            catch { }
+
             return null;
         }
 
@@ -2501,9 +2550,13 @@ namespace UnityExplorer.Mcp
                     {
                         var go = rr.gameObject;
                         if (go == null) continue;
-                        var id = "obj:" + go.GetInstanceID();
-                        var path = BuildPath(go.transform);
-                        items.Add(new PickHit { Id = id, Name = go.name, Path = path });
+
+                        var resolved = FindByInstanceId(go.GetInstanceID());
+                        if (resolved == null) continue;
+
+                        var id = "obj:" + resolved.GetInstanceID();
+                        var path = BuildPath(resolved.transform);
+                        items.Add(new PickHit { Id = id, Name = resolved.name, Path = path });
                     }
 
                     var primaryId = items.Count > 0 ? items[0].Id : null;
@@ -2606,6 +2659,12 @@ namespace UnityExplorer.Mcp
                     case "NotFound": return ToolError("NotFound", "Not found");
                     case "PermissionDenied": return ToolError("PermissionDenied", "Permission denied");
                     case "ConfirmationRequired": return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+                    case "Denied by allowlist": return ToolError("PermissionDenied", "Denied by allowlist");
+                    case "Component not found": return ToolError("NotFound", "Component not found");
+                    case "Method overload not found": return ToolError("NotFound", "Method overload not found");
+                    case "Method not found": return ToolError("NotFound", "Method not found");
+                    case "Type not found": return ToolError("NotFound", "Type not found");
+                    case "Hook not found": return ToolError("NotFound", "Hook not found");
                     default: return ToolError("InvalidArgument", inv.Message);
                 }
             }
@@ -2640,6 +2699,18 @@ namespace UnityExplorer.Mcp
                     comp = c;
                     return true;
                 }
+            }
+            return false;
+        }
+
+        private static bool IsHookAllowed(string typeFullName)
+        {
+            var allow = McpConfig.Load().HookAllowlistSignatures;
+            if (allow == null || allow.Length == 0) return false;
+            foreach (var entry in allow)
+            {
+                if (string.Equals(entry, typeFullName, StringComparison.Ordinal))
+                    return true;
             }
             return false;
         }
@@ -2779,6 +2850,192 @@ namespace UnityExplorer.Mcp
             }
         }
 
+        public object ConsoleEval(string code, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.EnableConsoleEval) return ToolError("PermissionDenied", "ConsoleEval disabled by config");
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            if (string.IsNullOrEmpty(code) || code.Trim().Length == 0)
+                return new { ok = true, result = string.Empty };
+
+            try
+            {
+                string? result = null;
+                MainThread.Run(() =>
+                {
+                    try
+                    {
+                        var evaluator = new ConsoleScriptEvaluator();
+                        evaluator.Initialize();
+                        var compiled = evaluator.Compile(code);
+                        if (compiled != null)
+                        {
+                            object? ret = null;
+                            compiled.Invoke(ref ret);
+                            result = ret?.ToString();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        result = "Error: " + ex.Message;
+                    }
+                });
+
+                return new { ok = true, result };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        public object AddComponent(string objectId, string type, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+            if (cfg.ComponentAllowlist == null || cfg.ComponentAllowlist.Length == 0)
+                return ToolError("PermissionDenied", "No components are allowlisted");
+            if (Array.IndexOf(cfg.ComponentAllowlist, type) < 0)
+                return ToolError("PermissionDenied", "Denied by allowlist");
+
+            if (string.IsNullOrEmpty(objectId) || objectId.Trim().Length == 0 || !objectId.StartsWith("obj:"))
+                return ToolError("InvalidArgument", "Invalid objectId; expected 'obj:<instanceId>'");
+            if (!int.TryParse(objectId.Substring(4), out var iid))
+                return ToolError("InvalidArgument", "Invalid instance id");
+
+            try
+            {
+                var t = UniverseLib.ReflectionUtility.GetTypeByName(type);
+                if (t == null || !typeof(UnityEngine.Component).IsAssignableFrom(t))
+                    return ToolError("InvalidArgument", "Type not found or not a Component");
+
+                MainThread.Run(() =>
+                {
+                    var go = _read.FindByInstanceId(iid);
+                    if (go == null) throw new InvalidOperationException("NotFound");
+                    go.AddComponent(t);
+                });
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        public object RemoveComponent(string objectId, string typeOrIndex, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+            if (string.IsNullOrEmpty(objectId) || objectId.Trim().Length == 0 || !objectId.StartsWith("obj:"))
+                return ToolError("InvalidArgument", "Invalid objectId; expected 'obj:<instanceId>'");
+            if (!int.TryParse(objectId.Substring(4), out var iid))
+                return ToolError("InvalidArgument", "Invalid instance id");
+
+            try
+            {
+                MainThread.Run(() =>
+                {
+                    var go = _read.FindByInstanceId(iid);
+                    if (go == null) throw new InvalidOperationException("NotFound");
+                    UnityEngine.Component target = null;
+                    if (int.TryParse(typeOrIndex, out var idx))
+                    {
+                        var comps = go.GetComponents<UnityEngine.Component>();
+                        if (idx >= 0 && idx < comps.Length) target = comps[idx];
+                    }
+                    else
+                    {
+                        var t = UniverseLib.ReflectionUtility.GetTypeByName(typeOrIndex);
+                        if (t != null)
+                        {
+                            if (cfg.ComponentAllowlist == null || Array.IndexOf(cfg.ComponentAllowlist, t.FullName) < 0)
+                                throw new InvalidOperationException("Denied by allowlist");
+                            var comps = go.GetComponents<UnityEngine.Component>();
+                            foreach (var c in comps)
+                            {
+                                if (c != null && c.GetType().FullName == t.FullName)
+                                {
+                                    target = c;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (target == null) throw new InvalidOperationException("Component not found");
+                    UnityEngine.Object.Destroy(target);
+                });
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        public object HookAdd(string type, string method, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+            if (!IsHookAllowed(type)) return ToolError("PermissionDenied", "Denied by hook allowlist");
+
+            try
+            {
+                MainThread.Run(() =>
+                {
+                    var t = UniverseLib.ReflectionUtility.GetTypeByName(type);
+                    if (t == null) throw new InvalidOperationException("Type not found");
+                    var mi = t.GetMethod(method, UniverseLib.ReflectionUtility.FLAGS);
+                    if (mi == null) throw new InvalidOperationException("Method not found");
+
+                    var sig = mi.FullDescription();
+                    if (HookList.hookedSignatures.Contains(sig))
+                        throw new InvalidOperationException("Method is already hooked");
+
+                    var hook = new HookInstance(mi);
+                    HookList.hookedSignatures.Add(sig);
+                    HookList.currentHooks.Add(sig, hook);
+                });
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        public object HookRemove(string signature, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            try
+            {
+                MainThread.Run(() =>
+                {
+                    if (!HookList.currentHooks.Contains(signature))
+                        throw new InvalidOperationException("Hook not found");
+
+                    var hook = (HookInstance)HookList.currentHooks[signature]!;
+                    hook.Unpatch();
+                    HookList.currentHooks.Remove(signature);
+                    HookList.hookedSignatures.Remove(signature);
+                });
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
         public object Reparent(string objectId, string newParentId, bool confirm = false)
         {
             var cfg = McpConfig.Load();
@@ -2871,6 +3128,7 @@ namespace UnityExplorer.Mcp
 
             try
             {
+                SelectionDto? selection = null;
                 MainThread.Run(() =>
                 {
                     var go = _read.FindByInstanceId(iid);
@@ -2878,6 +3136,15 @@ namespace UnityExplorer.Mcp
                     try { InspectorManager.Inspect(go); } catch { }
                     _read.RecordSelection(objectId);
                 });
+
+                selection = _read.GetSelection();
+                try
+                {
+                    var http = McpSimpleHttp.Current;
+                    if (http != null) http.BroadcastNotificationAsync("selection", selection);
+                }
+                catch { }
+
                 return new { ok = true };
             }
             catch (Exception ex)

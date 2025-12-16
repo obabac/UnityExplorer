@@ -361,9 +361,13 @@ namespace UnityExplorer.Mcp
                         var rr = raycastResults[i];
                         var go = rr.gameObject;
                         if (go == null) continue;
-                        var id = $"obj:{go.GetInstanceID()}";
-                        var path = UnityQuery.BuildPath(go.transform);
-                        items.Add(new PickHit(id, go.name, path));
+
+                        var resolved = UnityQuery.FindByInstanceId(go.GetInstanceID());
+                        if (resolved == null) continue;
+
+                        var id = $"obj:{resolved.GetInstanceID()}";
+                        var path = UnityQuery.BuildPath(resolved.transform);
+                        items.Add(new PickHit(id, resolved.name, path));
                     }
 
                     var primaryId = items.Count > 0 ? items[0].Id : null;
