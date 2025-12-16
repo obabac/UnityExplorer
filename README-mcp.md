@@ -36,14 +36,14 @@ The helper accepts BaseUrl values with or without `/mcp` and normalizes to the J
 We do not use the Inspector UI for validation; use the CLI.
 
 ```bash
-npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51477/mcp --method tools/list
-npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51477/mcp --method tools/call --tool-name GetStatus
+npx @modelcontextprotocol/inspector --cli http://192.168.178.210:51477/mcp --method tools/list
+npx @modelcontextprotocol/inspector --cli http://192.168.178.210:51477/mcp --method tools/call --tool-name GetStatus
 ```
 
 Mono host example:
 
 ```bash
-npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51478/mcp --method tools/list
+npx @modelcontextprotocol/inspector --cli http://192.168.178.210:51478/mcp --method tools/list
 ```
 
 ## Mono Host Validation Checklist
@@ -96,7 +96,7 @@ Use this when you have a Mono (non‑IL2CPP) Unity game with MelonLoader.
 6. (Optional) Inspector CLI check:
 
    ```bash
-   npx @modelcontextprotocol/inspector --cli --transport http http://127.0.0.1:51477 --method tools/list
+   npx @modelcontextprotocol/inspector --cli http://127.0.0.1:51477/mcp --method tools/list
    ```
 
 ## Configuration
@@ -330,9 +330,9 @@ This matches the `stream_events` behavior and will print JSON‑RPC `notificatio
 2. From your dev machine, run:
 
    ```bash
-   npx @modelcontextprotocol/inspector --cli --transport http http://<TestVM-IP>:51477 --method tools/list
-   npx @modelcontextprotocol/inspector --cli --transport http http://<TestVM-IP>:51477 --method resources/read --uri unity://status
-   npx @modelcontextprotocol/inspector --cli --transport http http://<TestVM-IP>:51477 --method tools/call --tool-name GetStatus
+   npx @modelcontextprotocol/inspector --cli http://<TestVM-IP>:51477/mcp --method tools/list
+   npx @modelcontextprotocol/inspector --cli http://<TestVM-IP>:51477/mcp --method resources/read --uri unity://status
+   npx @modelcontextprotocol/inspector --cli http://<TestVM-IP>:51477/mcp --method tools/call --tool-name GetStatus
    ```
 
 3. Or use the repo helper:
