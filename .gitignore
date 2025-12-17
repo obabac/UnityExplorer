@@ -362,6 +362,7 @@ MigrationBackup/
 .dotnet/
 .npm/
 .local/
+.worktrees/
 .codex/*sessions
 .codex/exec-logs/*
 .codex/history.jsonl

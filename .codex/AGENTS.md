@@ -22,6 +22,18 @@ Speak a simple language so you are easier to understand
 - You can start a new worker by writing instructions into INSTRUCTIONS.MD and then running "pwsh codex-exec.ps1".
 - You can start mutliple worker in parallel if needed (max 4)
 
+# Parallel worker rules (must follow)
+- Use `git worktree` under `./.worktrees/<name>` so each worker has its own branch + working tree.
+- Ensure Codex auth exists in the worktree (`.codex/auth.json`); if missing, symlink it to `$HOME/.codex/auth.json`.
+- In parallel runs, workers must NOT edit:
+  - `INSTRUCTIONS.MD`
+  - `plans/unity-explorer-mcp-plan.md`
+  - `plans/unity-explorer-mcp-todo.md`
+  - (Only update `plans/mcp-interface-concept.md` when DTO/tool shapes change.)
+- Avoid shared-file hotspots:
+  - Put DTOs in `src/Mcp/Dto/` (one feature per file).
+  - Put Mono host logic in `src/Mcp/Mono/` (avoid feature edits in `src/Mcp/McpSimpleHttp.cs`).
+
 # Operation mode: WORKER
 - Work autonomously; proceed unless you hit a true blocker (missing credentials, hard unknowns).
 - There may be quick fixes/changes which do not strictly follow "General-Workflow" format. But most work should do.

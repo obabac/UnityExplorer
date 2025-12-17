@@ -20,8 +20,13 @@ You have ~60 minutes. Work autonomously:
 - Only stop early if blocked by missing credentials or destructive ops
 - Avoid asking questions; make reasonable assumptions and document them
 - Produce a concise summary at the end; no intermediate status reports
-- Keep "plans/unity-explorer-mcp-plan.md" and "plans/unity-explorer-mcp-todo.md" updated
-- Read instructions from INSTRUCTIONS.MD. When finishing turn: Write new instructions for the next iteration into INSTRUCTIONS.MD (replace old instructions) then GIT commit changes
+- Read tasks from INSTRUCTIONS.MD
+- Do NOT modify INSTRUCTIONS.MD unless explicitly instructed
+ - Do NOT modify plans/unity-explorer-mcp-plan.md or plans/unity-explorer-mcp-todo.md unless explicitly instructed
+ - Update plans/mcp-interface-concept.md only when DTO/tool shapes change
+ - Run relevant tests
+ - GIT commit your changes with a clear message (commits are allowed)
+
 "@
 }
 #Write-Host "Prompt: $Prompt"
@@ -63,6 +68,20 @@ function Resolve-CodexHome {
 $startDir   = (Get-Location).Path
 $codexHome  = Resolve-CodexHome -StartDir $startDir -CreateIfMissing:$CreateMissing.IsPresent
 $env:CODEX_HOME = $codexHome  # expose to codex and child processes
+
+# Ensure Codex auth exists (worktrees may not have .codex/auth.json).
+$authPath = Join-Path $codexHome "auth.json"
+if (-not (Test-Path -LiteralPath $authPath)) {
+  $fallbackAuth = Join-Path (Join-Path $HOME ".codex") "auth.json"
+  if (Test-Path -LiteralPath $fallbackAuth) {
+    try {
+      New-Item -ItemType SymbolicLink -Path $authPath -Target $fallbackAuth -Force | Out-Null
+    }
+    catch {
+      Copy-Item -LiteralPath $fallbackAuth -Destination $authPath -Force
+    }
+  }
+}
 
 # Logs
 $logDir  = Join-Path $codexHome "exec-logs"

@@ -14,6 +14,23 @@ This file is for agents working on this repository, especially when building on 
   - `ML_Mono` (`dotnet build src/UnityExplorer.csproj -c ML_Mono`)
 - You do **not** need to build other legacy Mono / net35 targets unless a task explicitly requires them.
 
+### Parallel workers (scalable workflow)
+
+When running multiple Codex workers in parallel, use these rules to reduce merge conflicts:
+
+- Use `git worktree` under `./.worktrees/<name>` (keep it gitignored).
+- Each worker uses its own branch and commits there.
+- Ensure each worktree has Codex auth available:
+  - If `.codex/auth.json` is missing, symlink it to `$HOME/.codex/auth.json`.
+- Workers should NOT edit these files in parallel runs:
+  - `INSTRUCTIONS.MD`
+  - `plans/unity-explorer-mcp-plan.md`
+  - `plans/unity-explorer-mcp-todo.md`
+  - (Only update `plans/mcp-interface-concept.md` when DTO/tool shapes change.)
+- Avoid shared-file hotspots:
+  - Add new DTOs under `src/Mcp/Dto/` (one feature per file).
+  - Keep Mono host logic under `src/Mcp/Mono/` (avoid feature edits in `src/Mcp/McpSimpleHttp.cs`).
+
 ### Required tools on Linux
 
 On a Linux development machine, assume the following tools should be present or installed by the human operator:
