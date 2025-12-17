@@ -53,15 +53,61 @@
 
 ### Guarded writes (require `allowWrites=true`; `requireConfirm=true` forces `confirm=true` where supported)
 - Config: `SetConfig(allowWrites?, requireConfirm?, enableConsoleEval?, componentAllowlist?, reflectionAllowlistMembers?, hookAllowlistSignatures?, restart=false)` → `{ ok }`; `GetConfig()` → `{ ok, enabled, bindAddress, port, allowWrites, requireConfirm, exportRoot, logLevel, componentAllowlist, reflectionAllowlistMembers, enableConsoleEval, hookAllowlistSignatures }` (sanitized).
+  - Note: despite the name, `hookAllowlistSignatures` currently contains **type full names** allowed for `HookAdd` (example: `["UnityEngine.GameObject"]`).
 - Object state: `SetActive(objectId, active, confirm?)` → `{ ok }`; `SelectObject(objectId)` → `{ ok }` and triggers a `selection` notification (still gated by `allowWrites`).
 - Reflection writes: `SetMember(objectId, componentType, member, jsonValue, confirm?)` → `{ ok }` (enforces `reflectionAllowlistMembers` entries `<Type>.<Member>`). `CallMethod(objectId, componentType, method, argsJson="[]", confirm?)` → `{ ok, result }` is available on IL2CPP; planned for Mono and will use the same allowlist.
 - Component writes: `AddComponent(objectId, type, confirm?)` / `RemoveComponent(objectId, typeOrIndex, confirm?)` → `{ ok }`; `componentAllowlist` must include the type when removing by type or adding.
-- Hooks: `HookAdd(type, method, confirm?)` / `HookRemove(signature, confirm?)` → `{ ok }`; allowlist via `hookAllowlistSignatures`.
+- Hooks: `HookAdd(type, method, confirm?)` / `HookRemove(signature, confirm?)` → `{ ok }`; allowlist via `hookAllowlistSignatures` (type full names).
 - Hierarchy: `Reparent(objectId, newParentId, confirm?)` and `DestroyObject(objectId, confirm?)` → `{ ok }`; Mono host restricts these to the `SpawnTestUi` hierarchy, CoreCLR currently allows any object.
 - Console: `ConsoleEval(code, confirm?)` → `{ ok, result }` (requires `enableConsoleEval=true` in config).
 - Time: `SetTimeScale(value, lock?, confirm?)` → `{ ok, value, locked }` (value clamped 0–4; `lock=true` uses the Explorer widget lock when available).
 - Test UI helpers: `SpawnTestUi(confirm?)` → `{ ok, rootId, blocks: [{ name, id }] }` (id strings are `obj:<instanceId>`); `DestroyTestUi(confirm?)` → `{ ok }`.
 - Tool errors: `{ ok: false, error: { kind, message, hint? } }` where `kind` mirrors the JSON-RPC error kinds below.
+
+## Planned (next) — Console scripts + Hooks parity
+
+These surfaces are **planned** (not implemented yet). Before implementing, keep this section and `plans/unity-explorer-mcp-todo.md` in sync.
+
+### Console scripts (file-level parity)
+
+Goal: expose UnityExplorer’s `Scripts/` folder (under `ExplorerCore.ExplorerFolder`) so an agent can list, read, write, and run scripts safely.
+
+- Resources
+  - `unity://console/script?path=<relativeOrAbsolute>` — `ConsoleScriptFileDto { Name, Path, Content, SizeBytes, LastModifiedUtc, Truncated }`
+    - `path` is validated to stay inside the Scripts folder.
+    - `Content` is truncated at a fixed max size (to avoid multi‑MB transfers).
+
+- Read-only tools
+  - `ReadConsoleScript(path)` → `ConsoleScriptFileDto` (same as the resource).
+  - `GetStartupScript()` → `{ ok, enabled, path, content? }`.
+
+- Guarded tools
+  - `WriteConsoleScript(path, content, confirm?)` → `{ ok }` (requires `allowWrites=true`; requires `confirm=true` when `requireConfirm=true`).
+  - `DeleteConsoleScript(path, confirm?)` → `{ ok }` (same gating as above).
+  - `RunConsoleScript(path, confirm?)` → `{ ok, result }` (requires `enableConsoleEval=true` in addition to write gating).
+  - Startup script control (maps to the built-in `startup.cs` behavior):
+    - `SetStartupScriptEnabled(enabled, confirm?)` → `{ ok }` (guarded).
+    - `WriteStartupScript(content, confirm?)` → `{ ok }` (guarded; `enableConsoleEval` not required for writing).
+    - `RunStartupScript(confirm?)` → `{ ok, result }` (requires `enableConsoleEval=true`).
+
+Errors: `InvalidArgument` for invalid paths (outside Scripts folder), `NotFound` for missing files, `PermissionDenied` for gating.
+
+### Hooks (advanced parity)
+
+Goal: let an agent discover safe hook targets (within allowlist), toggle hooks, and (optionally) edit/apply patch source.
+
+- Read-only tools
+  - `HookListAllowedTypes()` → `{ ok, items: string[] }` (mirrors current `hookAllowlistSignatures` config values).
+  - `HookListMethods(type, filter?, limit?, offset?)` → `Page<HookMethodDto> { Total, Items: [{ Name, Signature }] }`.
+  - `HookGetSource(signature)` → `{ ok, signature, source }`.
+
+- Guarded tools
+  - `HookSetEnabled(signature, enabled, confirm?)` → `{ ok }`.
+  - `HookSetSource(signature, source, confirm?)` → `{ ok }` (requires `enableConsoleEval=true` because it compiles patch code).
+
+- Back-compat note for `HookAdd(type, method)`
+  - Today `method` is a method name string and overloads may be ambiguous.
+  - Planned: accept a full `MethodInfo.FullDescription()` signature string in `method` to select overloads deterministically.
 
 ## Streams & Notifications
 

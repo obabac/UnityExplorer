@@ -4,12 +4,15 @@ This file is for agents working on this repository, especially when building on 
 
 ### Build focus
 
-- Primary build targets for MCP work are the CoreCLR IL2CPP configurations:
+- CoreCLR IL2CPP and MelonLoader Mono (`ML_Mono` / net35) are **equally important** for MCP work; keep parity and validate on both when changing shared MCP surfaces.
+- CoreCLR IL2CPP build targets:
   - `Release_BIE_Cpp_CoreCLR`
   - `Release_BIE_Unity_Cpp_CoreCLR`
   - `Release_ML_Cpp_CoreCLR`
   - Optionally: `Release_STANDALONE_Cpp_CoreCLR`
-- You do **not** need to build legacy Mono / `net35` targets unless a task explicitly requires them.
+- Mono build target:
+  - `ML_Mono` (`dotnet build src/UnityExplorer.csproj -c ML_Mono`)
+- You do **not** need to build other legacy Mono / net35 targets unless a task explicitly requires them.
 
 ### Required tools on Linux
 

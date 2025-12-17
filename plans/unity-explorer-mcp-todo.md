@@ -5,10 +5,10 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 
 ### Definition of Done (100%)
 - All checkboxes in this file are checked (including tests and docs updates).
-- `dotnet test UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests` passes.
+- `dotnet test UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests` passes against both IL2CPP and Mono hosts (via `UE_MCP_DISCOVERY`).
 - `@modelcontextprotocol/inspector` flow works end‑to‑end: `initialize` → `notifications/initialized` → `list_tools` → `call_tool` (at least status/logs) → `read_resource` (status/scenes/objects/search/selection/logs) → `stream_events` (receive a deterministic `scenes` snapshot on open).
 - Smoke CLI (call‑mcp script) succeeds against a running game.
-- Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
+- Space Shooter hosts (IL2CPP + Mono): all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 - Feature parity: the major UnityExplorer panels are reachable via MCP (Object Explorer + Inspector read/write, Console scripts, Hooks, Freecam, Clipboard) with guarded writes and tests.
 
@@ -51,7 +51,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 3) Guarded writes (SelectObject test, SetMember/ConsoleEval/Hooks) and new time‑scale tool.
 4) Streams cleanup and rate‑limit tests.
 5) Inspector/README-mcp/documentation polish.
-6) Space Shooter validation (no game-specific assumptions).
+6) Space Shooter validation (IL2CPP + Mono; no game-specific assumptions).
 
 ### Pitfalls / reminders for agents
 - Keep `plans/mcp-interface-concept.md`, DTO code, and contract tests in sync; update all three together when shapes change.
@@ -180,6 +180,8 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 
 These are the remaining big feature surfaces to expose for “agent-grade” parity with UnityExplorer. For any new tool/resource/DTO shape, update `plans/mcp-interface-concept.md` first, then implement + add contract tests.
 
+Priority right now: **12.7 Console scripts** + **12.8 Hooks (advanced)**.
+
 ### 12.1 Object Explorer parity
 - [ ] Add pseudo-scene coverage (DontDestroyOnLoad / HideAndDontSave / Resources/Assets views) in resources + tools.
 - [ ] Add hierarchical object tree browsing (not only shallow cards); include paging and stable ids.
@@ -206,14 +208,28 @@ These are the remaining big feature surfaces to expose for “agent-grade” par
 - [ ] Expose clipboard read (type + preview) as a resource.
 - [ ] Add guarded tools to set/clear clipboard.
 
-### 12.7 Console scripts parity
-- [ ] Expose script read/write/compile/run for the `Scripts/` folder (guarded; allowlist + confirm).
-- [ ] Expose startup script enable/disable behavior (guarded).
+### 12.7 Console scripts parity (TOP)
+- [ ] Spec: finalize the planned contract in `plans/mcp-interface-concept.md` (section: “Planned (next) — Console scripts”).
+- [ ] Implement resource `unity://console/script?path=...` (content + metadata; size cap; validate path stays inside Scripts folder).
+- [ ] Implement tools:
+  - `ReadConsoleScript(path)`
+  - `WriteConsoleScript(path, content, confirm?)`
+  - `DeleteConsoleScript(path, confirm?)`
+  - `RunConsoleScript(path, confirm?)` (requires `enableConsoleEval=true`)
+  - `GetStartupScript()` / `SetStartupScriptEnabled(enabled, confirm?)` / `WriteStartupScript(content, confirm?)` / `RunStartupScript(confirm?)`
+- [ ] Safety: block path traversal, require `.cs`, enforce max bytes, respect `allowWrites` + `requireConfirm`.
+- [ ] Contract tests: schemas + script read/write/run round-trips (and cleanup).
+- [ ] Smoke: cover one full script lifecycle (create → read → run → delete) on IL2CPP + Mono.
+- [ ] Test-VM validation: inspector CLI + smoke + contract tests on IL2CPP (`51477`) + Mono (`51478`).
 
-### 12.8 Hooks parity (advanced)
-- [ ] Expose hook target discovery (types/methods) for agent UX (read-only).
-- [ ] Expose hook source read/write and apply/reload (guarded).
-- [ ] Align `hookAllowlistSignatures` semantics between hosts (type vs full signature) and document it.
+### 12.8 Hooks parity (advanced) (TOP)
+- [x] Align + document allowlist semantics: `hookAllowlistSignatures` contains type full names (both hosts).
+- [ ] Spec: finalize the planned contract in `plans/mcp-interface-concept.md` (section: “Planned (next) — Hooks advanced”).
+- [ ] Implement read-only discovery tools: `HookListAllowedTypes()` + `HookListMethods(type, filter?, limit?, offset?)`.
+- [ ] Implement hook management: `HookGetSource(signature)` (read-only), `HookSetEnabled(signature, enabled, confirm?)`, `HookSetSource(signature, source, confirm?)` (guarded; requires `enableConsoleEval=true`).
+- [ ] Improve `HookAdd(type, method)`: accept a full `MethodInfo.FullDescription()` signature in `method` to select overloads (keep method-name support).
+- [ ] Contract tests + smoke: cover enable/disable + source read/write on a safe allowlisted type (keep `UE_MCP_HOOK_TEST_ENABLED` gate).
+- [ ] Test-VM validation: inspector CLI + smoke + contract tests on IL2CPP + Mono.
 
 ## 13. Streams & Agent UX
 - [ ] Decide and document the minimal “agent-first” event set with stable payloads and examples (log/scenes/selection/tool_result/inspected_scene).

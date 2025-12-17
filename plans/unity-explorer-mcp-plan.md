@@ -33,15 +33,15 @@ Gates (always)
 - If a change touches shared query/DTO code (even if Mono-motivated), run IL2CPP regression (inspector CLI + smoke + contract tests).
 
 Near-term (next ~10 iterations)
-1) Mono `CallMethod` parity: implement tool + gating + allowlist; update smoke + contract tests.
-2) Stream robustness: add IL2CPP stream write serialization (mirror Mono broadcast gate) and add a stress test.
-3) Object Explorer parity: pseudo-scenes (DontDestroyOnLoad/HideAndDontSave/Resources) + hierarchical tree browsing.
-4) Inspector parity (read): component member listing + safe member value reads (depth/size limits).
-5) Inspector parity (write): expand `SetMember` value-type support + write audit logging.
-6) Search parity: singleton search + static class search surfaces.
-7) Freecam parity: expose state + guarded controls.
-8) Clipboard parity: expose clipboard read + guarded set/clear.
-9) Console scripts parity: read/write/compile/run + startup script controls (guarded).
+1) Console scripts parity: read/write/run + startup script controls (guarded).
+2) Hooks parity (advanced): hook target discovery + hook source read/write/apply (guarded) + align allowlist semantics.
+3) Mono `CallMethod` parity: implement tool + gating + allowlist; update smoke + contract tests.
+4) Stream robustness: add IL2CPP stream write serialization (mirror Mono broadcast gate) and add a stress test.
+5) Object Explorer parity: pseudo-scenes (DontDestroyOnLoad/HideAndDontSave/Resources) + hierarchical tree browsing.
+6) Inspector parity (read): component member listing + safe member value reads (depth/size limits).
+7) Inspector parity (write): expand `SetMember` value-type support + write audit logging.
+8) Search parity: singleton search + static class search surfaces.
+9) Freecam + Clipboard parity: expose state + guarded controls.
 10) Reliability/Ops: win-dev proxy watchdog + cross-title IL2CPP regression (or document blockers).
 
 ## 1) Context & Assumptions
@@ -57,13 +57,13 @@ Near-term (next ~10 iterations)
   - Time-scale widget and keybinds (lock/pause/speed change)
   - Settings, Clipboard, etc.
 - MCP clients (IDEs, agents, inspector tools) connect over HTTP to inspect and, when allowed, control the running game.
-- Target: Windows first, CoreCLR IL2CPP builds. Mono/legacy MelonLoader builds are now in scope as a follow‑up MCP phase and tracked as a priority in TODO section 11. For MCP deployment we use `Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR` (and `Release/UnityExplorer.MelonLoader.IL2CPP` if needed); full build.ps1 legacy packages are optional.
+- Target: Windows first. CoreCLR IL2CPP and MelonLoader Mono (`ML_Mono` / net35) are equally important for MCP; keep parity and validate both hosts whenever changing shared MCP surfaces. For deployment we use `Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR` (and `Release/UnityExplorer.MelonLoader.IL2CPP` if needed) plus `Release/UnityExplorer.MelonLoader.Mono/Mods/UnityExplorer.ML.Mono.dll`.
 
 ---
 
 ## 2) Architecture & Transport
 
-- **Placement:** In‑process C# server inside the CoreCLR UnityExplorer DLL (`#if INTEROP`).
+- **Placement:** In‑process C# server inside UnityExplorer INTEROP builds (CoreCLR IL2CPP + MelonLoader Mono).
 - **Server:** `UnityExplorer.Mcp.McpSimpleHttp`
   - Binds to `bindAddress:port` from `mcp.config.json` (defaults: `0.0.0.0:51477`).
   - Discovery file: `%TEMP%/unity-explorer-mcp.json` with:
@@ -284,7 +284,7 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
 
 Fine‑grained TODOs live in `plans/unity-explorer-mcp-todo.md`. High‑level themes:
 
-- Mono / MelonLoader MCP host support (UnityExplorer.MelonLoader.Mono) follows a three-phase path: (A) get ML_Mono compiling again with an MCP host stub and guard non-INTEROP callers, (B) bring up a minimal read-only Mono MCP surface with a lighter JSON/HTTP stack, (C) close parity gaps and add Mono-specific smoke/contract coverage. See TODO section 11 for the detailed checklist.
+- CoreCLR IL2CPP and Mono (`UnityExplorer.MelonLoader.Mono`) are first-class MCP hosts; parity work is tracked in TODO sections 11–14. Mono host work followed a three-phase path (A/B/C) and is now in Phase C parity + tests; remaining gaps should be closed with the same contract-test + inspector-CLI gates as IL2CPP.
 
 1. **Transport & protocol polish**
    - Remove SSE leftovers, refine error codes, add light rate limiting.
