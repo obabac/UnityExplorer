@@ -135,17 +135,36 @@ try {
 
     $writeResult = $null
     if ($EnableWriteSmoke) {
-        Write-Host "[mono-smoke] guarded write smoke (SpawnTestUi -> SetMember(Image.color) -> Reparent -> DestroyObject -> DestroyTestUi + SetTimeScale)"
-        $resetParams = @{ name = "SetConfig"; arguments = @{ allowWrites = $false; requireConfirm = $true; reflectionAllowlistMembers = @() } }
+        Write-Host "[mono-smoke] guarded write smoke (SetConfig -> ConsoleEval -> SpawnTestUi -> Add/RemoveComponent -> SetMember(Image.color) -> HookAdd/HookRemove -> Reparent -> DestroyObject -> DestroyTestUi + TimeScale)"
+        $resetParams = @{ name = "SetConfig"; arguments = @{ allowWrites = $false; requireConfirm = $true; enableConsoleEval = $false; componentAllowlist = @(); reflectionAllowlistMembers = @(); hookAllowlistSignatures = @() } }
+        $prevConfigJson = $null
         $spawned = $false
         $destroyUiJson = $null
         $destroyBlockJson = $null
         $reparentJson = $null
         $setMemberJson = $null
+        $consoleEvalJson = $null
+        $addComponentJson = $null
+        $removeComponentJson = $null
+        $hookAddJson = $null
+        $hookRemoveJson = $null
+        $hookSignature = $null
         $selectionEvent = $null
         $blockIds = @()
         try {
-            Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true; reflectionAllowlistMembers = @("UnityEngine.UI.Image.color") } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+            $prevConfigJson = Get-JsonContent -Result (Invoke-McpRpc -Id "get-config-before-smoke" -Method "call_tool" -Params @{ name = "GetConfig"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds)
+            if ($prevConfigJson -and $prevConfigJson.ok) {
+                if ($prevConfigJson.enableConsoleEval -eq $true) { $resetParams.arguments.enableConsoleEval = $true }
+                if ($prevConfigJson.componentAllowlist) { $resetParams.arguments.componentAllowlist = @($prevConfigJson.componentAllowlist) | Where-Object { $_ } }
+                if ($prevConfigJson.reflectionAllowlistMembers) { $resetParams.arguments.reflectionAllowlistMembers = @($prevConfigJson.reflectionAllowlistMembers) | Where-Object { $_ } }
+                if ($prevConfigJson.hookAllowlistSignatures) { $resetParams.arguments.hookAllowlistSignatures = @($prevConfigJson.hookAllowlistSignatures) | Where-Object { $_ } }
+            }
+
+            Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true; enableConsoleEval = $true; componentAllowlist = @("UnityEngine.CanvasGroup"); reflectionAllowlistMembers = @("UnityEngine.UI.Image.color"); hookAllowlistSignatures = @("UnityEngine.GameObject") } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+
+            $eval = Invoke-McpRpc -Id "console-eval" -Method "call_tool" -Params @{ name = "ConsoleEval"; arguments = @{ code = "1+1"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $consoleEvalJson = Get-JsonContent -Result $eval
+            if (-not $consoleEvalJson -or -not $consoleEvalJson.ok) { throw "ConsoleEval returned ok=false" }
 
             $spawn = Invoke-McpRpc -Id "spawn-testui" -Method "call_tool" -Params @{ name = "SpawnTestUi"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $spawnJson = Get-JsonContent -Result $spawn
@@ -174,10 +193,48 @@ try {
             $childId = $blockIds[1]
             $parentId = $blockIds[0]
 
+            $addComp = Invoke-McpRpc -Id "add-component" -Method "call_tool" -Params @{ name = "AddComponent"; arguments = @{ objectId = $parentId; type = "UnityEngine.CanvasGroup"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $addComponentJson = Get-JsonContent -Result $addComp
+            if (-not $addComponentJson -or -not $addComponentJson.ok) { throw "AddComponent returned ok=false" }
+
+            $removeComp = Invoke-McpRpc -Id "remove-component" -Method "call_tool" -Params @{ name = "RemoveComponent"; arguments = @{ objectId = $parentId; typeOrIndex = "UnityEngine.CanvasGroup"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $removeComponentJson = Get-JsonContent -Result $removeComp
+            if (-not $removeComponentJson -or -not $removeComponentJson.ok) { throw "RemoveComponent returned ok=false" }
+
             $colorJson = (@{ r = 0.25; g = 0.5; b = 0.75; a = 0.9 } | ConvertTo-Json -Compress)
             $setMember = Invoke-McpRpc -Id "set-member" -Method "call_tool" -Params @{ name = "SetMember"; arguments = @{ objectId = $parentId; componentType = "UnityEngine.UI.Image"; member = "color"; jsonValue = $colorJson; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $setMemberJson = Get-JsonContent -Result $setMember
             if (-not $setMemberJson -or -not $setMemberJson.ok) { throw "SetMember returned ok=false" }
+
+            $hooksBeforeRes = Invoke-McpRpc -Id "read-hooks-before" -Method "read_resource" -Params @{ uri = "unity://hooks?limit=500" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $hooksBeforeDoc = ($hooksBeforeRes.result.contents[0].text | ConvertFrom-Json)
+            $beforeSigs = @()
+            if ($hooksBeforeDoc -and $hooksBeforeDoc.Items) { $beforeSigs = @($hooksBeforeDoc.Items | ForEach-Object { $_.Signature }) | Where-Object { $_ } }
+
+            $hookAdd = Invoke-McpRpc -Id "hook-add" -Method "call_tool" -Params @{ name = "HookAdd"; arguments = @{ type = "UnityEngine.GameObject"; method = "SetActive"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $hookAddJson = Get-JsonContent -Result $hookAdd
+            if (-not $hookAddJson -or -not $hookAddJson.ok) { throw "HookAdd returned ok=false" }
+
+            $hooksAfterRes = Invoke-McpRpc -Id "read-hooks-after" -Method "read_resource" -Params @{ uri = "unity://hooks?limit=500" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $hooksAfterDoc = ($hooksAfterRes.result.contents[0].text | ConvertFrom-Json)
+            $afterSigs = @()
+            if ($hooksAfterDoc -and $hooksAfterDoc.Items) { $afterSigs = @($hooksAfterDoc.Items | ForEach-Object { $_.Signature }) | Where-Object { $_ } }
+
+            $addedSigs = @($afterSigs | Where-Object { $beforeSigs -notcontains $_ })
+            if ($addedSigs.Count -lt 1) { throw "HookAdd produced no new hook signature" }
+            $hookSignature = $addedSigs[0]
+
+            $hookRemove = Invoke-McpRpc -Id "hook-remove" -Method "call_tool" -Params @{ name = "HookRemove"; arguments = @{ signature = $hookSignature; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $hookRemoveJson = Get-JsonContent -Result $hookRemove
+            if (-not $hookRemoveJson -or -not $hookRemoveJson.ok) { throw "HookRemove returned ok=false" }
+
+            $hooksFinalRes = Invoke-McpRpc -Id "read-hooks-final" -Method "read_resource" -Params @{ uri = "unity://hooks?limit=500" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $hooksFinalDoc = ($hooksFinalRes.result.contents[0].text | ConvertFrom-Json)
+            if ($hooksFinalDoc -and $hooksFinalDoc.Items) {
+                foreach ($h in $hooksFinalDoc.Items) {
+                    if ($h.Signature -eq $hookSignature) { throw "HookRemove cleanup failed; signature still present" }
+                }
+            }
 
             $reparent = Invoke-McpRpc -Id "reparent" -Method "call_tool" -Params @{ name = "Reparent"; arguments = @{ objectId = $childId; newParentId = $parentId; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $reparentJson = Get-JsonContent -Result $reparent
@@ -235,7 +292,13 @@ try {
             $writeResult = [ordered]@{
                 blocks         = $blockIds
                 spawn          = $spawnJson
+                consoleEval    = $consoleEvalJson
+                addComponent   = $addComponentJson
+                removeComponent = $removeComponentJson
                 setMember      = $setMemberJson
+                hookSignature  = $hookSignature
+                hookAdd        = $hookAddJson
+                hookRemove     = $hookRemoveJson
                 reparent       = $reparentJson
                 destroyBlock   = $destroyBlockJson
                 destroyUi      = $destroyUiJson
@@ -310,15 +373,21 @@ try {
     Write-Host "Logs (read): $($readLogsDoc.Items.Count) items"
     if ($EnableWriteSmoke) {
         $spawnOk = if ($writeResult) { $writeResult.spawn.ok } else { $false }
+        $consoleEvalOk = if ($writeResult) { $writeResult.consoleEval.ok } else { $false }
+        $addCompOk = if ($writeResult) { $writeResult.addComponent.ok } else { $false }
+        $removeCompOk = if ($writeResult) { $writeResult.removeComponent.ok } else { $false }
+        $hookAddOk = if ($writeResult) { $writeResult.hookAdd.ok } else { $false }
+        $hookRemoveOk = if ($writeResult) { $writeResult.hookRemove.ok } else { $false }
         $setMemberOk = if ($writeResult) { $writeResult.setMember.ok } else { $false }
         $reparentOk = if ($writeResult) { $writeResult.reparent.ok } else { $false }
         $destroyBlockOk = if ($writeResult) { $writeResult.destroyBlock.ok } else { $false }
         $destroyUiOk = if ($writeResult) { $writeResult.destroyUi.ok } else { $false }
         $blockCount = if ($writeResult -and $writeResult.blocks) { ($writeResult.blocks | Measure-Object).Count } else { 0 }
+        $hookSig = if ($writeResult) { $writeResult.hookSignature } else { $null }
         $timeValue = if ($writeResult) { $writeResult.time.value } else { $null }
         $timeLocked = if ($writeResult) { $writeResult.time.locked } else { $null }
         $selectionSeen = if ($writeResult) { $writeResult.selectionEvent -ne $null } else { $false }
-        Write-Host "Write smoke: blocks=$blockCount spawnOk=$spawnOk setMemberOk=$setMemberOk reparentOk=$reparentOk destroyBlockOk=$destroyBlockOk destroyUiOk=$destroyUiOk timeValue=$timeValue locked=$timeLocked selectionEvent=$selectionSeen"
+        Write-Host "Write smoke: blocks=$blockCount spawnOk=$spawnOk consoleEvalOk=$consoleEvalOk addCompOk=$addCompOk removeCompOk=$removeCompOk hookAddOk=$hookAddOk hookRemoveOk=$hookRemoveOk hookSig=$hookSig setMemberOk=$setMemberOk reparentOk=$reparentOk destroyBlockOk=$destroyBlockOk destroyUiOk=$destroyUiOk timeValue=$timeValue locked=$timeLocked selectionEvent=$selectionSeen"
     }
     Write-Host "Stream events captured: $($events.Count) (tool_result observed=$($toolResultEvent -ne $null))"
     Write-Host "[mono-smoke] Done"

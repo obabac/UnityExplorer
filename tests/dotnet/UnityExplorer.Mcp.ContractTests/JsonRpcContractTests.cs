@@ -597,6 +597,73 @@ public class JsonRpcContractTests
     }
 
     [Fact]
+    public async Task StreamEvents_Emits_Scenes_Snapshot_On_Open()
+    {
+        if (!Discovery.TryLoad(out var info))
+            return;
+
+        using var http = new HttpClient { BaseAddress = info!.EffectiveBaseUrl };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var payload = new
+        {
+            jsonrpc = "2.0",
+            id = "stream-events-open-scenes",
+            method = "stream_events",
+            @params = new { }
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/message")
+        {
+            Content = content
+        };
+
+        using var res = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        res.EnsureSuccessStatusCode();
+
+        await using var stream = await res.Content.ReadAsStreamAsync(cts.Token);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        waitCts.CancelAfter(TimeSpan.FromSeconds(5));
+
+        while (!waitCts.IsCancellationRequested)
+        {
+            string? line;
+            try { line = await reader.ReadLineAsync(waitCts.Token); }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            using var doc = JsonDocument.Parse(line);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("method", out var methodEl) || methodEl.GetString() != "notification")
+                continue;
+
+            if (!root.TryGetProperty("params", out var @params))
+                continue;
+
+            if (!@params.TryGetProperty("event", out var eventEl) || eventEl.GetString() != "scenes")
+                continue;
+
+            @params.TryGetProperty("payload", out var payloadEl).Should().BeTrue();
+            payloadEl.TryGetProperty("Total", out var totalEl).Should().BeTrue();
+            totalEl.ValueKind.Should().Be(JsonValueKind.Number);
+            payloadEl.TryGetProperty("Items", out var itemsEl).Should().BeTrue();
+            itemsEl.ValueKind.Should().Be(JsonValueKind.Array);
+            return;
+        }
+
+        Assert.Fail("Expected a 'scenes' notification on stream_events immediately after opening the stream.");
+    }
+
+    [Fact]
     public async Task Sse_Root_Stream_Emits_ToolResult_When_Tool_Called()
     {
         if (!Discovery.TryLoad(out var info))

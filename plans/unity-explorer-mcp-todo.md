@@ -6,7 +6,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 ### Definition of Done (100%)
 - All checkboxes in this file are checked (including tests and docs updates).
 - `dotnet test UnityExplorer/tests/dotnet/UnityExplorer.Mcp.ContractTests` passes.
-- `@modelcontextprotocol/inspector` flow works end‑to‑end: `initialize` → `notifications/initialized` → `list_tools` → `call_tool` (at least status/logs) → `read_resource` (status/scenes/objects/search/selection/logs) → `stream_events` (receive non‑tool event).
+- `@modelcontextprotocol/inspector` flow works end‑to‑end: `initialize` → `notifications/initialized` → `list_tools` → `call_tool` (at least status/logs) → `read_resource` (status/scenes/objects/search/selection/logs) → `stream_events` (receive a deterministic `scenes` snapshot on open).
 - Smoke CLI (call‑mcp script) succeeds against a running game.
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
@@ -168,7 +168,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Implement guarded writes on Mono (start with `SetActive`, `SelectObject`, `GetTimeScale`/`SetTimeScale`) behind `allowWrites` + `requireConfirm`; keep the same error envelope as CoreCLR (needs live validation on hosts).
   - [x] Add `SpawnTestUi` / `DestroyTestUi` guarded tools to Mono and cover them in `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` (config enable → spawn/destroy → reset).
   - [x] Add guarded `Reparent` / `DestroyObject` for Mono (limited to SpawnTestUi blocks) and surface SpawnTestUi block ids for write smoke reparent/destroy coverage.
-  - [ ] Expand Mono coverage toward CoreCLR parity (selection, console/scripts, hooks); MousePick UI ordering/primary Id, world Items=null, and CameraInfo now match IL2CPP; log remaining gaps vs. IL2CPP/Test-VM.
+  - [x] Expand Mono coverage toward CoreCLR parity (selection, console/scripts, hooks); Mono now exposes `unity://console/scripts` + `unity://hooks`, and `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` covers `ConsoleEval` + `AddComponent`/`RemoveComponent` + `HookAdd`/`HookRemove`.
   
   - [x] Fix Mono notification broadcast compile issue (net35 has no Tasks): remove discards on void `BroadcastNotificationAsync` or reintroduce a Task-compatible wrapper.
   - [x] Run Mono smoke + inspector CLI against a real Mono host and record results (Test‑VM base URL: `http://192.168.178.210:51478`). See `README-mcp.md` Mono Host Validation Checklist. (Ran `Run-McpMonoSmoke.ps1`, inspector tools/list + resources/read now green after redeploy.)

@@ -17,7 +17,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 
 Test‑VM Space Shooter E2E plan: `plans/space-shooter-test-plan.md` (canonical paths/ports/builds on the VM).
 
-Mono/net35 builds: MCP host exposes initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion plus guarded writes when `allowWrites=true` (`requireConfirm` recommended; see `plans/mcp-interface-concept.md` for allowlists + `enableConsoleEval`). `stream_events` (log/selection/scene/tool_result; payloads include `source` + optional `category`) and discovery (`unity-explorer-mcp.json`) are available. Smoke/CI: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3 [-EnableWriteSmoke]` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → optional SpawnTestUi + SetMember(Image.color) + reparent/destroy/time-scale writes → stream_events tool_result check). Test-VM Mono host base URL: `http://192.168.178.210:51478`.
+Mono/net35 builds: MCP host exposes initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion plus guarded writes when `allowWrites=true` (`requireConfirm` recommended; see `plans/mcp-interface-concept.md` for allowlists + `enableConsoleEval`). `stream_events` (log/selection/scene/tool_result; payloads include `source` + optional `category`) and discovery (`unity-explorer-mcp.json`) are available. Smoke/CI: `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://127.0.0.1:51477 -LogCount 10 -StreamLines 3 [-EnableWriteSmoke]` (initialize → list_tools → GetStatus/TailLogs/MousePick → read status/scenes/logs → optional guarded write smoke: ConsoleEval + SpawnTestUi + Add/RemoveComponent + SetMember(Image.color) + HookAdd/HookRemove + reparent/destroy/time-scale writes (then reset config) → stream_events tool_result check). Test-VM Mono host base URL: `http://192.168.178.210:51478`.
 
 ## Inspector CLI smoke
 
@@ -233,14 +233,14 @@ All server‑side notifications are delivered over `stream_events` as JSON‑RPC
 { "jsonrpc": "2.0", "method": "notification", "params": { "event": "<name>", "payload": { ... } } }
 ```
 
-Event types:
+Event types (payloads and examples live in `plans/mcp-interface-concept.md`):
 
-- `log` — `{ level, message, t, source, category? }`
-- `selection` — `{ activeId, items[] }`
-- `scenes` — `{ loaded[], count }`
-- `scenes_diff` — `{ added[], removed[] }`
-- `inspected_scene` — `{ name, handle, isLoaded }`
-- `tool_result` — `{ name, ok, result? | error? }`
+- `log` — log lines (mirrors `unity://logs/tail`).
+- `selection` — selection snapshot (mirrors `unity://selection`).
+- `scenes` — scenes snapshot (mirrors `unity://scenes`; emitted on stream open).
+- `scenes_diff` — scenes added/removed.
+- `inspected_scene` — inspected scene marker (if emitted).
+- `tool_result` — tool call result/error mirror for `call_tool`.
 
 ## Allowlists
 

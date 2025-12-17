@@ -441,6 +441,26 @@ namespace UnityExplorer.Mcp
                                 int id = Interlocked.Increment(ref _nextClientId);
                                 _httpStreams[id] = stream;
 
+                                try
+                                {
+                                    var scenes = await UnityReadTools.ListScenes(null, null, ct).ConfigureAwait(false);
+                                    var notificationJson = JsonSerializer.Serialize(new
+                                    {
+                                        jsonrpc = "2.0",
+                                        method = "notification",
+                                        @params = new { @event = "scenes", payload = scenes }
+                                    });
+                                    var lineJson = notificationJson + "\n";
+                                    var payload = Encoding.UTF8.GetBytes(lineJson);
+                                    var prefix = Encoding.ASCII.GetBytes(payload.Length.ToString("X") + "\r\n");
+                                    var suffix = Encoding.ASCII.GetBytes("\r\n");
+                                    await stream.WriteAsync(prefix, 0, prefix.Length, ct).ConfigureAwait(false);
+                                    await stream.WriteAsync(payload, 0, payload.Length, ct).ConfigureAwait(false);
+                                    await stream.WriteAsync(suffix, 0, suffix.Length, ct).ConfigureAwait(false);
+                                    await stream.FlushAsync(ct).ConfigureAwait(false);
+                                }
+                                catch { }
+
                                 await WaitForStreamDisconnectAsync(stream, id, _httpStreams, ct).ConfigureAwait(false);
                                 return;
                             }
@@ -1110,6 +1130,7 @@ namespace UnityExplorer.Mcp
         private readonly object _streamGate = new object();
         private readonly Dictionary<int, Stream> _sseStreams = new Dictionary<int, Stream>();
         private readonly object _sseGate = new object();
+        private readonly object _broadcastGate = new object();
         private volatile bool _disposed;
         private int _active;
         private int _nextStreamId;
@@ -1419,6 +1440,30 @@ namespace UnityExplorer.Mcp
                     _streams[id] = stream;
                 }
 
+                try
+                {
+                    var scenes = _handlers.ReadResource("unity://scenes");
+                    var notification = new JObject
+                    {
+                        { "jsonrpc", "2.0" },
+                        { "method", "notification" },
+                        { "params", new JObject { { "event", "scenes" }, { "payload", scenes == null ? JValue.CreateNull() : JToken.FromObject(scenes) } } }
+                    };
+                    var json = notification.ToString(Formatting.None);
+                    var chunkData = json + "\n";
+                    var data = Encoding.UTF8.GetBytes(chunkData);
+                    var prefix = Encoding.ASCII.GetBytes(data.Length.ToString("X") + "\r\n");
+                    var suffix = Encoding.ASCII.GetBytes("\r\n");
+                    lock (_broadcastGate)
+                    {
+                        stream.Write(prefix, 0, prefix.Length);
+                        stream.Write(data, 0, data.Length);
+                        stream.Write(suffix, 0, suffix.Length);
+                        stream.Flush();
+                    }
+                }
+                catch { }
+
                 WaitForStreamDisconnect(stream, id);
                 return;
             }
@@ -1572,35 +1617,38 @@ namespace UnityExplorer.Mcp
             var suffix = Encoding.ASCII.GetBytes("\r\n");
             var sseData = Encoding.UTF8.GetBytes("data: " + json + "\n\n");
 
-            foreach (var kv in snapshot)
+            lock (_broadcastGate)
             {
-                if (_disposed) break;
-                var s = kv.Value;
-                try
+                foreach (var kv in snapshot)
                 {
-                    s.Write(prefix, 0, prefix.Length);
-                    s.Write(data, 0, data.Length);
-                    s.Write(suffix, 0, suffix.Length);
-                    s.Flush();
+                    if (_disposed) break;
+                    var s = kv.Value;
+                    try
+                    {
+                        s.Write(prefix, 0, prefix.Length);
+                        s.Write(data, 0, data.Length);
+                        s.Write(suffix, 0, suffix.Length);
+                        s.Flush();
+                    }
+                    catch
+                    {
+                        RemoveStream(kv.Key);
+                    }
                 }
-                catch
-                {
-                    RemoveStream(kv.Key);
-                }
-            }
 
-            foreach (var kv in sseSnapshot)
-            {
-                if (_disposed) break;
-                var s = kv.Value;
-                try
+                foreach (var kv in sseSnapshot)
                 {
-                    s.Write(sseData, 0, sseData.Length);
-                    s.Flush();
-                }
-                catch
-                {
-                    RemoveSseStream(kv.Key);
+                    if (_disposed) break;
+                    var s = kv.Value;
+                    try
+                    {
+                        s.Write(sseData, 0, sseData.Length);
+                        s.Flush();
+                    }
+                    catch
+                    {
+                        RemoveSseStream(kv.Key);
+                    }
                 }
             }
         }
@@ -1846,6 +1894,8 @@ namespace UnityExplorer.Mcp
                 Resource("unity://camera/active", "Active camera", "Active camera info."),
                 Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
                 Resource("unity://logs/tail", "Log tail", "Tail recent MCP log buffer."),
+                Resource("unity://console/scripts", "Console scripts", "List C# console scripts (from the Scripts folder)."),
+                Resource("unity://hooks", "Hooks", "List active method hooks."),
             };
         }
 
@@ -2009,6 +2059,47 @@ namespace UnityExplorer.Mcp
             if (path.Equals("camera/active", StringComparison.OrdinalIgnoreCase)) return _tools.GetCameraInfo();
             if (path.Equals("selection", StringComparison.OrdinalIgnoreCase)) return _tools.GetSelection();
             if (path.Equals("logs/tail", StringComparison.OrdinalIgnoreCase)) return _tools.TailLogs(TryInt(query, "count") ?? 200);
+            if (path.Equals("console/scripts", StringComparison.OrdinalIgnoreCase))
+            {
+                int lim = Math.Max(1, TryInt(query, "limit") ?? 100);
+                int off = Math.Max(0, TryInt(query, "offset") ?? 0);
+                return MainThread.Run(() =>
+                {
+                    var scriptsFolder = ConsoleController.ScriptsFolder;
+                    if (!Directory.Exists(scriptsFolder))
+                        return new Page<ConsoleScriptDto>(0, new List<ConsoleScriptDto>());
+
+                    var files = Directory.GetFiles(scriptsFolder, "*.cs");
+                    var total = files.Length;
+                    var list = new List<ConsoleScriptDto>(lim);
+                    foreach (var file in files.Skip(off).Take(lim))
+                    {
+                        list.Add(new ConsoleScriptDto { Name = Path.GetFileName(file), Path = file });
+                    }
+                    return new Page<ConsoleScriptDto>(total, list);
+                });
+            }
+            if (path.Equals("hooks", StringComparison.OrdinalIgnoreCase))
+            {
+                int lim = Math.Max(1, TryInt(query, "limit") ?? 100);
+                int off = Math.Max(0, TryInt(query, "offset") ?? 0);
+                return MainThread.Run(() =>
+                {
+                    var list = new List<HookDto>(lim);
+                    int total = HookList.currentHooks.Count;
+                    int index = 0;
+                    foreach (System.Collections.DictionaryEntry entry in HookList.currentHooks)
+                    {
+                        if (index++ < off) continue;
+                        if (list.Count >= lim) break;
+                        if (entry.Value is HookInstance hook)
+                        {
+                            list.Add(new HookDto { Signature = hook.TargetMethod.FullDescription(), Enabled = hook.Enabled });
+                        }
+                    }
+                    return new Page<HookDto>(total, list);
+                });
+            }
 
             throw new McpError(-32004, 404, "NotFound", "resource not supported");
         }

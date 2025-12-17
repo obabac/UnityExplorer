@@ -1,16 +1,17 @@
 # Unity Explorer MCP Integration Plan (Updated)
 
-- Updated: 2025-12-16  
+- Updated: 2025-12-17  
 - Owner: Unity Explorer MCP (p-unity-explorer-mcp)  
 - Goal: Expose Unity Explorer’s runtime capabilities through an in‑process MCP server with **streamable HTTP** transport, making game state and safe controls available as MCP resources, tools, and streams.
 
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
-### Latest iteration snapshot (2025-12-16)
+### Latest iteration snapshot (2025-12-17)
 - IL2CPP MCP host on the Test-VM (`http://192.168.178.210:51477` and `/mcp`) now survives malformed JSON-RPC: invalid requests return HTTP 400 with structured errors, and the host stays alive. MainThread dispatch falls back to UniverseLib main-thread invoke when no `SynchronizationContext` is captured.
 - IL2CPP contract suite passes (55/56 passed, 1 skipped) via `UE_MCP_DISCOVERY=/home/onur/p-unity-explorer-mcp/ue-mcp-il2cpp-discovery.json`. Inspector CLI smoke and `Invoke-McpSmoke.ps1` both succeed against the running Space Shooter host.
 - win-dev control plane alias surface validated: `McpProxy8083` (mcp-control) exposes the harness tool names; seed the session after a restart with `initialize` that includes `Accept: application/json, text/event-stream` plus a `clientInfo` payload (e.g., `protocolVersion=2024-11-05`, `capabilities={}`) and the `win-dev-vm-ui/State-Tool` + `win-dev-vm-ui/Powershell-Tool` succeed. Logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`.
-- Mono host (Space Shooter 51478) redeployed: MousePick world Items=null (curl no-hit) with UI hits filtered to resolvable ids; `Run-McpMonoSmoke.ps1` and inspector CLI are green; `ue-mcp-mono-discovery.json` added. Mono contract run: 55 passed / 0 failed / 1 skipped (UI MousePick follow-up GetObject now 200).
+- Mono host (Space Shooter 51478) parity expanded: `unity://console/scripts` + `unity://hooks` resources; `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` now covers ConsoleEval + Add/RemoveComponent + HookAdd/HookRemove (guarded).
+- Streams parity: `stream_events` emits a deterministic `scenes` snapshot notification on stream open (both hosts); contract test added.
 - Inspector validation is CLI-only: use `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <url>` (accepts bases with or without `/mcp`) or direct `npx @modelcontextprotocol/inspector --cli` one-liners; the Inspector UI helper is deprecated (see `README-mcp.md`).
 
 ---
@@ -28,10 +29,10 @@ Pre-reqs done: inspector CLI gate (`tools/Run-McpInspectorCli.ps1`), removed the
 
 1) Inspector CLI gate hardening: ensure `npx @modelcontextprotocol/inspector --cli` commands work reliably (including common `/mcp` URL forms) on both hosts; remove/deprecate Inspector UI helpers and keep docs aligned.
 2) Add Mono discovery helper + contract run: add `ue-mcp-mono-discovery.json` and run `UnityExplorer.Mcp.ContractTests` against the Mono host (lock in MousePick/world null Items shape).
-3) Expand Mono parity coverage (selection, console/scripts, hooks) after the MousePick world null fix; document any remaining deltas vs. IL2CPP/Test-VM.
-4) Expand Mono guarded writes (tier 2): implement safe `AddComponent`/`RemoveComponent`/`CallMethod` behind allowlists + confirm and extend `Run-McpMonoSmoke.ps1 -EnableWriteSmoke`.
-5) Mono console + hooks parity: enable behind `enableConsoleEval`/allowlists, add a small gated test (mirror existing IL2CPP hook tests).
-6) Streams parity: add/extend contract tests for at least one non-tool notification on both hosts (selection/scenes/log) and keep rate-limit behavior stable.
+3) DONE: Expand Mono parity coverage (selection, console/scripts, hooks); remaining gap: `CallMethod` parity.
+4) PARTIAL: Expand Mono guarded writes (tier 2): `AddComponent`/`RemoveComponent` covered by `Run-McpMonoSmoke.ps1 -EnableWriteSmoke`; `CallMethod` still pending.
+5) DONE: Mono console + hooks parity: `ConsoleEval` gating + `unity://hooks` listing; gated hook tests remain optional.
+6) DONE: Streams parity: `scenes` snapshot notification on stream open + contract test.
 7) Space Shooter env hardening: keep IL2CPP + Mono builds as similar as possible, keep build scripts stable, and document any required Unity project changes.
 8) Cross-title IL2CPP regression: validate the dropdown refresh guard on another IL2CPP title (or document why not available).
 9) Final DoD sweep: run IL2CPP inspector CLI + Invoke-McpSmoke + contract tests and Mono inspector CLI + Mono smoke (with writes); check every TODO.

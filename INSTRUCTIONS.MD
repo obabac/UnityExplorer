@@ -1,14 +1,14 @@
-# Next iteration instructions (Iteration 20)
+# Next iteration instructions (Iteration 21)
 
 Focus (do in this order)
-1) Audit Mono console/scripts + hooks parity vs `plans/mcp-interface-concept.md`.
-2) Expand Mono write smoke to cover ConsoleEval + Add/RemoveComponent + HookAdd/HookRemove (guarded).
-3) Add a streams parity contract test for a non-tool notification on both hosts (prefer a deterministic `scenes` snapshot on stream open).
+1) Implement Mono `CallMethod` guarded write tool parity with IL2CPP.
+2) Extend Mono write smoke (`-EnableWriteSmoke`) to cover `CallMethod` with a harmless, allowlisted call.
+3) Add a small contract test that asserts `unity://console/scripts` and `unity://hooks` are listed and readable on both hosts.
 
 Rules / gates
 - Inspector validation is CLI-only (no UI).
 - Test-VM validation must happen in the same iteration as any behavior change.
-- IL2CPP regression is required when shared query/DTO code changes (even if the change was Mono-motivated): run inspector CLI + smoke + contract tests.
+- IL2CPP regression is required when shared query/DTO code changes: run inspector CLI + smoke + contract tests.
 - Keep writes off by default; any write-smoke must reset config at the end.
 
 Targets
@@ -17,23 +17,27 @@ Targets
 - Discovery files in repo: `ue-mcp-il2cpp-discovery.json`, `ue-mcp-mono-discovery.json`
 
 Tasks
-1) Mono audit (no behavior change unless required)
-- Compare Mono `tools/list` + `resources/list` with `plans/mcp-interface-concept.md`.
-- Specifically validate Mono `unity://console/scripts` and `unity://hooks` are readable and match the concept doc shapes.
-- If the concept doc is wrong/outdated, update it (it is the source of truth). If code is wrong, fix code to match.
 
-2) Expand Mono write smoke (`-EnableWriteSmoke`)
-- Update `tools/Run-McpMonoSmoke.ps1` (and underlying helper if needed) to add these steps when `-EnableWriteSmoke` is set:
-  - `SetConfig`: `allowWrites=true`, `requireConfirm=true`, `enableConsoleEval=true`, set allowlists needed for the smoke (reflection + component + hooks).
-  - `ConsoleEval` with a harmless snippet (e.g., `"1+1"`) and `confirm=true`; assert `ok=true`.
-  - `AddComponent` + `RemoveComponent` on a safe SpawnTestUi block using an allowlisted, harmless component type (e.g., `UnityEngine.CanvasGroup`), with `confirm=true`; assert `ok=true`.
-  - `HookAdd` then `HookRemove` for a safe allowlisted target; ensure hooks are cleaned up (no leftover hooks after the smoke).
-  - Always reset config at the end (`allowWrites=false`, `requireConfirm=true`, and disable `enableConsoleEval` if you enabled it).
+1) Mono `CallMethod` parity
+- Add `CallMethod(objectId, componentType, method, argsJson="[]", confirm=false)` to the Mono host.
+- Enforce the same gating semantics as other guarded tools:
+  - `allowWrites=true` required.
+  - if `requireConfirm=true`, require `confirm=true`.
+  - enforce `reflectionAllowlistMembers` entries using the same key format as IL2CPP (`<Type>.<Member>`).
+- Return shape should match the concept doc: `{ ok: true, result: <value|null> }` or `{ ok: false, error: { kind, message, hint? } }`.
+- Update `plans/mcp-interface-concept.md` only if you must (it is the source of truth).
 
-3) Streams parity contract test (both hosts)
-- Add a deterministic contract test (new `[Fact]`) that asserts `stream_events` emits a non-tool notification on stream open.
-  - Prefer `event="scenes"` (snapshot) within a short timeout.
-  - If IL2CPP does not emit it today, implement the same behavior and document the event/payload in `plans/mcp-interface-concept.md`.
+2) Extend Mono write smoke (`tools/Invoke-McpSmokeMono.ps1`)
+- When `-EnableWriteSmoke` is set, add a `CallMethod` step with a harmless target.
+  - Recommendation: call `GetInstanceID` on the `UnityEngine.UI.Image` component on a SpawnTestUi block.
+  - Add `UnityEngine.UI.Image.GetInstanceID` to `reflectionAllowlistMembers` for the smoke.
+- Keep the existing reset behavior: always end with `allowWrites=false` and restore `enableConsoleEval`/allowlists.
+
+3) Contract test for Mono console/hooks resources
+- Add a deterministic contract test (new `[Fact]`) that:
+  - Calls `resources/list` and asserts `unity://console/scripts` and `unity://hooks` are present.
+  - Calls `read_resource` (or `/read`) for both URIs and asserts the payload has `{ Total, Items }`.
+- Run the test against BOTH hosts.
 
 Validation (must do)
 - Mono:

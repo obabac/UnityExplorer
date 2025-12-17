@@ -65,10 +65,11 @@
 
 ## Streams & Notifications
 
-- `stream_events` emits chunked JSON notifications until the client disconnects. Event names/payloads:
+- `stream_events` emits chunked JSON notifications until the client disconnects; on open it emits a deterministic `scenes` snapshot notification.
 - `GET /` with `Accept: text/event-stream` delivers the same JSON-RPC payloads as SSE frames (`data: <json>\n\n`) for clients that prefer the inspector-style receive channel.
   - `log`: `{ level, message, source, category?, t }` (mirrors `logs/tail`).
   - `selection`: `SelectionDto { ActiveId, Items[] }` (same as `unity://selection`).
+  - `scenes`: `Page<SceneDto>` (same as `unity://scenes`), emitted once per `stream_events` connection on open.
   - `scenes_diff`: `{ added: [sceneId], removed: [sceneId] }` when scenes load/unload.
   - `tool_result`: `{ name, ok: true, result }` or `{ name, ok: false, error: { code, message, data } }` reflecting `call_tool` outcomes.
 - JSON-RPC results and errors for other requests are also mirrored onto the stream for connected clients.
