@@ -219,7 +219,7 @@ Guarded / write-related tools (most require `allowWrites: true`; many also need 
 
 - Config: `SetConfig`, `GetConfig` (sanitized view).
 - Object state: `SetActive`, `SelectObject`, `Reparent`, `DestroyObject`.
-- Reflection/component writes: `SetMember`, `CallMethod`, `AddComponent`, `RemoveComponent` (respect reflection/component allowlists).
+- Reflection/component writes: `SetMember`, `AddComponent`, `RemoveComponent` (respect allowlists). `CallMethod` is available on IL2CPP and planned for Mono.
 - Hooks: `HookAdd`, `HookRemove` (hook allowlist enforced).
 - Console: `ConsoleEval` (requires `enableConsoleEval` + writes + confirm).
 - Time scale: `GetTimeScale` (read), `SetTimeScale` (guarded; optional lock/unlock).
@@ -251,7 +251,7 @@ Two allowlists are configured in `mcp.config.json` and editable via the Options 
   - `AddComponent` and `RemoveComponent` are restricted to these types (or indices).
 - Reflection allowlist: `reflectionAllowlistMembers`  
   - Array of `"Type.Member"` strings, e.g., `"UnityEngine.Light.intensity"`.  
-  - `SetMember` / `CallMethod` require entries here.
+  - `SetMember` requires entries here; `CallMethod` (IL2CPP; Mono planned) uses the same allowlist.
 
 Empty allowlists disable the corresponding write features (for safety).
 

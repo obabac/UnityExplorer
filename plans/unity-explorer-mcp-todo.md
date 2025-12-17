@@ -10,8 +10,9 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Smoke CLI (call‑mcp script) succeeds against a running game.
 - Space Shooter host: all contract tests pass; documented write scenarios (`SetActive`, `SelectObject`, future time‑scale) succeed with `allowWrites+confirm`.
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
+- Feature parity: the major UnityExplorer panels are reachable via MCP (Object Explorer + Inspector read/write, Console scripts, Hooks, Freecam, Clipboard) with guarded writes and tests.
 
-Status (2025-12-16): IL2CPP MCP host now returns HTTP 400 with structured JSON on malformed requests and stays alive (MainThread falls back to UniverseLib main-thread invoke when no `SynchronizationContext` is captured). Contract suite (IL2CPP) passes (55 passed, 1 skipped) via `UE_MCP_DISCOVERY=/home/onur/p-unity-explorer-mcp/ue-mcp-il2cpp-discovery.json` while Space Shooter is running; inspector CLI smoke and `Invoke-McpSmoke.ps1` both succeed against `http://192.168.178.210:51477` (`/mcp` also works). win-dev-vm MCP control plane alias tools remain valid after restart when seeding `initialize` with `Accept: application/json, text/event-stream` + `clientInfo` (logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`). Mono host (51478) redeployed; `Run-McpMonoSmoke.ps1` and inspector CLI are green, curl world pick returns `Items=null`, `ue-mcp-mono-discovery.json` added; Mono contract run: 55 passed / 0 failed / 1 skipped (MousePick UI ids now resolve via GetObject).
+Status (2025-12-17): Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, smoke, and contract tests (57 total: 56 passed, 1 skipped). Mono parity expanded: `unity://console/scripts` + `unity://hooks` resources, `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` covers `ConsoleEval` + `AddComponent`/`RemoveComponent` + `HookAdd`/`HookRemove`, and `stream_events` emits a deterministic `scenes` snapshot on open. Known gap: Mono still lacks `CallMethod` (IL2CPP has it).
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -107,7 +108,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 
 ## 7. Inspector & DX Polish
 
-- [ ] Verify all tools and resources render cleanly in `@modelcontextprotocol/inspector` (no schema errors); per-argument `inputSchema` is now emitted from `list_tools` but still needs UI validation.
+- [x] Verify inspector CLI flows on both hosts (tools/list, resources/list, resources/read, tools/call) and ensure `inputSchema` is present for all tools; we do not use the inspector UI.
 - [x] Add contract coverage for `list_resources` plus inspector-friendly `call_tool` content (`text` + `mimeType` + `json`) to keep CLI compatibility stable.
 - [x] Add an inspector CLI smoke script (`tools/Run-McpInspectorCli.ps1`) that runs inspector --cli (tools/list, resources/list, read unity://status, tools/call GetStatus; optional Authorization header) and document usage; last run 2025-12-14: Mono 51478 PASS, IL2CPP 51477 PASS.
 - [x] Add JSON‑RPC contract tests that exercise `tools/list`, `tools/call`, and `call_tool` for all read‑only tools (matching inspector CLI usage).
@@ -169,8 +170,57 @@ This section summarizes what still needs to be in place so that Unity Explorer M
   - [x] Add `SpawnTestUi` / `DestroyTestUi` guarded tools to Mono and cover them in `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` (config enable → spawn/destroy → reset).
   - [x] Add guarded `Reparent` / `DestroyObject` for Mono (limited to SpawnTestUi blocks) and surface SpawnTestUi block ids for write smoke reparent/destroy coverage.
   - [x] Expand Mono coverage toward CoreCLR parity (selection, console/scripts, hooks); Mono now exposes `unity://console/scripts` + `unity://hooks`, and `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` covers `ConsoleEval` + `AddComponent`/`RemoveComponent` + `HookAdd`/`HookRemove`.
+  - [ ] Implement `CallMethod` on Mono (guarded; `reflectionAllowlistMembers` + `allowWrites` + confirm) and cover it in write smoke + a contract test.
   
   - [x] Fix Mono notification broadcast compile issue (net35 has no Tasks): remove discards on void `BroadcastNotificationAsync` or reintroduce a Task-compatible wrapper.
   - [x] Run Mono smoke + inspector CLI against a real Mono host and record results (Test‑VM base URL: `http://192.168.178.210:51478`). See `README-mcp.md` Mono Host Validation Checklist. (Ran `Run-McpMonoSmoke.ps1`, inspector tools/list + resources/read now green after redeploy.)
   - [x] Add Mono-specific contract/CI entry (`tools/Run-McpMonoSmoke.ps1`); run against a Mono host when available and keep IL2CPP behavior unchanged.
-  
+
+## 12. UnityExplorer Feature Parity (MCP v1)
+
+These are the remaining big feature surfaces to expose for “agent-grade” parity with UnityExplorer. For any new tool/resource/DTO shape, update `plans/mcp-interface-concept.md` first, then implement + add contract tests.
+
+### 12.1 Object Explorer parity
+- [ ] Add pseudo-scene coverage (DontDestroyOnLoad / HideAndDontSave / Resources/Assets views) in resources + tools.
+- [ ] Add hierarchical object tree browsing (not only shallow cards); include paging and stable ids.
+- [ ] Expose Scene Loader basics: list build scenes and add a guarded `LoadScene` tool.
+
+### 12.2 Inspector parity (read)
+- [ ] Expose component member listing (fields/properties/methods) for an object + component type.
+- [ ] Add safe “read member value” surface with depth/size limits and cycle protection.
+- [ ] Add “reflection inspector” reads for non-GameObject objects where UnityExplorer supports it.
+
+### 12.3 Inspector parity (write)
+- [ ] Expand `SetMember` support for common Unity value types (Color/Vector*/Quaternion/enums) consistently on IL2CPP + Mono.
+- [ ] Add per-tool audit logging for writes (visible in `unity://logs/tail`).
+
+### 12.4 Search parity
+- [ ] Add Singleton search surface (UnityExplorer’s singleton finder) with stable ids.
+- [ ] Add Static class search surface (type names + members; read-only).
+
+### 12.5 Freecam parity
+- [ ] Expose freecam state (enabled/useGameCamera/speed/pose) as a resource.
+- [ ] Add guarded tools to enable/disable freecam and set pose/speed.
+
+### 12.6 Clipboard parity
+- [ ] Expose clipboard read (type + preview) as a resource.
+- [ ] Add guarded tools to set/clear clipboard.
+
+### 12.7 Console scripts parity
+- [ ] Expose script read/write/compile/run for the `Scripts/` folder (guarded; allowlist + confirm).
+- [ ] Expose startup script enable/disable behavior (guarded).
+
+### 12.8 Hooks parity (advanced)
+- [ ] Expose hook target discovery (types/methods) for agent UX (read-only).
+- [ ] Expose hook source read/write and apply/reload (guarded).
+- [ ] Align `hookAllowlistSignatures` semantics between hosts (type vs full signature) and document it.
+
+## 13. Streams & Agent UX
+- [ ] Decide and document the minimal “agent-first” event set with stable payloads and examples (log/scenes/selection/tool_result/inspected_scene).
+- [ ] Consider adding a `selection` snapshot on stream open (optional) and lock it with a contract test.
+- [ ] Add a backpressure strategy for `stream_events` (cap/drop policy) and a stress test.
+
+## 14. Reliability / Ops
+- [ ] Add a lightweight watchdog for the win-dev MCP proxies (8082/8083): healthcheck + restart commands + log paths.
+- [ ] Cross-title IL2CPP regression: validate the dropdown refresh guard + MCP host on one additional IL2CPP title (or document the blocker).
+- [ ] Add CI hooks for inspector CLI smoke runs where infra allows (optional).

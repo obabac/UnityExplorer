@@ -23,20 +23,26 @@ This plan merges the original scope, the current implementation snapshot, and th
 - Dropdown Il2Cpp cast crash is guarded; keep watching logs across titles and leave `UeMcpHeadless.dll` disabled.
 - Treat inspector validation as a first-class gate: run `tools/Run-McpInspectorCli.ps1` early on both hosts for any wire/schema change.
 
-### Planned next 10 iterations (planner)
+### Roadmap to Completion (MCP v1)
 
-Pre-reqs done: inspector CLI gate (`tools/Run-McpInspectorCli.ps1`), removed the `UeMcpHeadless.dll` workaround, Mono baseline guarded writes, repeatable Space Shooter IL2CPP+Mono rebuilds, and the win-dev control plane restored via `McpProxy8082/8083` on 8082/8083.
+Single source of truth for open tasks: `plans/unity-explorer-mcp-todo.md`.
 
-1) Inspector CLI gate hardening: ensure `npx @modelcontextprotocol/inspector --cli` commands work reliably (including common `/mcp` URL forms) on both hosts; remove/deprecate Inspector UI helpers and keep docs aligned.
-2) Add Mono discovery helper + contract run: add `ue-mcp-mono-discovery.json` and run `UnityExplorer.Mcp.ContractTests` against the Mono host (lock in MousePick/world null Items shape).
-3) DONE: Expand Mono parity coverage (selection, console/scripts, hooks); remaining gap: `CallMethod` parity.
-4) PARTIAL: Expand Mono guarded writes (tier 2): `AddComponent`/`RemoveComponent` covered by `Run-McpMonoSmoke.ps1 -EnableWriteSmoke`; `CallMethod` still pending.
-5) DONE: Mono console + hooks parity: `ConsoleEval` gating + `unity://hooks` listing; gated hook tests remain optional.
-6) DONE: Streams parity: `scenes` snapshot notification on stream open + contract test.
-7) Space Shooter env hardening: keep IL2CPP + Mono builds as similar as possible, keep build scripts stable, and document any required Unity project changes.
-8) Cross-title IL2CPP regression: validate the dropdown refresh guard on another IL2CPP title (or document why not available).
-9) Final DoD sweep: run IL2CPP inspector CLI + Invoke-McpSmoke + contract tests and Mono inspector CLI + Mono smoke (with writes); check every TODO.
-10) Add a lightweight healthcheck/watchdog for the win-dev MCP proxies (8082/8083) so failures are detected and restarted quickly (document the commands + log paths).
+Gates (always)
+- Inspector validation is CLI-only (`tools/Run-McpInspectorCli.ps1` or direct `npx @modelcontextprotocol/inspector --cli <baseUrl>/mcp ...`).
+- Test-VM validation happens in the same iteration as any behavior change.
+- If a change touches shared query/DTO code (even if Mono-motivated), run IL2CPP regression (inspector CLI + smoke + contract tests).
+
+Near-term (next ~10 iterations)
+1) Mono `CallMethod` parity: implement tool + gating + allowlist; update smoke + contract tests.
+2) Stream robustness: add IL2CPP stream write serialization (mirror Mono broadcast gate) and add a stress test.
+3) Object Explorer parity: pseudo-scenes (DontDestroyOnLoad/HideAndDontSave/Resources) + hierarchical tree browsing.
+4) Inspector parity (read): component member listing + safe member value reads (depth/size limits).
+5) Inspector parity (write): expand `SetMember` value-type support + write audit logging.
+6) Search parity: singleton search + static class search surfaces.
+7) Freecam parity: expose state + guarded controls.
+8) Clipboard parity: expose clipboard read + guarded set/clear.
+9) Console scripts parity: read/write/compile/run + startup script controls (guarded).
+10) Reliability/Ops: win-dev proxy watchdog + cross-title IL2CPP regression (or document blockers).
 
 ## 1) Context & Assumptions
 
