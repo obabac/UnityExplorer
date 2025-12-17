@@ -4,10 +4,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using HarmonyLib;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityExplorer.CSConsole;
+using UnityExplorer.Hooks;
 using UnityExplorer.ObjectExplorer;
 using UnityExplorer.UI.Panels;
 using UniverseLib.Input;
@@ -23,6 +25,18 @@ namespace UnityExplorer.Mcp
 
         private string? _fallbackSelectionActive;
         private readonly List<string> _fallbackSelectionItems = new List<string>();
+
+        private static bool IsHookAllowedType(string typeFullName)
+        {
+            var allow = McpConfig.Load().HookAllowlistSignatures;
+            if (allow == null || allow.Length == 0) return false;
+            foreach (var entry in allow)
+            {
+                if (string.Equals(entry, typeFullName, StringComparison.Ordinal))
+                    return true;
+            }
+            return false;
+        }
 
         internal void RecordSelection(string objectId)
         {
@@ -168,6 +182,67 @@ namespace UnityExplorer.Mcp
                     ScenesLoaded = scenesLoaded,
                     Selection = selection
                 };
+            });
+        }
+
+        public object HookListAllowedTypes()
+        {
+            var cfg = McpConfig.Load();
+            return new { ok = true, items = cfg.HookAllowlistSignatures ?? new string[0] };
+        }
+
+        public Page<HookMethodDto> HookListMethods(string type, string? filter, int? limit, int? offset)
+        {
+            int lim = Math.Max(1, limit ?? 100);
+            int off = Math.Max(0, offset ?? 0);
+
+            return MainThread.Run(() =>
+            {
+                if (string.IsNullOrEmpty(type) || type.Trim().Length == 0)
+                    throw new ArgumentException("type is required", nameof(type));
+                if (!IsHookAllowedType(type))
+                    throw new InvalidOperationException("PermissionDenied");
+
+                var t = UniverseLib.ReflectionUtility.GetTypeByName(type);
+                if (t == null) throw new InvalidOperationException("Type not found");
+
+                var methods = t.GetMethods(UniverseLib.ReflectionUtility.FLAGS);
+                IEnumerable<System.Reflection.MethodInfo> query = methods;
+                if (!string.IsNullOrEmpty(filter) && filter.Trim().Length > 0)
+                {
+                    query = query.Where(m =>
+                    {
+                        if (m == null) return false;
+                        var sig = m.FullDescription();
+                        var f = filter!;
+                        return m.Name.IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
+                            || sig.IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0;
+                    });
+                }
+
+                var ordered = query
+                    .Select(m => new HookMethodDto(m.Name, m.FullDescription()))
+                    .OrderBy(m => m.Signature, StringComparer.Ordinal)
+                    .ToList();
+
+                var total = ordered.Count;
+                var items = ordered.Skip(off).Take(lim).ToList();
+                return new Page<HookMethodDto>(total, items);
+            });
+        }
+
+        public object HookGetSource(string signature)
+        {
+            return MainThread.Run(() =>
+            {
+                if (string.IsNullOrEmpty(signature) || signature.Trim().Length == 0)
+                    throw new ArgumentException("signature is required", nameof(signature));
+
+                if (!HookList.currentHooks.Contains(signature))
+                    throw new InvalidOperationException("Hook not found");
+
+                var hook = (HookInstance)HookList.currentHooks[signature]!;
+                return new { ok = true, signature, source = hook.PatchSourceCode ?? string.Empty };
             });
         }
 

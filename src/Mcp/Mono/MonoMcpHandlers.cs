@@ -95,7 +95,12 @@ namespace UnityExplorer.Mcp
             list.Add(new { name = "ConsoleEval", description = "Evaluate a small C# snippet in the UnityExplorer console context (guarded by config).", inputSchema = Schema(new Dictionary<string, object> { { "code", String() }, { "confirm", Bool(false) } }, new[] { "code" }) });
             list.Add(new { name = "AddComponent", description = "Add a component by full type name to a GameObject (guarded by allowlist).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "type", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "type" }) });
             list.Add(new { name = "RemoveComponent", description = "Remove a component by full type name or index from a GameObject (allowlist enforced when by type).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "typeOrIndex", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "typeOrIndex" }) });
+            list.Add(new { name = "HookListAllowedTypes", description = "List hook-allowed types (mirrors config hookAllowlistSignatures).", inputSchema = Schema(new Dictionary<string, object> { }) });
+            list.Add(new { name = "HookListMethods", description = "List methods for a hook-allowed type (paged).", inputSchema = Schema(new Dictionary<string, object> { { "type", String() }, { "filter", String() }, { "limit", Integer() }, { "offset", Integer() } }, new[] { "type" }) });
+            list.Add(new { name = "HookGetSource", description = "Get hook patch source by signature.", inputSchema = Schema(new Dictionary<string, object> { { "signature", String() } }, new[] { "signature" }) });
             list.Add(new { name = "HookAdd", description = "Add a Harmony hook for the given type and method (guarded by hook allowlist).", inputSchema = Schema(new Dictionary<string, object> { { "type", String() }, { "method", String() }, { "confirm", Bool(false) } }, new[] { "type", "method" }) });
+            list.Add(new { name = "HookSetEnabled", description = "Enable or disable a previously added Harmony hook by signature.", inputSchema = Schema(new Dictionary<string, object> { { "signature", String() }, { "enabled", Bool() }, { "confirm", Bool(false) } }, new[] { "signature", "enabled" }) });
+            list.Add(new { name = "HookSetSource", description = "Update the patch source for a previously added Harmony hook (requires enableConsoleEval).", inputSchema = Schema(new Dictionary<string, object> { { "signature", String() }, { "source", String() }, { "confirm", Bool(false) } }, new[] { "signature", "source" }) });
             list.Add(new { name = "HookRemove", description = "Remove a previously added Harmony hook by signature.", inputSchema = Schema(new Dictionary<string, object> { { "signature", String() }, { "confirm", Bool(false) } }, new[] { "signature" }) });
             list.Add(new { name = "Reparent", description = "Reparent a GameObject under a new parent (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "newParentId", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "newParentId" }) });
             list.Add(new { name = "DestroyObject", description = "Destroy a GameObject (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "confirm", Bool(false) } }, new[] { "objectId" }) });
@@ -223,11 +228,37 @@ namespace UnityExplorer.Mcp
                         var typeOrIndex = RequireString(args, "typeOrIndex", "Invalid params: 'typeOrIndex' is required.");
                         return _write.RemoveComponent(oid, typeOrIndex, GetBool(args, "confirm") ?? false);
                     }
+                case "hooklistallowedtypes":
+                    return _tools.HookListAllowedTypes();
+                case "hooklistmethods":
+                    {
+                        var type = RequireString(args, "type", "Invalid params: 'type' is required.");
+                        return _tools.HookListMethods(type, GetString(args, "filter"), GetInt(args, "limit"), GetInt(args, "offset"));
+                    }
+                case "hookgetsource":
+                    {
+                        var signature = RequireString(args, "signature", "Invalid params: 'signature' is required.");
+                        return _tools.HookGetSource(signature);
+                    }
                 case "hookadd":
                     {
                         var type = RequireString(args, "type", "Invalid params: 'type' is required.");
                         var method = RequireString(args, "method", "Invalid params: 'method' is required.");
                         return _write.HookAdd(type, method, GetBool(args, "confirm") ?? false);
+                    }
+                case "hooksetenabled":
+                    {
+                        var signature = RequireString(args, "signature", "Invalid params: 'signature' is required.");
+                        var enabled = GetBool(args, "enabled");
+                        if (enabled == null)
+                            throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'enabled' is required.");
+                        return _write.HookSetEnabled(signature, enabled.Value, GetBool(args, "confirm") ?? false);
+                    }
+                case "hooksetsource":
+                    {
+                        var signature = RequireString(args, "signature", "Invalid params: 'signature' is required.");
+                        var source = RequireString(args, "source", "Invalid params: 'source' is required.");
+                        return _write.HookSetSource(signature, source, GetBool(args, "confirm") ?? false);
                     }
                 case "hookremove":
                     {
