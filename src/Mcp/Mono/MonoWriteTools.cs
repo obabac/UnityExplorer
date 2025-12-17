@@ -1,7 +1,9 @@
 #if MONO && !INTEROP
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
+using System.Text;
 using HarmonyLib;
 using Newtonsoft.Json;
 using UnityEngine;
@@ -23,6 +25,7 @@ namespace UnityExplorer.Mcp
         private static GameObject? _testUiRoot;
         private static GameObject? _testUiLeft;
         private static GameObject? _testUiRight;
+        private const int MaxConsoleScriptBytes = 256 * 1024;
 
         public MonoWriteTools(MonoReadTools read)
         {
@@ -175,6 +178,75 @@ namespace UnityExplorer.Mcp
             {
                 return ToolError("Internal", ex.Message);
             }
+        }
+
+        public object WriteConsoleScript(string path, string content, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            try
+            {
+                var fullPath = ResolveConsoleScriptPath(path);
+                var byteCount = Encoding.UTF8.GetByteCount(content ?? string.Empty);
+                if (byteCount > MaxConsoleScriptBytes)
+                    throw new ArgumentException("Content too large; max " + MaxConsoleScriptBytes + " bytes");
+
+                var dir = Path.GetDirectoryName(fullPath);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+
+                File.WriteAllText(fullPath, content ?? string.Empty, Encoding.UTF8);
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        public object DeleteConsoleScript(string path, bool confirm = false)
+        {
+            var cfg = McpConfig.Load();
+            if (!cfg.AllowWrites) return ToolError("PermissionDenied", "Writes disabled");
+            if (cfg.RequireConfirm && !confirm) return ToolError("PermissionDenied", "Confirmation required", "resend with confirm=true");
+
+            try
+            {
+                var fullPath = ResolveConsoleScriptPath(path);
+                if (!File.Exists(fullPath))
+                    throw new InvalidOperationException("NotFound");
+                File.Delete(fullPath);
+                return new { ok = true };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrorFromException(ex);
+            }
+        }
+
+        private static string ResolveConsoleScriptPath(string path)
+        {
+            if (string.IsNullOrEmpty(path) || path.Trim().Length == 0)
+                throw new ArgumentException("path is required");
+            if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("Only .cs files are allowed");
+
+            var scriptsFolder = ConsoleController.ScriptsFolder;
+            if (string.IsNullOrEmpty(scriptsFolder) || scriptsFolder.Trim().Length == 0)
+                throw new InvalidOperationException("NotReady");
+
+            var scriptsRoot = Path.GetFullPath(scriptsFolder);
+            if (!scriptsRoot.EndsWith(Path.DirectorySeparatorChar.ToString()) && !scriptsRoot.EndsWith(Path.AltDirectorySeparatorChar.ToString()))
+                scriptsRoot += Path.DirectorySeparatorChar;
+
+            var candidate = Path.IsPathRooted(path) ? path : Path.Combine(scriptsRoot, path);
+            var full = Path.GetFullPath(candidate);
+            if (!full.StartsWith(scriptsRoot, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("path must stay inside the Scripts folder");
+
+            return full;
         }
 
         public object SetActive(string objectId, bool active, bool confirm = false)

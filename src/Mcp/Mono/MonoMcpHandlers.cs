@@ -87,6 +87,9 @@ namespace UnityExplorer.Mcp
             });
             list.Add(new { name = "TailLogs", description = "Tail recent logs.", inputSchema = Schema(new Dictionary<string, object> { { "count", Integer(200) } }) });
             list.Add(new { name = "GetSelection", description = "Current selection / inspected tabs.", inputSchema = Schema(new Dictionary<string, object>()) });
+            list.Add(new { name = "ReadConsoleScript", description = "Read a C# console script file (validated to stay within the Scripts folder; fixed max bytes; .cs only).", inputSchema = Schema(new Dictionary<string, object> { { "path", String() } }, new[] { "path" }) });
+            list.Add(new { name = "WriteConsoleScript", description = "Write a C# console script file (guarded; validated to stay within the Scripts folder; fixed max bytes; .cs only).", inputSchema = Schema(new Dictionary<string, object> { { "path", String() }, { "content", String() }, { "confirm", Bool(false) } }, new[] { "path", "content" }) });
+            list.Add(new { name = "DeleteConsoleScript", description = "Delete a C# console script file (guarded; validated to stay within the Scripts folder; .cs only).", inputSchema = Schema(new Dictionary<string, object> { { "path", String() }, { "confirm", Bool(false) } }, new[] { "path" }) });
             list.Add(new { name = "SetActive", description = "Set GameObject active state (guarded by allowWrites/confirm).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "active", Bool() }, { "confirm", Bool(false) } }, new[] { "objectId", "active" }) });
             list.Add(new { name = "SetMember", description = "Set a field or property on a component (allowlist enforced).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "componentType", String() }, { "member", String() }, { "jsonValue", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "componentType", "member", "jsonValue" }) });
             list.Add(new { name = "ConsoleEval", description = "Evaluate a small C# snippet in the UnityExplorer console context (guarded by config).", inputSchema = Schema(new Dictionary<string, object> { { "code", String() }, { "confirm", Bool(false) } }, new[] { "code" }) });
@@ -121,6 +124,7 @@ namespace UnityExplorer.Mcp
                 Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
                 Resource("unity://logs/tail", "Log tail", "Tail recent MCP log buffer."),
                 Resource("unity://console/scripts", "Console scripts", "List C# console scripts (from the Scripts folder)."),
+                Resource("unity://console/script?path={path}", "Console script", "Read a single C# console script by path (validated; .cs only)."),
                 Resource("unity://hooks", "Hooks", "List active method hooks."),
             };
         }
@@ -170,6 +174,22 @@ namespace UnityExplorer.Mcp
                     return _tools.TailLogs(GetInt(args, "count") ?? 200);
                 case "getselection":
                     return _tools.GetSelection();
+                case "readconsolescript":
+                    {
+                        var p = RequireString(args, "path", "Invalid params: 'path' is required.");
+                        return _tools.ReadConsoleScript(p);
+                    }
+                case "writeconsolescript":
+                    {
+                        var p = RequireString(args, "path", "Invalid params: 'path' is required.");
+                        var c = RequireString(args, "content", "Invalid params: 'content' is required.");
+                        return _write.WriteConsoleScript(p, c, GetBool(args, "confirm") ?? false);
+                    }
+                case "deleteconsolescript":
+                    {
+                        var p = RequireString(args, "path", "Invalid params: 'path' is required.");
+                        return _write.DeleteConsoleScript(p, GetBool(args, "confirm") ?? false);
+                    }
                 case "setactive":
                     {
                         var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
@@ -304,6 +324,13 @@ namespace UnityExplorer.Mcp
                     }
                     return new Page<ConsoleScriptDto>(total, list);
                 });
+            }
+            if (path.Equals("console/script", StringComparison.OrdinalIgnoreCase))
+            {
+                var p = TryString(query, "path");
+                if (string.IsNullOrEmpty(p) || p.Trim().Length == 0)
+                    throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'path' is required.");
+                return _tools.ReadConsoleScript(p);
             }
             if (path.Equals("hooks", StringComparison.OrdinalIgnoreCase))
             {
