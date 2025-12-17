@@ -21,7 +21,8 @@ Speak a simple language so you are easier to understand
 # Response style
  - Keep Answers concise if not stated otherwise
  - State assumptions
- - Add a short reflection how your workflow can be improved
+ - Add a `short reflection` how your workflow can be improved
+ - Update docs/workflows according the `short reflection` (continous improving)
  - Provide 2-4 Answer-Options for the user to choose for what next:\
 `1) <option>` \
 `2) <option>`
