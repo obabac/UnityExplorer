@@ -33,7 +33,7 @@ Gates (always)
 - If a change touches shared query/DTO code (even if Mono-motivated), run IL2CPP regression (inspector CLI + smoke + contract tests).
 
 Near-term (next ~10 iterations)
-0) Parallel-work scalability refactor: split `src/Mcp/Dto.cs` into per-feature DTO files and move Mono host dispatch out of `src/Mcp/McpSimpleHttp.cs` (reduce merge conflicts for parallel workers).
+0) DONE: Parallel-work scalability refactor: split `src/Mcp/Dto.cs` into per-feature DTO files and move Mono host dispatch out of `src/Mcp/McpSimpleHttp.cs` (reduce merge conflicts for parallel workers).
 1) Console scripts parity: read/write/run + startup script controls (guarded).
 2) Hooks parity (advanced): hook target discovery + hook source read/write/apply (guarded) + align allowlist semantics.
 3) Mono `CallMethod` parity: implement tool + gating + allowlist; update smoke + contract tests.

@@ -73,11 +73,11 @@ Goal: reduce shared-file merge conflicts so we can run console scripts + hooks w
 
 - [x] Add `.worktrees/` to `.gitignore` and document worktree workflow in `AGENTS.md` + `.codex/AGENTS.md`.
 - [x] Update `codex-exec.ps1` prompt so workers do not rewrite `INSTRUCTIONS.MD` and do not touch plan/todo docs unless explicitly instructed.
-- [ ] Refactor: split `src/Mcp/Dto.cs` into per-feature DTO files under `src/Mcp/Dto/`.
-- [ ] Refactor: move Mono host classes (`MonoMcpHandlers`, `MonoReadTools`, `MonoWriteTools`) out of `src/Mcp/McpSimpleHttp.cs` into `src/Mcp/Mono/`.
-- [ ] Refactor: isolate Mono tool/resource registries so adding tools does not require editing `src/Mcp/McpSimpleHttp.cs`.
-- [ ] Run: `dotnet build src/UnityExplorer.csproj -c ML_Cpp_CoreCLR` and `dotnet build src/UnityExplorer.csproj -c ML_Mono`.
-- [ ] Run: contract tests against both discovery files.
+- [x] Refactor: split `src/Mcp/Dto.cs` into per-feature DTO files under `src/Mcp/Dto/`.
+- [x] Refactor: move Mono host classes (`MonoMcpHandlers`, `MonoReadTools`, `MonoWriteTools`) out of `src/Mcp/McpSimpleHttp.cs` into `src/Mcp/Mono/`.
+- [x] Refactor: isolate Mono tool/resource registries so adding tools does not require editing `src/Mcp/McpSimpleHttp.cs`.
+- [x] Run: `dotnet build src/UnityExplorer.csproj -c ML_Cpp_CoreCLR` and `dotnet build src/UnityExplorer.csproj -c ML_Mono`.
+- [x] Run: contract tests against both discovery files.
 
 ## 1. Transport & Protocol Polish
 
