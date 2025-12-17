@@ -29,6 +29,8 @@ When running multiple Codex workers in parallel, use these rules to reduce merge
   - (Only update `plans/mcp-interface-concept.md` when DTO/tool shapes change.)
 - Avoid shared-file hotspots:
   - Add new DTOs under `src/Mcp/Dto/` (one feature per file).
+  - Put MCP tool implementations in `src/Mcp/Features/<FeatureName>/Interop/` and `src/Mcp/Features/<FeatureName>/Mono/`.
+  - Keep the aggregator/entry files small and stable: `src/Mcp/UnityReadTools.cs`, `src/Mcp/UnityWriteTools.cs`, `src/Mcp/Mono/MonoReadTools.cs`, `src/Mcp/Mono/MonoWriteTools.cs`, `src/Mcp/Mono/MonoMcpHandlers.cs`.
   - Keep Mono host logic under `src/Mcp/Mono/` (avoid feature edits in `src/Mcp/McpSimpleHttp.cs`).
 
 ### Required tools on Linux

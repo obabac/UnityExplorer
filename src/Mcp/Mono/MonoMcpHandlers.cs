@@ -12,7 +12,7 @@ using UnityExplorer.Hooks;
 
 namespace UnityExplorer.Mcp
 {
-    internal sealed class MonoMcpHandlers
+    internal sealed partial class MonoMcpHandlers
     {
         internal sealed class McpError : Exception
         {
@@ -63,52 +63,22 @@ namespace UnityExplorer.Mcp
         public object[] ListTools()
         {
             var list = new List<object>();
-            list.Add(new { name = "SetConfig", description = "Update MCP config settings and optionally restart the server.", inputSchema = Schema(new Dictionary<string, object> { { "allowWrites", Bool() }, { "requireConfirm", Bool() }, { "enableConsoleEval", Bool() }, { "componentAllowlist", new { type = "array", items = String() } }, { "reflectionAllowlistMembers", new { type = "array", items = String() } }, { "hookAllowlistSignatures", new { type = "array", items = String() } }, { "restart", Bool() } }) });
-            list.Add(new { name = "GetConfig", description = "Read current MCP config (sanitized).", inputSchema = Schema(new Dictionary<string, object>()) });
-            list.Add(new { name = "GetStatus", description = "Status snapshot of Unity Explorer.", inputSchema = Schema(new Dictionary<string, object>()) });
-            list.Add(new { name = "ListScenes", description = "List scenes (paged).", inputSchema = Schema(new Dictionary<string, object> { { "limit", Integer() }, { "offset", Integer() } }) });
-            list.Add(new { name = "ListObjects", description = "List objects in a scene or all scenes.", inputSchema = Schema(new Dictionary<string, object> { { "sceneId", String() }, { "name", String() }, { "type", String() }, { "activeOnly", Bool() }, { "limit", Integer() }, { "offset", Integer() } }) });
-            list.Add(new { name = "GetObject", description = "Get object details by id.", inputSchema = Schema(new Dictionary<string, object> { { "id", String() } }, new[] { "id" }) });
-            list.Add(new { name = "GetComponents", description = "List component cards for an object.", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "limit", Integer() }, { "offset", Integer() } }, new[] { "objectId" }) });
-            list.Add(new { name = "GetVersion", description = "Version info for Unity Explorer MCP.", inputSchema = Schema(new Dictionary<string, object>()) });
-            list.Add(new { name = "SearchObjects", description = "Search objects by name/type/path.", inputSchema = Schema(new Dictionary<string, object> { { "query", String() }, { "name", String() }, { "type", String() }, { "path", String() }, { "activeOnly", Bool() }, { "limit", Integer() }, { "offset", Integer() } }) });
-            list.Add(new { name = "GetCameraInfo", description = "Get active camera info.", inputSchema = Schema(new Dictionary<string, object>()) });
-            list.Add(new
-            {
-                name = "MousePick",
-                description = "Raycast at current mouse position to pick a world or UI object.",
-                inputSchema = Schema(new Dictionary<string, object>
-                {
-                    { "mode", new { type = "string", @enum = new[] { "world", "ui" }, @default = "world" } },
-                    { "x", Number() },
-                    { "y", Number() },
-                    { "normalized", Bool(false) }
-                })
-            });
-            list.Add(new { name = "TailLogs", description = "Tail recent logs.", inputSchema = Schema(new Dictionary<string, object> { { "count", Integer(200) } }) });
-            list.Add(new { name = "GetSelection", description = "Current selection / inspected tabs.", inputSchema = Schema(new Dictionary<string, object>()) });
-            list.Add(new { name = "ReadConsoleScript", description = "Read a C# console script file (validated to stay within the Scripts folder; fixed max bytes; .cs only).", inputSchema = Schema(new Dictionary<string, object> { { "path", String() } }, new[] { "path" }) });
-            list.Add(new { name = "WriteConsoleScript", description = "Write a C# console script file (guarded; validated to stay within the Scripts folder; fixed max bytes; .cs only).", inputSchema = Schema(new Dictionary<string, object> { { "path", String() }, { "content", String() }, { "confirm", Bool(false) } }, new[] { "path", "content" }) });
-            list.Add(new { name = "DeleteConsoleScript", description = "Delete a C# console script file (guarded; validated to stay within the Scripts folder; .cs only).", inputSchema = Schema(new Dictionary<string, object> { { "path", String() }, { "confirm", Bool(false) } }, new[] { "path" }) });
-            list.Add(new { name = "SetActive", description = "Set GameObject active state (guarded by allowWrites/confirm).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "active", Bool() }, { "confirm", Bool(false) } }, new[] { "objectId", "active" }) });
-            list.Add(new { name = "SetMember", description = "Set a field or property on a component (allowlist enforced).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "componentType", String() }, { "member", String() }, { "jsonValue", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "componentType", "member", "jsonValue" }) });
-            list.Add(new { name = "ConsoleEval", description = "Evaluate a small C# snippet in the UnityExplorer console context (guarded by config).", inputSchema = Schema(new Dictionary<string, object> { { "code", String() }, { "confirm", Bool(false) } }, new[] { "code" }) });
-            list.Add(new { name = "AddComponent", description = "Add a component by full type name to a GameObject (guarded by allowlist).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "type", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "type" }) });
-            list.Add(new { name = "RemoveComponent", description = "Remove a component by full type name or index from a GameObject (allowlist enforced when by type).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "typeOrIndex", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "typeOrIndex" }) });
-            list.Add(new { name = "HookListAllowedTypes", description = "List hook-allowed types (mirrors config hookAllowlistSignatures).", inputSchema = Schema(new Dictionary<string, object> { }) });
-            list.Add(new { name = "HookListMethods", description = "List methods for a hook-allowed type (paged).", inputSchema = Schema(new Dictionary<string, object> { { "type", String() }, { "filter", String() }, { "limit", Integer() }, { "offset", Integer() } }, new[] { "type" }) });
-            list.Add(new { name = "HookGetSource", description = "Get hook patch source by signature.", inputSchema = Schema(new Dictionary<string, object> { { "signature", String() } }, new[] { "signature" }) });
-            list.Add(new { name = "HookAdd", description = "Add a Harmony hook for the given type and method (guarded by hook allowlist).", inputSchema = Schema(new Dictionary<string, object> { { "type", String() }, { "method", String() }, { "confirm", Bool(false) } }, new[] { "type", "method" }) });
-            list.Add(new { name = "HookSetEnabled", description = "Enable or disable a previously added Harmony hook by signature.", inputSchema = Schema(new Dictionary<string, object> { { "signature", String() }, { "enabled", Bool() }, { "confirm", Bool(false) } }, new[] { "signature", "enabled" }) });
-            list.Add(new { name = "HookSetSource", description = "Update the patch source for a previously added Harmony hook (requires enableConsoleEval).", inputSchema = Schema(new Dictionary<string, object> { { "signature", String() }, { "source", String() }, { "confirm", Bool(false) } }, new[] { "signature", "source" }) });
-            list.Add(new { name = "HookRemove", description = "Remove a previously added Harmony hook by signature.", inputSchema = Schema(new Dictionary<string, object> { { "signature", String() }, { "confirm", Bool(false) } }, new[] { "signature" }) });
-            list.Add(new { name = "Reparent", description = "Reparent a GameObject under a new parent (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "newParentId", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "newParentId" }) });
-            list.Add(new { name = "DestroyObject", description = "Destroy a GameObject (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "confirm", Bool(false) } }, new[] { "objectId" }) });
-            list.Add(new { name = "SelectObject", description = "Select a GameObject in the inspector (requires allowWrites).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() } }, new[] { "objectId" }) });
-            list.Add(new { name = "GetTimeScale", description = "Get current time-scale (read-only).", inputSchema = Schema(new Dictionary<string, object>()) });
-            list.Add(new { name = "SetTimeScale", description = "Set Unity time-scale (guarded).", inputSchema = Schema(new Dictionary<string, object> { { "value", Number() }, { "lock", Bool() }, { "confirm", Bool(false) } }, new[] { "value" }) });
-            list.Add(new { name = "SpawnTestUi", description = "Spawn a simple UI canvas for MousePick UI validation (guarded).", inputSchema = Schema(new Dictionary<string, object> { { "confirm", Bool(false) } }) });
-            list.Add(new { name = "DestroyTestUi", description = "Destroy the test UI canvas (guarded).", inputSchema = Schema(new Dictionary<string, object> { { "confirm", Bool(false) } }) });
+            AddTools_Config(list);
+            AddTools_Status(list);
+            AddTools_Scenes(list);
+            AddTools_Objects(list);
+            AddTools_Components(list);
+            AddTools_Version(list);
+            AddTools_Search(list);
+            AddTools_Camera(list);
+            AddTools_MousePick(list);
+            AddTools_Logs(list);
+            AddTools_Selection(list);
+            AddTools_ConsoleScripts(list);
+            AddTools_ConsoleEval(list);
+            AddTools_Hooks(list);
+            AddTools_TimeScale(list);
+            AddTools_TestUi(list);
             return list.ToArray();
         }
 
@@ -138,165 +108,25 @@ namespace UnityExplorer.Mcp
         {
             var key = (name ?? string.Empty).ToLowerInvariant();
             try { LogBuffer.Add("debug", "call_tool:" + key, "mcp"); } catch { }
-            switch (key)
-            {
-                case "setconfig":
-                    return _write.SetConfig(
-                        GetBool(args, "allowWrites"),
-                        GetBool(args, "requireConfirm"),
-                        GetBool(args, "enableConsoleEval"),
-                        GetStringArray(args, "componentAllowlist"),
-                        GetStringArray(args, "reflectionAllowlistMembers"),
-                        GetStringArray(args, "hookAllowlistSignatures"),
-                        GetBool(args, "restart") ?? false);
-                case "getconfig":
-                    return _write.GetConfig();
-                case "getstatus":
-                    return _tools.GetStatus();
-                case "listscenes":
-                    return _tools.ListScenes(GetInt(args, "limit"), GetInt(args, "offset"));
-                case "listobjects":
-                    return _tools.ListObjects(GetString(args, "sceneId"), GetString(args, "name"), GetString(args, "type"), GetBool(args, "activeOnly"), GetInt(args, "limit"), GetInt(args, "offset"));
-                case "getobject":
-                    {
-                        var id = RequireString(args, "id", "Invalid params: 'id' is required.");
-                        return _tools.GetObject(id);
-                    }
-                case "getcomponents":
-                    {
-                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
-                        return _tools.GetComponents(oid, GetInt(args, "limit"), GetInt(args, "offset"));
-                    }
-                case "getversion":
-                    return _tools.GetVersion();
-                case "searchobjects":
-                    return _tools.SearchObjects(GetString(args, "query"), GetString(args, "name"), GetString(args, "type"), GetString(args, "path"), GetBool(args, "activeOnly"), GetInt(args, "limit"), GetInt(args, "offset"));
-                case "getcamerainfo":
-                    return _tools.GetCameraInfo();
-                case "mousepick":
-                    return _tools.MousePick(GetString(args, "mode"), GetFloat(args, "x"), GetFloat(args, "y"), GetBool(args, "normalized") ?? false);
-                case "taillogs":
-                    return _tools.TailLogs(GetInt(args, "count") ?? 200);
-                case "getselection":
-                    return _tools.GetSelection();
-                case "readconsolescript":
-                    {
-                        var p = RequireString(args, "path", "Invalid params: 'path' is required.");
-                        return _tools.ReadConsoleScript(p);
-                    }
-                case "writeconsolescript":
-                    {
-                        var p = RequireString(args, "path", "Invalid params: 'path' is required.");
-                        var c = RequireString(args, "content", "Invalid params: 'content' is required.");
-                        return _write.WriteConsoleScript(p, c, GetBool(args, "confirm") ?? false);
-                    }
-                case "deleteconsolescript":
-                    {
-                        var p = RequireString(args, "path", "Invalid params: 'path' is required.");
-                        return _write.DeleteConsoleScript(p, GetBool(args, "confirm") ?? false);
-                    }
-                case "setactive":
-                    {
-                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
-                        var active = GetBool(args, "active");
-                        if (active == null)
-                            throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'active' is required.");
-                        return _write.SetActive(oid, active.Value, GetBool(args, "confirm") ?? false);
-                    }
-                case "setmember":
-                    {
-                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
-                        var type = RequireString(args, "componentType", "Invalid params: 'componentType' is required.");
-                        var member = RequireString(args, "member", "Invalid params: 'member' is required.");
-                        var jsonValue = RequireString(args, "jsonValue", "Invalid params: 'jsonValue' is required.");
-                        return _write.SetMember(oid, type, member, jsonValue, GetBool(args, "confirm") ?? false);
-                    }
-                case "consoleeval":
-                    {
-                        var code = RequireString(args, "code", "Invalid params: 'code' is required.");
-                        return _write.ConsoleEval(code, GetBool(args, "confirm") ?? false);
-                    }
-                case "addcomponent":
-                    {
-                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
-                        var type = RequireString(args, "type", "Invalid params: 'type' is required.");
-                        return _write.AddComponent(oid, type, GetBool(args, "confirm") ?? false);
-                    }
-                case "removecomponent":
-                    {
-                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
-                        var typeOrIndex = RequireString(args, "typeOrIndex", "Invalid params: 'typeOrIndex' is required.");
-                        return _write.RemoveComponent(oid, typeOrIndex, GetBool(args, "confirm") ?? false);
-                    }
-                case "hooklistallowedtypes":
-                    return _tools.HookListAllowedTypes();
-                case "hooklistmethods":
-                    {
-                        var type = RequireString(args, "type", "Invalid params: 'type' is required.");
-                        return _tools.HookListMethods(type, GetString(args, "filter"), GetInt(args, "limit"), GetInt(args, "offset"));
-                    }
-                case "hookgetsource":
-                    {
-                        var signature = RequireString(args, "signature", "Invalid params: 'signature' is required.");
-                        return _tools.HookGetSource(signature);
-                    }
-                case "hookadd":
-                    {
-                        var type = RequireString(args, "type", "Invalid params: 'type' is required.");
-                        var method = RequireString(args, "method", "Invalid params: 'method' is required.");
-                        return _write.HookAdd(type, method, GetBool(args, "confirm") ?? false);
-                    }
-                case "hooksetenabled":
-                    {
-                        var signature = RequireString(args, "signature", "Invalid params: 'signature' is required.");
-                        var enabled = GetBool(args, "enabled");
-                        if (enabled == null)
-                            throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'enabled' is required.");
-                        return _write.HookSetEnabled(signature, enabled.Value, GetBool(args, "confirm") ?? false);
-                    }
-                case "hooksetsource":
-                    {
-                        var signature = RequireString(args, "signature", "Invalid params: 'signature' is required.");
-                        var source = RequireString(args, "source", "Invalid params: 'source' is required.");
-                        return _write.HookSetSource(signature, source, GetBool(args, "confirm") ?? false);
-                    }
-                case "hookremove":
-                    {
-                        var signature = RequireString(args, "signature", "Invalid params: 'signature' is required.");
-                        return _write.HookRemove(signature, GetBool(args, "confirm") ?? false);
-                    }
-                case "reparent":
-                    {
-                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
-                        var pid = RequireString(args, "newParentId", "Invalid params: 'newParentId' is required.");
-                        return _write.Reparent(oid, pid, GetBool(args, "confirm") ?? false);
-                    }
-                case "destroyobject":
-                    {
-                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
-                        return _write.DestroyObject(oid, GetBool(args, "confirm") ?? false);
-                    }
-                case "selectobject":
-                    {
-                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
-                        return _write.SelectObject(oid);
-                    }
-                case "gettimescale":
-                    return _write.GetTimeScale();
-                case "settimescale":
-                    {
-                        var val = GetFloat(args, "value");
-                        if (val == null)
-                            throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'value' is required.");
-                        return _write.SetTimeScale(val.Value, GetBool(args, "lock"), GetBool(args, "confirm") ?? false);
-                    }
-                case "spawntestui":
-                    return _write.SpawnTestUi(GetBool(args, "confirm") ?? false);
-                case "destroytestui":
-                    return _write.DestroyTestUi(GetBool(args, "confirm") ?? false);
-                default:
-                    throw new McpError(-32004, 404, "NotFound", "Tool not found: " + name);
-            }
+
+            if (TryCallTool_Config(key, args, out var result)) return result;
+            if (TryCallTool_Status(key, args, out result)) return result;
+            if (TryCallTool_Scenes(key, args, out result)) return result;
+            if (TryCallTool_Objects(key, args, out result)) return result;
+            if (TryCallTool_Components(key, args, out result)) return result;
+            if (TryCallTool_Version(key, args, out result)) return result;
+            if (TryCallTool_Search(key, args, out result)) return result;
+            if (TryCallTool_Camera(key, args, out result)) return result;
+            if (TryCallTool_MousePick(key, args, out result)) return result;
+            if (TryCallTool_Logs(key, args, out result)) return result;
+            if (TryCallTool_Selection(key, args, out result)) return result;
+            if (TryCallTool_ConsoleScripts(key, args, out result)) return result;
+            if (TryCallTool_ConsoleEval(key, args, out result)) return result;
+            if (TryCallTool_Hooks(key, args, out result)) return result;
+            if (TryCallTool_TimeScale(key, args, out result)) return result;
+            if (TryCallTool_TestUi(key, args, out result)) return result;
+
+            throw new McpError(-32004, 404, "NotFound", "Tool not found: " + name);
         }
 
         public object ReadResource(string uri)
