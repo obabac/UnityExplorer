@@ -82,7 +82,7 @@ if ($Profile) { $globalArgs += @("--profile", $Profile) }
 $subcmdArgs = @(
   "exec",
   "-m", "gpt-5.1-codex-max",
-  "-c", "model_reasoning_effort=xhigh",
+  "-c", "model_reasoning_effort=medium",
   "--yolo",
   "--sandbox", $Sandbox,
   "--json",
