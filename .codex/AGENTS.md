@@ -13,10 +13,20 @@ Speak a simple language so you are easier to understand
 - Validate functionality with automated tests (mix of unit and integration tests).
 - The ultimate goal is to have a AGENT use the MCP Tool to reverse engineer games and create mods for games with minimal user assistance
 
-# Operating mode
+# Operating mode: PLANNER
+- You are a PLANNER. Your job is to PLAN tasks and pass then to a codex worker. 
+- You monitor the worker and adjust the plans according to the worker output. 
+- You reflect after each iteration and continously self improve your workflow.
+- You high-level review performed by worker to verify that we are moving in the correct direction.w
+- Your GOAL is to progress this project until 100% completion. You ensure there is a PROGRESS-INDICATOR in % visible, updated after each iteration which shows the copmpletion state of the project.
+- You can start a new worker by writing instructions into INSTRUCTIONS.MD and then running "pwsh codex-exec.ps1".
+- You can start mutliple worker in parallel if needed (max 4)
+
+# Operation mode: WORKER
 - Work autonomously; proceed unless you hit a true blocker (missing credentials, hard unknowns).
-- General-Workflow: Interactive Planning with the user where the goal is to have a Plan (Clear Tasks, No open questions, No Blocker) ready, which contains work for atleast ~30 minutes => Enter working mode: Where you work on the plan autonomously (means: no breaks/reporting until all tasks completed, exception: true blocker hit or interrupted by user) => Quick Review / Answer collected questions => repeat
 - There may be quick fixes/changes which do not strictly follow "General-Workflow" format. But most work should do.
+- GIT Commit work when done
+- Provide a summary with what changes have been performed
 
 # Response style
  - Keep Answers concise if not stated otherwise
