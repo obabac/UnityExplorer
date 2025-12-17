@@ -79,6 +79,19 @@ Goal: reduce shared-file merge conflicts so we can run console scripts + hooks w
 - [x] Run: `dotnet build src/UnityExplorer.csproj -c ML_Cpp_CoreCLR` and `dotnet build src/UnityExplorer.csproj -c ML_Mono`.
 - [x] Run: contract tests against both discovery files.
 
+## 0.2 Feature-based folder split (parallel efficiency)
+
+Goal: reduce merge conflicts further by splitting MCP implementation into per-feature folders/files, so different workers can work on different features without touching shared hotspots.
+
+- [ ] Split IL2CPP tool code into per-feature files (make `UnityReadTools`/`UnityWriteTools` partial; move feature blocks into `src/Mcp/Features/<Feature>/...`).
+- [ ] Split Mono tool code into per-feature files (make `MonoReadTools`/`MonoWriteTools` partial; move feature blocks into `src/Mcp/Features/<Feature>/...`).
+- [ ] Split Mono MCP handler hotspots into per-feature files (make `MonoMcpHandlers` partial; move `list_tools` schema blocks + `call_tool` dispatch + `list_resources`/`read_resource` routing into per-feature partials).
+- [ ] Optional: split IL2CPP resource routing (`McpReflection.ReadResourceAsync`) into per-feature files if still a hotspot.
+- [ ] Update coding rules in `AGENTS.md` and `.codex/AGENTS.md` to describe the new folder conventions (where to add tools/resources for each feature).
+- [ ] Build: `dotnet build src/UnityExplorer.csproj -c ML_Cpp_CoreCLR` and `dotnet build src/UnityExplorer.csproj -c ML_Mono`.
+- [ ] Contract tests: run against IL2CPP + Mono discovery files.
+- [ ] Test-VM validation gate (same iteration): inspector CLI + smoke on IL2CPP `51477` and Mono `51478`.
+
 ## 1. Transport & Protocol Polish
 
 - [x] Remove legacy SSE wording/naming in code (e.g. `McpSseState` → neutral name) while keeping behavior unchanged.

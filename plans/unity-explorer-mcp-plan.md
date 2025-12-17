@@ -34,6 +34,7 @@ Gates (always)
 
 Near-term (next ~10 iterations)
 0) DONE: Parallel-work scalability refactor: split `src/Mcp/Dto.cs` into per-feature DTO files and move Mono host dispatch out of `src/Mcp/McpSimpleHttp.cs` (reduce merge conflicts for parallel workers).
+0.2) IN PROGRESS: Split MCP code into feature-based folders/files (reduce shared hotspots: `UnityReadTools`/`UnityWriteTools`, `MonoReadTools`/`MonoWriteTools`, `MonoMcpHandlers`).
 1) Console scripts parity (partial): list + read/write/delete (guarded) implemented; run + startup controls still pending.
 2) DONE: Hooks parity (advanced): discovery + source read/write + enable/disable + HookAdd signature support (guarded).
 3) Mono `CallMethod` parity: implement tool + gating + allowlist; update smoke + contract tests.
