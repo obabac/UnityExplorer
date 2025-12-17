@@ -5,6 +5,8 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 ## Status
 
 - Targets: CoreCLR builds (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) hosts a lightweight MCP (initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion) with discovery and `stream_events` (log/selection/scene/tool_result notifications with `source` + optional `category`); Mono also exposes guarded writes when `allowWrites=true` (`requireConfirm` recommended). See `plans/mcp-interface-concept.md` for the exact tool list and gating (reflection/component/hook allowlists + `enableConsoleEval`).
+- Console scripts: `unity://console/scripts`, `unity://console/script?path=...`, `ReadConsoleScript` (RO), guarded `WriteConsoleScript`/`DeleteConsoleScript` (both hosts).
+- Hooks advanced: `HookListAllowedTypes`, `HookListMethods`, `HookGetSource`, guarded `HookSetEnabled`/`HookSetSource` (both hosts).
 - Transport: lightweight streamable HTTP over a local TCP listener.
 - Default mode: Read‑only (guarded writes must be explicitly enabled).
 

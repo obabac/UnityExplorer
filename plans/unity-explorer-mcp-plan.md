@@ -8,9 +8,9 @@ This plan merges the original scope, the current implementation snapshot, and th
 
 ### Latest iteration snapshot (2025-12-17)
 - IL2CPP MCP host on the Test-VM (`http://192.168.178.210:51477` and `/mcp`) now survives malformed JSON-RPC: invalid requests return HTTP 400 with structured errors, and the host stays alive. MainThread dispatch falls back to UniverseLib main-thread invoke when no `SynchronizationContext` is captured.
-- IL2CPP contract suite passes (55/56 passed, 1 skipped) via `UE_MCP_DISCOVERY=/home/onur/p-unity-explorer-mcp/ue-mcp-il2cpp-discovery.json`. Inspector CLI smoke and `Invoke-McpSmoke.ps1` both succeed against the running Space Shooter host.
+- Contract suite passes (57 passed, 1 skipped) on Space Shooter IL2CPP + Mono via `UE_MCP_DISCOVERY` (including gated ConsoleScripts/Hooks tests when enabled). Inspector CLI smoke and the repo smoke scripts succeed against both hosts.
 - win-dev control plane alias surface validated: `McpProxy8083` (mcp-control) exposes the harness tool names; seed the session after a restart with `initialize` that includes `Accept: application/json, text/event-stream` plus a `clientInfo` payload (e.g., `protocolVersion=2024-11-05`, `capabilities={}`) and the `win-dev-vm-ui/State-Tool` + `win-dev-vm-ui/Powershell-Tool` succeed. Logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`.
-- Mono host (Space Shooter 51478) parity expanded: `unity://console/scripts` + `unity://hooks` resources; `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` now covers ConsoleEval + Add/RemoveComponent + HookAdd/HookRemove (guarded).
+- Console scripts parity: `unity://console/scripts` + `unity://console/script?path=...` resources and `ReadConsoleScript` + guarded `WriteConsoleScript`/`DeleteConsoleScript` on both hosts (BOM normalized; 256KB cap). Hooks parity (advanced): discovery + source read/write + enable/disable + HookAdd signature support.
 - Streams parity: `stream_events` emits a deterministic `scenes` snapshot notification on stream open (both hosts); contract test added.
 - Inspector validation is CLI-only: use `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <url>` (accepts bases with or without `/mcp`) or direct `npx @modelcontextprotocol/inspector --cli` one-liners; the Inspector UI helper is deprecated (see `README-mcp.md`).
 
@@ -34,8 +34,8 @@ Gates (always)
 
 Near-term (next ~10 iterations)
 0) DONE: Parallel-work scalability refactor: split `src/Mcp/Dto.cs` into per-feature DTO files and move Mono host dispatch out of `src/Mcp/McpSimpleHttp.cs` (reduce merge conflicts for parallel workers).
-1) Console scripts parity: read/write/run + startup script controls (guarded).
-2) Hooks parity (advanced): hook target discovery + hook source read/write/apply (guarded) + align allowlist semantics.
+1) Console scripts parity (partial): list + read/write/delete (guarded) implemented; run + startup controls still pending.
+2) DONE: Hooks parity (advanced): discovery + source read/write + enable/disable + HookAdd signature support (guarded).
 3) Mono `CallMethod` parity: implement tool + gating + allowlist; update smoke + contract tests.
 4) Stream robustness: add IL2CPP stream write serialization (mirror Mono broadcast gate) and add a stress test.
 5) Object Explorer parity: pseudo-scenes (DontDestroyOnLoad/HideAndDontSave/Resources) + hierarchical tree browsing.

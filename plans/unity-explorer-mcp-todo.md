@@ -221,27 +221,28 @@ Priority right now: **12.7 Console scripts** + **12.8 Hooks (advanced)**.
 - [ ] Add guarded tools to set/clear clipboard.
 
 ### 12.7 Console scripts parity (TOP)
-- [ ] Spec: finalize the planned contract in `plans/mcp-interface-concept.md` (section: “Planned (next) — Console scripts”).
-- [ ] Implement resource `unity://console/script?path=...` (content + metadata; size cap; validate path stays inside Scripts folder).
-- [ ] Implement tools:
-  - `ReadConsoleScript(path)`
-  - `WriteConsoleScript(path, content, confirm?)`
-  - `DeleteConsoleScript(path, confirm?)`
-  - `RunConsoleScript(path, confirm?)` (requires `enableConsoleEval=true`)
-  - `GetStartupScript()` / `SetStartupScriptEnabled(enabled, confirm?)` / `WriteStartupScript(content, confirm?)` / `RunStartupScript(confirm?)`
-- [ ] Safety: block path traversal, require `.cs`, enforce max bytes, respect `allowWrites` + `requireConfirm`.
-- [ ] Contract tests: schemas + script read/write/run round-trips (and cleanup).
+- [x] Spec: console scripts contract in `plans/mcp-interface-concept.md` (Console scripts section).
+- [x] Implement resource `unity://console/script?path=...` (content + metadata; size cap; validate path stays inside Scripts folder).
+- [x] Implement tools (read/write/delete):
+  - [x] `ReadConsoleScript(path)`
+  - [x] `WriteConsoleScript(path, content, confirm?)`
+  - [x] `DeleteConsoleScript(path, confirm?)`
+- [ ] Implement tools (execution + startup):
+  - [ ] `RunConsoleScript(path, confirm?)` (requires `enableConsoleEval=true`)
+  - [ ] `GetStartupScript()` / `SetStartupScriptEnabled(enabled, confirm?)` / `WriteStartupScript(content, confirm?)` / `RunStartupScript(confirm?)`
+- [x] Safety (read/write/delete): block path traversal, require `.cs`, enforce max bytes, respect `allowWrites` + `requireConfirm`, normalize BOM.
+- [x] Contract tests (gated): schema + read/write/delete round-trip + cleanup (`UE_MCP_CONSOLE_SCRIPT_TEST_ENABLED=1`).
 - [ ] Smoke: cover one full script lifecycle (create → read → run → delete) on IL2CPP + Mono.
-- [ ] Test-VM validation: inspector CLI + smoke + contract tests on IL2CPP (`51477`) + Mono (`51478`).
+- [x] Test-VM validation (read/write/delete): inspector CLI + smoke + contract tests on IL2CPP (`51477`) + Mono (`51478`).
 
 ### 12.8 Hooks parity (advanced) (TOP)
 - [x] Align + document allowlist semantics: `hookAllowlistSignatures` contains type full names (both hosts).
-- [ ] Spec: finalize the planned contract in `plans/mcp-interface-concept.md` (section: “Planned (next) — Hooks advanced”).
-- [ ] Implement read-only discovery tools: `HookListAllowedTypes()` + `HookListMethods(type, filter?, limit?, offset?)`.
-- [ ] Implement hook management: `HookGetSource(signature)` (read-only), `HookSetEnabled(signature, enabled, confirm?)`, `HookSetSource(signature, source, confirm?)` (guarded; requires `enableConsoleEval=true`).
-- [ ] Improve `HookAdd(type, method)`: accept a full `MethodInfo.FullDescription()` signature in `method` to select overloads (keep method-name support).
-- [ ] Contract tests + smoke: cover enable/disable + source read/write on a safe allowlisted type (keep `UE_MCP_HOOK_TEST_ENABLED` gate).
-- [ ] Test-VM validation: inspector CLI + smoke + contract tests on IL2CPP + Mono.
+- [x] Spec: hooks advanced contract in `plans/mcp-interface-concept.md` (Hooks advanced section).
+- [x] Implement read-only discovery tools: `HookListAllowedTypes()` + `HookListMethods(type, filter?, limit?, offset?)`.
+- [x] Implement hook management: `HookGetSource(signature)` (read-only), `HookSetEnabled(signature, enabled, confirm?)`, `HookSetSource(signature, source, confirm?)` (guarded; requires `enableConsoleEval=true`).
+- [x] Improve `HookAdd(type, method)`: accept full `MethodInfo.FullDescription()` signature in `method` to select overloads (keep method-name support).
+- [x] Contract tests + smoke: cover enable/disable + source read/write on a safe allowlisted type (keep `UE_MCP_HOOK_TEST_ENABLED` gate).
+- [x] Test-VM validation: inspector CLI + smoke + contract tests on IL2CPP + Mono.
 
 ## 13. Streams & Agent UX
 - [ ] Decide and document the minimal “agent-first” event set with stable payloads and examples (log/scenes/selection/tool_result/inspected_scene).

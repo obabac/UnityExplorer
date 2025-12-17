@@ -48,6 +48,7 @@
 - `GetCameraInfo()` → `CameraInfoDto`.
 - `MousePick(mode="world"|"ui", x?, y?, normalized=false)` → `PickResultDto { Mode, Hit, Id?, Items? }`; world mode omits `Items` (null); UI mode uses EventSystem ordering (top-most first) and `Id` mirrors the first resolvable hit (hits are filtered to GameObjects that `GetObject` can resolve; if none, Items is empty/Id null) on both IL2CPP and Mono.
 - `TailLogs(count=200)` → `LogTailDto`.
+- `ReadConsoleScript(path)` → `ConsoleScriptFileDto { Name, Path, Content, SizeBytes, LastModifiedUtc, Truncated }` (max 256KB; strips leading BOM).
 - `GetSelection()` → `SelectionDto { ActiveId, Items[] }`.
 - `GetTimeScale()` → `{ ok: true, value: float, locked: bool }`.
 
@@ -57,37 +58,40 @@
 - Object state: `SetActive(objectId, active, confirm?)` → `{ ok }`; `SelectObject(objectId)` → `{ ok }` and triggers a `selection` notification (still gated by `allowWrites`).
 - Reflection writes: `SetMember(objectId, componentType, member, jsonValue, confirm?)` → `{ ok }` (enforces `reflectionAllowlistMembers` entries `<Type>.<Member>`). `CallMethod(objectId, componentType, method, argsJson="[]", confirm?)` → `{ ok, result }` is available on IL2CPP; planned for Mono and will use the same allowlist.
 - Component writes: `AddComponent(objectId, type, confirm?)` / `RemoveComponent(objectId, typeOrIndex, confirm?)` → `{ ok }`; `componentAllowlist` must include the type when removing by type or adding.
-- Hooks: `HookAdd(type, method, confirm?)` / `HookRemove(signature, confirm?)` → `{ ok }`; allowlist via `hookAllowlistSignatures` (type full names).
+- Hooks: `HookAdd(type, methodOrSignature, confirm?)` / `HookRemove(signature, confirm?)` / `HookSetEnabled(signature, enabled, confirm?)` / `HookSetSource(signature, source, confirm?)` → `{ ok }`; allowlist via `hookAllowlistSignatures` (type full names). `HookSetSource` requires `enableConsoleEval=true`. `HookAdd` accepts either a method name (may be ambiguous) or a full `MethodInfo.FullDescription()` signature string for deterministic overload selection.
 - Hierarchy: `Reparent(objectId, newParentId, confirm?)` and `DestroyObject(objectId, confirm?)` → `{ ok }`; Mono host restricts these to the `SpawnTestUi` hierarchy, CoreCLR currently allows any object.
 - Console: `ConsoleEval(code, confirm?)` → `{ ok, result }` (requires `enableConsoleEval=true` in config).
+- Console scripts: `WriteConsoleScript(path, content, confirm?)` / `DeleteConsoleScript(path, confirm?)` → `{ ok }` (paths validated to Scripts folder; max 256KB; BOM normalized).
 - Time: `SetTimeScale(value, lock?, confirm?)` → `{ ok, value, locked }` (value clamped 0–4; `lock=true` uses the Explorer widget lock when available).
 - Test UI helpers: `SpawnTestUi(confirm?)` → `{ ok, rootId, blocks: [{ name, id }] }` (id strings are `obj:<instanceId>`); `DestroyTestUi(confirm?)` → `{ ok }`.
 - Tool errors: `{ ok: false, error: { kind, message, hint? } }` where `kind` mirrors the JSON-RPC error kinds below.
 
-## Planned (next) — Console scripts + Hooks parity
+## Console scripts + Hooks parity (current)
 
-These surfaces are **planned** (not implemented yet). Before implementing, keep this section and `plans/unity-explorer-mcp-todo.md` in sync.
+These surfaces are implemented in part (console scripts) and implemented (hooks advanced). Remaining planned items are explicitly marked as **Planned** below and tracked in `plans/unity-explorer-mcp-todo.md`.
 
 ### Console scripts (file-level parity)
 
 Goal: expose UnityExplorer’s `Scripts/` folder (under `ExplorerCore.ExplorerFolder`) so an agent can list, read, write, and run scripts safely.
 
 - Resources
-  - `unity://console/script?path=<relativeOrAbsolute>` — `ConsoleScriptFileDto { Name, Path, Content, SizeBytes, LastModifiedUtc, Truncated }`
-    - `path` is validated to stay inside the Scripts folder.
-    - `Content` is truncated at a fixed max size (to avoid multi‑MB transfers).
+  - `unity://console/scripts` — `Page<ConsoleScriptDto> { Total, Items: [{ Name, Path }] }` (**Implemented**).
+  - `unity://console/script?path=<relativeOrAbsolute>` — `ConsoleScriptFileDto { Name, Path, Content, SizeBytes, LastModifiedUtc, Truncated }` (**Implemented**).
+    - `path` is validated to stay inside the Scripts folder; `.cs` only.
+    - `Content` is truncated at a fixed max size (256 KB) to avoid multi‑MB transfers.
+    - BOM: reads strip a leading UTF‑8 BOM; writes emit UTF‑8 without BOM.
 
 - Read-only tools
-  - `ReadConsoleScript(path)` → `ConsoleScriptFileDto` (same as the resource).
-  - `GetStartupScript()` → `{ ok, enabled, path, content? }`.
+  - `ReadConsoleScript(path)` → `ConsoleScriptFileDto` (**Implemented**; same as the resource).
+  - `GetStartupScript()` → `{ ok, enabled, path, content? }` (**Planned**).
 
 - Guarded tools
-  - `WriteConsoleScript(path, content, confirm?)` → `{ ok }` (requires `allowWrites=true`; requires `confirm=true` when `requireConfirm=true`).
-  - `DeleteConsoleScript(path, confirm?)` → `{ ok }` (same gating as above).
-  - `RunConsoleScript(path, confirm?)` → `{ ok, result }` (requires `enableConsoleEval=true` in addition to write gating).
-  - Startup script control (maps to the built-in `startup.cs` behavior):
-    - `SetStartupScriptEnabled(enabled, confirm?)` → `{ ok }` (guarded).
-    - `WriteStartupScript(content, confirm?)` → `{ ok }` (guarded; `enableConsoleEval` not required for writing).
+  - `WriteConsoleScript(path, content, confirm?)` → `{ ok }` (**Implemented**; requires `allowWrites=true`; requires `confirm=true` when `requireConfirm=true`).
+  - `DeleteConsoleScript(path, confirm?)` → `{ ok }` (**Implemented**; same gating as above).
+  - `RunConsoleScript(path, confirm?)` → `{ ok, result }` (**Planned**; requires `enableConsoleEval=true` in addition to write gating).
+  - Startup script control (maps to the built-in `startup.cs` behavior) (**Planned**):
+    - `SetStartupScriptEnabled(enabled, confirm?)` → `{ ok }`.
+    - `WriteStartupScript(content, confirm?)` → `{ ok }` (`enableConsoleEval` not required for writing).
     - `RunStartupScript(confirm?)` → `{ ok, result }` (requires `enableConsoleEval=true`).
 
 Errors: `InvalidArgument` for invalid paths (outside Scripts folder), `NotFound` for missing files, `PermissionDenied` for gating.
@@ -106,8 +110,8 @@ Goal: let an agent discover safe hook targets (within allowlist), toggle hooks, 
   - `HookSetSource(signature, source, confirm?)` → `{ ok }` (requires `enableConsoleEval=true` because it compiles patch code).
 
 - Back-compat note for `HookAdd(type, method)`
-  - Today `method` is a method name string and overloads may be ambiguous.
-  - Planned: accept a full `MethodInfo.FullDescription()` signature string in `method` to select overloads deterministically.
+  - `method` may be either a method name or a full `MethodInfo.FullDescription()` signature string.
+  - Prefer the full signature for overloads; name-based lookup can be ambiguous and should return `InvalidArgument` with a hint to pass the signature.
 
 ## Streams & Notifications
 
@@ -167,6 +171,16 @@ Goal: let an agent discover safe hook targets (within allowlist), toggle hooks, 
 - `MousePick(mode="ui")` after `SpawnTestUi` (shape)
 ```json
 { "Mode": "ui", "Hit": true, "Id": "obj:<topHit>", "Items": [{ "Id": "obj:<topHit>", "Name": "McpTestBlock_Left", "Path": "/McpTestCanvas/McpTestBlock_Left" }, { "Id": "obj:<other>", "Name": "McpTestBlock_Right", "Path": "/McpTestCanvas/McpTestBlock_Right" }] }
+```
+
+- `unity://console/script?path=mcp-test.cs` (shape)
+```json
+{ "Name": "mcp-test.cs", "Path": "<ScriptsFolder>/mcp-test.cs", "Content": "return 123;", "SizeBytes": 11, "LastModifiedUtc": "2025-12-17T18:00:00Z", "Truncated": false }
+```
+
+- `WriteConsoleScript` (JSON-RPC call_tool shape)
+```json
+{"jsonrpc":"2.0","id":"write-script","method":"call_tool","params":{"name":"WriteConsoleScript","arguments":{"path":"mcp-test.cs","content":"return 123;","confirm":true}}}
 ```
 
 Use these examples to keep DTOs, tests, and docs in sync. Any shape change must be reflected here, in DTOs, in contract tests, and in `README-mcp.md`.
