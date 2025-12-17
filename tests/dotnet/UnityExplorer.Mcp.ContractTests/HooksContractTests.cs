@@ -99,8 +99,26 @@ public class HooksContractTests
         {
             allowWrites = (bool?)true,
             requireConfirm = (bool?)true,
+            enableConsoleEval = (bool?)true,
             hookAllowlistSignatures = new[] { AllowType }
         }, cts.Token);
+
+        var allowedTypes = await CallToolAsync(http, "HookListAllowedTypes", new { }, cts.Token);
+        allowedTypes.Should().NotBeNull();
+        allowedTypes!.Value.TryGetProperty("ok", out var allowedOk).Should().BeTrue();
+        allowedOk.ValueKind.Should().Be(JsonValueKind.True);
+        allowedTypes.Value.TryGetProperty("items", out var allowedItems).Should().BeTrue();
+        allowedItems.ValueKind.Should().Be(JsonValueKind.Array);
+        allowedItems.EnumerateArray().Any(i => i.ValueKind == JsonValueKind.String && i.GetString() == AllowType).Should().BeTrue();
+
+        var methods = await CallToolAsync(http, "HookListMethods", new { type = AllowType, filter = (string?)null, limit = (int?)10, offset = (int?)0 }, cts.Token);
+        methods.Should().NotBeNull();
+        methods!.Value.TryGetProperty("Items", out var methodItems).Should().BeTrue();
+        methodItems.ValueKind.Should().Be(JsonValueKind.Array);
+        methodItems.GetArrayLength().Should().BeGreaterThan(0);
+        methodItems[0].TryGetProperty("Signature", out var methodSig).Should().BeTrue();
+        methodSig.ValueKind.Should().Be(JsonValueKind.String);
+        methodSig.GetString().Should().NotBeNullOrWhiteSpace();
 
         var initialHooks = await ReadHooksAsync(http, cts.Token);
         if (initialHooks.HasValue)
@@ -138,6 +156,38 @@ public class HooksContractTests
 
         signature ??= FindSignature(hooksRoot, "SetActive");
         signature.Should().NotBeNullOrWhiteSpace();
+
+        var source = await CallToolAsync(http, "HookGetSource", new { signature = signature! }, cts.Token);
+        source.Should().NotBeNull();
+        source!.Value.TryGetProperty("ok", out var sourceOk).Should().BeTrue();
+        sourceOk.ValueKind.Should().Be(JsonValueKind.True);
+        source.Value.TryGetProperty("source", out var sourceText).Should().BeTrue();
+        sourceText.ValueKind.Should().Be(JsonValueKind.String);
+        sourceText.GetString().Should().NotBeNullOrWhiteSpace();
+
+        _ = await CallToolAsync(http, "HookSetEnabled", new { signature = signature!, enabled = false, confirm = true }, cts.Token);
+        var afterDisable = await ReadHooksAsync(http, cts.Token);
+        afterDisable.HasValue.Should().BeTrue();
+        var disabled = afterDisable!.Value.GetProperty("Items").EnumerateArray()
+            .Where(i => i.TryGetProperty("Signature", out var s) && s.ValueKind == JsonValueKind.String && s.GetString() == signature)
+            .Select(i => i.GetProperty("Enabled").ValueKind)
+            .FirstOrDefault();
+        disabled.Should().Be(JsonValueKind.False);
+
+        _ = await CallToolAsync(http, "HookSetEnabled", new { signature = signature!, enabled = true, confirm = true }, cts.Token);
+        var afterEnable = await ReadHooksAsync(http, cts.Token);
+        afterEnable.HasValue.Should().BeTrue();
+        var enabledFlag = afterEnable!.Value.GetProperty("Items").EnumerateArray()
+            .Where(i => i.TryGetProperty("Signature", out var s) && s.ValueKind == JsonValueKind.String && s.GetString() == signature)
+            .Select(i => i.GetProperty("Enabled").ValueKind)
+            .FirstOrDefault();
+        enabledFlag.Should().Be(JsonValueKind.True);
+
+        var sameSource = sourceText.GetString()!;
+        var setSource = await CallToolAsync(http, "HookSetSource", new { signature = signature!, source = sameSource, confirm = true }, cts.Token);
+        setSource.Should().NotBeNull();
+        setSource!.Value.TryGetProperty("ok", out var setSourceOk).Should().BeTrue();
+        setSourceOk.ValueKind.Should().Be(JsonValueKind.True);
 
         var removed = await CallToolAsync(http, "HookRemove", new { signature = signature!, confirm = true }, cts.Token);
         removed.Should().NotBeNull();
