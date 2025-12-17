@@ -32,6 +32,7 @@ When running multiple Codex workers in parallel, use these rules to reduce merge
   - Put MCP tool implementations in `src/Mcp/Features/<FeatureName>/Interop/` and `src/Mcp/Features/<FeatureName>/Mono/`.
   - Keep the aggregator/entry files small and stable: `src/Mcp/UnityReadTools.cs`, `src/Mcp/UnityWriteTools.cs`, `src/Mcp/Mono/MonoReadTools.cs`, `src/Mcp/Mono/MonoWriteTools.cs`, `src/Mcp/Mono/MonoMcpHandlers.cs`.
   - Keep Mono host logic under `src/Mcp/Mono/` (avoid feature edits in `src/Mcp/McpSimpleHttp.cs`).
+  - Transport stays split under `src/Mcp/Transport/{Interop,Mono}/McpSimpleHttp.*.cs`; keep `McpSimpleHttp` partials in those folders and do not collapse them back into a monolith.
 
 ### Required tools on Linux
 

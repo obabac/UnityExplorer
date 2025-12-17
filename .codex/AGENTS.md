@@ -35,6 +35,7 @@ Speak a simple language so you are easier to understand
   - Put MCP tool implementations in `src/Mcp/Features/<FeatureName>/Interop/` and `src/Mcp/Features/<FeatureName>/Mono/`.
   - Keep the aggregator/entry files small and stable: `src/Mcp/UnityReadTools.cs`, `src/Mcp/UnityWriteTools.cs`, `src/Mcp/Mono/MonoReadTools.cs`, `src/Mcp/Mono/MonoWriteTools.cs`, `src/Mcp/Mono/MonoMcpHandlers.cs`.
   - Put Mono host logic in `src/Mcp/Mono/` (avoid feature edits in `src/Mcp/McpSimpleHttp.cs`).
+  - Transport stays split under `src/Mcp/Transport/{Interop,Mono}/McpSimpleHttp.*.cs`; keep `McpSimpleHttp` partials in those folders and do not collapse them back into a monolith.
 
 # Operation mode: WORKER
 - Work autonomously; proceed unless you hit a true blocker (missing credentials, hard unknowns).
