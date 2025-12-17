@@ -680,6 +680,9 @@ namespace UnityExplorer.Mcp
                     content = Encoding.UTF8.GetString(bytes, 0, used);
                 }
 
+                if (!string.IsNullOrEmpty(content) && content[0] == '\uFEFF')
+                    content = content.Substring(1);
+
                 return new ConsoleScriptFileDto
                 {
                     Name = Path.GetFileName(fullPath),

@@ -29,6 +29,13 @@ namespace UnityExplorer.Mcp
     public static class UnityWriteTools
     {
         private const int MaxConsoleScriptBytes = 256 * 1024;
+        private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+        private static string StripLeadingBom(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            return s[0] == '\uFEFF' ? s.Substring(1) : s;
+        }
 
         private static object ToolError(string kind, string message, string? hint = null)
             => new { ok = false, error = new { kind, message, hint } };
@@ -165,7 +172,8 @@ namespace UnityExplorer.Mcp
             try
             {
                 var fullPath = ResolveConsoleScriptPath(path);
-                var byteCount = Encoding.UTF8.GetByteCount(content ?? string.Empty);
+                content = StripLeadingBom(content ?? string.Empty);
+                var byteCount = Utf8NoBom.GetByteCount(content);
                 if (byteCount > MaxConsoleScriptBytes)
                     return ToolError("InvalidArgument", $"Content too large; max {MaxConsoleScriptBytes} bytes");
 
@@ -173,7 +181,7 @@ namespace UnityExplorer.Mcp
                 if (!string.IsNullOrEmpty(dir))
                     Directory.CreateDirectory(dir);
 
-                File.WriteAllText(fullPath, content ?? string.Empty, Encoding.UTF8);
+                File.WriteAllText(fullPath, content, Utf8NoBom);
                 return new { ok = true };
             }
             catch (Exception ex)

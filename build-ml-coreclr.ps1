@@ -9,17 +9,21 @@ $modDll     = Join-Path $releaseRoot "Mods\UnityExplorer.ML.IL2CPP.CoreCLR.dll"
 $userLibDll = Join-Path $releaseRoot "UserLibs\UniverseLib.ML.IL2CPP.Interop.dll"
 ${mcsSource} = Join-Path $PSScriptRoot "lib\net6\mcs.dll"
 
-if (-not (Test-Path $modDll)) {
-    throw "Built mod DLL not found at '$modDll'. Did the build succeed?"
-}
-if (-not (Test-Path $userLibDll)) {
-    throw "Built UniverseLib DLL not found at '$userLibDll'. Did the build succeed?"
-}
 if (-not (Test-Path ${mcsSource})) {
     throw "mcs.dll not found at '${mcsSource}'."
 }
 
 Write-Host "=== Synchronizing release layout (Mods/UserLibs) ==="
+
+# Ensure the folder structure exists (some builds only produce the root DLLs).
+$modsDir = Join-Path $releaseRoot "Mods"
+if (-not (Test-Path $modsDir)) {
+    New-Item -ItemType Directory -Path $modsDir -Force | Out-Null
+}
+$userLibsDir = Join-Path $releaseRoot "UserLibs"
+if (-not (Test-Path $userLibsDir)) {
+    New-Item -ItemType Directory -Path $userLibsDir -Force | Out-Null
+}
 
 # Ensure the Mods folder contains the freshly built DLL from the release root.
 $modDllRoot = Join-Path $releaseRoot "UnityExplorer.ML.IL2CPP.CoreCLR.dll"
@@ -41,6 +45,13 @@ else {
     Write-Warning "Expected root UniverseLib DLL not found at '$userLibRoot'."
 }
 
+if (-not (Test-Path $modDll)) {
+    throw "Built mod DLL not found at '$modDll'. Did the build succeed?"
+}
+if (-not (Test-Path $userLibDll)) {
+    throw "Built UniverseLib DLL not found at '$userLibDll'. Did the build succeed?"
+}
+
 Write-Host "=== SHA256 of UnityExplorer.ML.IL2CPP.CoreCLR.dll ==="
 try {
     $hash = Get-FileHash -Path $modDll -Algorithm SHA256
@@ -52,14 +63,9 @@ catch {
 
 Write-Host "=== Preparing release layout (UserLibs) ==="
 
-$releaseUserLibs = Join-Path $releaseRoot "UserLibs"
-if (-not (Test-Path $releaseUserLibs)) {
-    New-Item -ItemType Directory -Path $releaseUserLibs -Force | Out-Null
-}
-
 # Ensure mcs.dll is present in the Release UserLibs folder so it is deployed
 # to the game's UserLibs directory on the Test-VM.
-$mcsTarget = Join-Path $releaseUserLibs "mcs.dll"
+$mcsTarget = Join-Path $userLibsDir "mcs.dll"
 Write-Host "Copying mcs.dll into Release UserLibs: $mcsTarget"
 Copy-Item -Path ${mcsSource} -Destination $mcsTarget -Force
 
