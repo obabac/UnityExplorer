@@ -1,10 +1,13 @@
 #if MONO && !INTEROP
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using UnityExplorer.CSConsole;
 using UnityExplorer.ObjectExplorer;
 using UnityExplorer.UI.Panels;
 using UniverseLib.Input;
@@ -16,6 +19,8 @@ namespace UnityExplorer.Mcp
 {
     internal sealed class MonoReadTools
     {
+        private const int MaxConsoleScriptBytes = 256 * 1024;
+
         private string? _fallbackSelectionActive;
         private readonly List<string> _fallbackSelectionItems = new List<string>();
 
@@ -556,6 +561,59 @@ namespace UnityExplorer.Mcp
             {
                 var snap = CaptureSelection();
                 return new SelectionDto { ActiveId = snap.ActiveId, Items = snap.Items };
+            });
+        }
+
+        public ConsoleScriptFileDto ReadConsoleScript(string path)
+        {
+            if (string.IsNullOrEmpty(path) || path.Trim().Length == 0)
+                throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "path is required");
+            if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Only .cs files are allowed");
+
+            return MainThread.Run(() =>
+            {
+                var scriptsFolder = ConsoleController.ScriptsFolder;
+                if (string.IsNullOrEmpty(scriptsFolder) || scriptsFolder.Trim().Length == 0)
+                    throw new MonoMcpHandlers.McpError(-32001, 503, "NotReady", "Not ready");
+
+                var scriptsRoot = Path.GetFullPath(scriptsFolder);
+                if (!scriptsRoot.EndsWith(Path.DirectorySeparatorChar.ToString()) && !scriptsRoot.EndsWith(Path.AltDirectorySeparatorChar.ToString()))
+                    scriptsRoot += Path.DirectorySeparatorChar;
+
+                var candidate = Path.IsPathRooted(path) ? path : Path.Combine(scriptsRoot, path);
+                var fullPath = Path.GetFullPath(candidate);
+                if (!fullPath.StartsWith(scriptsRoot, StringComparison.OrdinalIgnoreCase))
+                    throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "path must stay inside the Scripts folder");
+
+                if (!File.Exists(fullPath))
+                    throw new MonoMcpHandlers.McpError(-32004, 404, "NotFound", "NotFound");
+
+                var info = new FileInfo(fullPath);
+                var sizeBytes = info.Length;
+                var lastModifiedUtc = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
+
+                string content;
+                bool truncated;
+                using (var fs = File.OpenRead(fullPath))
+                {
+                    var toRead = (int)Math.Min(sizeBytes, MaxConsoleScriptBytes + 1L);
+                    var bytes = new byte[toRead];
+                    var read = fs.Read(bytes, 0, toRead);
+                    truncated = read > MaxConsoleScriptBytes;
+                    var used = truncated ? MaxConsoleScriptBytes : read;
+                    content = Encoding.UTF8.GetString(bytes, 0, used);
+                }
+
+                return new ConsoleScriptFileDto
+                {
+                    Name = Path.GetFileName(fullPath),
+                    Path = fullPath,
+                    Content = content,
+                    SizeBytes = sizeBytes,
+                    LastModifiedUtc = lastModifiedUtc,
+                    Truncated = truncated
+                };
             });
         }
     }

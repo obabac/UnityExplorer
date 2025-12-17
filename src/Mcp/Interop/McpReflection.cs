@@ -67,6 +67,7 @@ namespace UnityExplorer.Mcp
                 Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
                 Resource("unity://logs/tail", "Log tail", "Tail recent MCP log buffer."),
                 Resource("unity://console/scripts", "Console scripts", "List C# console scripts (from the Scripts folder)."),
+                Resource("unity://console/script?path={path}", "Console script", "Read a single C# console script by path (validated; .cs only)."),
                 Resource("unity://hooks", "Hooks", "List active method hooks."),
             };
         }
@@ -297,6 +298,13 @@ namespace UnityExplorer.Mcp
                 return await UnityReadTools.TailLogs(TryInt(query, "count") ?? 200, default);
             if (path.Equals("console/scripts", StringComparison.OrdinalIgnoreCase))
                 return await UnityResources.ConsoleScripts(TryInt(query, "limit"), TryInt(query, "offset"), default);
+            if (path.Equals("console/script", StringComparison.OrdinalIgnoreCase))
+            {
+                var p = TryString(query, "path");
+                if (string.IsNullOrWhiteSpace(p))
+                    throw new ArgumentException("path query is required", "path");
+                return await UnityReadTools.ReadConsoleScript(p, default);
+            }
             if (path.Equals("hooks", StringComparison.OrdinalIgnoreCase))
                 return await UnityResources.Hooks(TryInt(query, "limit"), TryInt(query, "offset"), default);
 

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 #if INTEROP
 using System.Threading.Tasks;
@@ -10,6 +12,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityExplorer.UI.Panels;
 using UniverseLib.Input;
+using UnityExplorer.CSConsole;
 #endif
 
 #nullable enable
@@ -20,6 +23,8 @@ namespace UnityExplorer.Mcp
     [McpServerToolType]
     public static class UnityReadTools
     {
+        private const int MaxConsoleScriptBytes = 256 * 1024;
+
         private static string? _fallbackSelectionActive;
         private static readonly List<string> _fallbackSelectionItems = new();
 
@@ -394,6 +399,41 @@ namespace UnityExplorer.Mcp
         public static Task<LogTailDto> TailLogs(int count = 200, CancellationToken ct = default)
             => Task.FromResult(LogBuffer.Tail(count));
 
+        [McpServerTool, Description("Read a C# console script file (validated to stay within the Scripts folder; fixed max bytes; .cs only).")]
+        public static Task<ConsoleScriptFileDto> ReadConsoleScript(string path, CancellationToken ct = default)
+        {
+            return MainThread.Run(() =>
+            {
+                var fullPath = ResolveConsoleScriptPath(path);
+                if (!File.Exists(fullPath))
+                    throw new InvalidOperationException("NotFound");
+
+                var info = new FileInfo(fullPath);
+                var sizeBytes = info.Length;
+                var lastModifiedUtc = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
+
+                string content;
+                bool truncated;
+                using (var fs = File.OpenRead(fullPath))
+                {
+                    var toRead = (int)Math.Min(sizeBytes, MaxConsoleScriptBytes + 1L);
+                    var bytes = new byte[toRead];
+                    var read = fs.Read(bytes, 0, toRead);
+                    truncated = read > MaxConsoleScriptBytes;
+                    var used = truncated ? MaxConsoleScriptBytes : read;
+                    content = Encoding.UTF8.GetString(bytes, 0, used);
+                }
+
+                return new ConsoleScriptFileDto(
+                    Name: Path.GetFileName(fullPath),
+                    Path: fullPath,
+                    Content: content,
+                    SizeBytes: sizeBytes,
+                    LastModifiedUtc: lastModifiedUtc,
+                    Truncated: truncated);
+            });
+        }
+
         [McpServerTool, Description("Return current selection/inspected tabs (best effort).")]
         public static async Task<SelectionDto> GetSelection(CancellationToken ct)
         {
@@ -431,6 +471,29 @@ namespace UnityExplorer.Mcp
             if (active != null && !items.Contains(active))
                 items.Insert(0, active);
             return (active, items);
+        }
+
+        private static string ResolveConsoleScriptPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("path is required", nameof(path));
+            if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("Only .cs files are allowed", nameof(path));
+
+            var scriptsFolder = ConsoleController.ScriptsFolder;
+            if (string.IsNullOrWhiteSpace(scriptsFolder))
+                throw new InvalidOperationException("NotReady");
+
+            var scriptsRoot = Path.GetFullPath(scriptsFolder);
+            if (!scriptsRoot.EndsWith(Path.DirectorySeparatorChar.ToString()) && !scriptsRoot.EndsWith(Path.AltDirectorySeparatorChar.ToString()))
+                scriptsRoot += Path.DirectorySeparatorChar;
+
+            var candidate = Path.IsPathRooted(path) ? path : Path.Combine(scriptsRoot, path);
+            var full = Path.GetFullPath(candidate);
+            if (!full.StartsWith(scriptsRoot, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("path must stay inside the Scripts folder", nameof(path));
+
+            return full;
         }
     }
 #endif
