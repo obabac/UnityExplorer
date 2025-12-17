@@ -92,6 +92,19 @@ Goal: reduce merge conflicts further by splitting MCP implementation into per-fe
 - [x] Contract tests: run against IL2CPP + Mono discovery files.
 - [x] Test-VM validation gate (same iteration): inspector CLI + smoke on IL2CPP `51477` and Mono `51478`.
 
+## 0.3 Split large MCP hotspots (>400 lines)
+
+Goal: reduce merge conflicts further by splitting the remaining large shared MCP hotspots.
+
+- [x] Refactor transport into partials under `src/Mcp/Transport/{Interop,Mono}/McpSimpleHttp.*.cs` (accept loop, request parsing, JSON-RPC routing, stream handling, error mapping) and remove the monolithic `src/Mcp/McpSimpleHttp.cs`.
+  - [x] Interop: moved to `src/Mcp/Transport/Interop/` partials.
+  - [x] Mono: moved to `src/Mcp/Transport/Mono/` partials.
+  - [x] Keep a small stub implementation for non-INTEROP/non-MONO builds.
+- [x] Refactor `tests/dotnet/UnityExplorer.Mcp.ContractTests/JsonRpcContractTests.cs` into multiple test classes/files by topic (`Tools`, `Resources`, `Streams`, `Errors`) with a shared JSON-RPC client helper.
+- [x] Build: `dotnet build src/UnityExplorer.csproj -c ML_Cpp_CoreCLR` and `dotnet build src/UnityExplorer.csproj -c ML_Mono`.
+- [x] Contract tests: run against IL2CPP + Mono discovery files.
+- [x] Test-VM validation gate (same iteration): inspector CLI + smoke on IL2CPP `51477` and Mono `51478`.
+
 ## 1. Transport & Protocol Polish
 
 - [x] Remove legacy SSE wording/naming in code (e.g. `McpSseState` → neutral name) while keeping behavior unchanged.

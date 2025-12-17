@@ -1,5 +1,6 @@
 #if !INTEROP && !MONO
 #nullable enable
+using System;
 
 namespace UnityExplorer.Mcp
 {
