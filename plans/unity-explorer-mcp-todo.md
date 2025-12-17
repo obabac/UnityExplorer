@@ -56,6 +56,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 - Keep `plans/mcp-interface-concept.md`, DTO code, and contract tests in sync; update all three together when shapes change.
 - Inspector validation is a gate: run `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <url>` early on both hosts for any wire/schema change.
 - Test-VM validation is a gate: for any behavior change, validate on the Test-VM in the same iteration (not after).
+- IL2CPP regression is a gate: if a change touches shared query/DTO code used by both hosts (even if the change was Mono-motivated), run an IL2CPP regression pass (inspector CLI + smoke + contract tests).
 - Do not add game-specific assumptions; tests must pass on Space Shooter.
 - Guarded writes: always enforce `allowWrites` + `RequireConfirm` and return structured `ok=false` errors instead of throwing.
 - When adding new behaviour, include an example payload in the concept doc and a contract test.

@@ -94,6 +94,7 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
     UnityExplorer build or when tests depend on a fresh process.
   - Agents also own the Test-VM validation environment (SpaceShooter IL2CPP + Mono builds + MCP ports); keep it runnable and documented (see `plans/space-shooter-test-plan.md`).
   - For any behavior change, validate on the Test-VM in the same iteration (see `plans/unity-explorer-mcp-todo.md` → Pitfalls).
+  - IL2CPP regression is a gate: if a change touches shared query/DTO code used by both hosts (even if the change was Mono-motivated), run an IL2CPP regression pass (inspector CLI + smoke + contract tests).
 - **Inspect logs**:
   - Once the game is starting, use:
     ```powershell
@@ -131,8 +132,8 @@ When modifying build steps, update the relevant doc(s) and keep these instructio
   - Prefer the repo helper:
     - `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://<TestVM-IP>:51477`
   - Or run direct one-liners:
-    - `npx @modelcontextprotocol/inspector --cli --transport http http://<TestVM-IP>:51477 --method tools/list`
-    - `npx @modelcontextprotocol/inspector --cli --transport http http://<TestVM-IP>:51477 --method tools/call --tool-name GetStatus`
+    - `npx @modelcontextprotocol/inspector --cli http://<TestVM-IP>:51477/mcp --method tools/list`
+    - `npx @modelcontextprotocol/inspector --cli http://<TestVM-IP>:51477/mcp --method tools/call --tool-name GetStatus`
 - **Guarded writes and config:**
   - By default `allowWrites` is `false`; do not enable this casually on shared machines.
   - To experiment with write tools on the Test‑VM, use the `SetConfig` tool to toggle `allowWrites` / `requireConfirm` (and `enableConsoleEval` / allowlists) and always reset them to safe values when you are done.

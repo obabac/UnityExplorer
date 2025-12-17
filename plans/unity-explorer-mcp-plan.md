@@ -254,7 +254,7 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
   - `pwsh ./tools/Get-ML-Log.ps1` (with `-Stream` for live tail).
 - Inspector CLI:
   - `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477`
-  - Or: `npx @modelcontextprotocol/inspector --cli --transport http http://192.168.178.210:51477 --method tools/list`
+  - Or: `npx @modelcontextprotocol/inspector --cli http://192.168.178.210:51477/mcp --method tools/list`
 - Smoke CLI:
   - `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477 -LogCount 20`
   - Falls back to `%TEMP%/unity-explorer-mcp.json` or `UE_MCP_DISCOVERY` when `-BaseUrl` is omitted; runs initialize → notifications/initialized → list_tools → GetStatus/TailLogs → read status/scenes/logs and exits non-zero on errors.
