@@ -22,7 +22,7 @@
 - UE UI dropdown refresh guard added; log shows a warning `Failed to refresh UI dropdowns; continuing without failsafe: ...` on init. `Mods\UeMcpHeadless.dll` is renamed to `.disabled` on the Test-VM.
 - Discovery file: `%TEMP%\unity-explorer-mcp.json` (refresh by deleting before launch).
 - Launch: `Start-Process 'C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe' -ArgumentList '-seed=1234'`.
-- Deployment note: stop `SpaceShooter.exe` before `Update-Mod-Remote.ps1` (SCP fails on locked DLLs), then restart the game.
+- Deployment note: `Update-Mod-Remote.ps1` now stages to `~/<user>/$StagingSubPath/<Target>` via `scp` and then copies with remote PowerShell to avoid drive-letter scp issues. Use `-Target Il2Cpp|Mono|Both` (defaults Il2Cpp), `-StopGame` if `SpaceShooter.exe` is running/locked, and rerun for both hosts. Defaults target `C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP` and `C:\codex-workspace\space-shooter-build\SpaceShooter_Mono`.
 - 2025-12-13: Mono host responds on `http://192.168.178.210:51478` (Mono smoke + inspector CLI smoke should pass). IL2CPP host on `http://192.168.178.210:51477` is up after the dropdown guard; inspector CLI smoke, Invoke-McpSmoke, and MCP contract tests (47 passed, 1 skipped) pass without `UeMcpHeadless.dll`.
 - Gate: run `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <baseUrl>` early for any protocol/DTO changes (both hosts).
 - Inspector validation is CLI-only: use `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <baseUrl>` or the direct `npx @modelcontextprotocol/inspector --cli` one-liners in `README-mcp.md`.
