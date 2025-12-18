@@ -56,7 +56,7 @@
 - Config: `SetConfig(allowWrites?, requireConfirm?, enableConsoleEval?, componentAllowlist?, reflectionAllowlistMembers?, hookAllowlistSignatures?, restart=false)` → `{ ok }`; `GetConfig()` → `{ ok, enabled, bindAddress, port, allowWrites, requireConfirm, exportRoot, logLevel, componentAllowlist, reflectionAllowlistMembers, enableConsoleEval, hookAllowlistSignatures }` (sanitized).
   - Note: despite the name, `hookAllowlistSignatures` currently contains **type full names** allowed for `HookAdd` (example: `["UnityEngine.GameObject"]`).
 - Object state: `SetActive(objectId, active, confirm?)` → `{ ok }`; `SelectObject(objectId)` → `{ ok }` and triggers a `selection` notification (still gated by `allowWrites`).
-- Reflection writes: `SetMember(objectId, componentType, member, jsonValue, confirm?)` → `{ ok }` (enforces `reflectionAllowlistMembers` entries `<Type>.<Member>`). `CallMethod(objectId, componentType, method, argsJson="[]", confirm?)` → `{ ok, result }` is available on IL2CPP; planned for Mono and will use the same allowlist.
+- Reflection writes: `SetMember(objectId, componentType, member, jsonValue, confirm?)` → `{ ok }` (enforces `reflectionAllowlistMembers` entries `<Type>.<Member>`). `CallMethod(objectId, componentType, method, argsJson="[]", confirm?)` → `{ ok, result }` is available on both IL2CPP and Mono; allowlist enforced via `reflectionAllowlistMembers`.
 - Component writes: `AddComponent(objectId, type, confirm?)` / `RemoveComponent(objectId, typeOrIndex, confirm?)` → `{ ok }`; `componentAllowlist` must include the type when removing by type or adding.
 - Hooks: `HookAdd(type, methodOrSignature, confirm?)` / `HookRemove(signature, confirm?)` / `HookSetEnabled(signature, enabled, confirm?)` / `HookSetSource(signature, source, confirm?)` → `{ ok }`; allowlist via `hookAllowlistSignatures` (type full names). `HookSetSource` requires `enableConsoleEval=true`. `HookAdd` accepts either a method name (may be ambiguous) or a full `MethodInfo.FullDescription()` signature string for deterministic overload selection.
 - Hierarchy: `Reparent(objectId, newParentId, confirm?)` and `DestroyObject(objectId, confirm?)` → `{ ok }`; Mono host restricts these to the `SpawnTestUi` hierarchy, CoreCLR currently allows any object.
@@ -83,16 +83,16 @@ Goal: expose UnityExplorer’s `Scripts/` folder (under `ExplorerCore.ExplorerFo
 
 - Read-only tools
   - `ReadConsoleScript(path)` → `ConsoleScriptFileDto` (**Implemented**; same as the resource).
-  - `GetStartupScript()` → `{ ok, enabled, path, content? }` (**Planned**).
+  - `GetStartupScript()` → `{ ok, enabled, path, content? }` (**Implemented**; when `startup.cs` is missing but `startup.disabled.cs` exists, it returns `enabled=false` with the disabled file content so agents can restore it).
 
 - Guarded tools
   - `WriteConsoleScript(path, content, confirm?)` → `{ ok }` (**Implemented**; requires `allowWrites=true`; requires `confirm=true` when `requireConfirm=true`).
   - `DeleteConsoleScript(path, confirm?)` → `{ ok }` (**Implemented**; same gating as above).
-  - `RunConsoleScript(path, confirm?)` → `{ ok, result }` (**Planned**; requires `enableConsoleEval=true` in addition to write gating).
-  - Startup script control (maps to the built-in `startup.cs` behavior) (**Planned**):
-    - `SetStartupScriptEnabled(enabled, confirm?)` → `{ ok }`.
-    - `WriteStartupScript(content, confirm?)` → `{ ok }` (`enableConsoleEval` not required for writing).
-    - `RunStartupScript(confirm?)` → `{ ok, result }` (requires `enableConsoleEval=true`).
+  - `RunConsoleScript(path, confirm?)` → `{ ok, result }` (**Implemented**; requires `enableConsoleEval=true` in addition to write gating; max 256KB content, BOM stripped).
+  - Startup script control (maps to the built-in `startup.cs` behavior) (**Implemented**):
+    - `SetStartupScriptEnabled(enabled, confirm?)` → `{ ok }` (renames `startup.cs` ↔ `startup.disabled.cs`).
+    - `WriteStartupScript(content, confirm?)` → `{ ok }` (`enableConsoleEval` not required for writing; overwrites `startup.cs` and removes the disabled copy if present).
+    - `RunStartupScript(confirm?)` → `{ ok, result, path }` (requires `enableConsoleEval=true`; runs `startup.cs` when present, otherwise `startup.disabled.cs`; max 256KB, BOM stripped).
 
 Errors: `InvalidArgument` for invalid paths (outside Scripts folder), `NotFound` for missing files, `PermissionDenied` for gating.
 

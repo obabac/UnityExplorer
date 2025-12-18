@@ -23,33 +23,68 @@ namespace UnityExplorer.Mcp
                 if (!File.Exists(fullPath))
                     throw new InvalidOperationException("NotFound");
 
-                var info = new FileInfo(fullPath);
-                var sizeBytes = info.Length;
-                var lastModifiedUtc = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
-
-                string content;
-                bool truncated;
-                using (var fs = File.OpenRead(fullPath))
-                {
-                    var toRead = (int)Math.Min(sizeBytes, MaxConsoleScriptBytes + 1L);
-                    var bytes = new byte[toRead];
-                    var read = fs.Read(bytes, 0, toRead);
-                    truncated = read > MaxConsoleScriptBytes;
-                    var used = truncated ? MaxConsoleScriptBytes : read;
-                    content = Encoding.UTF8.GetString(bytes, 0, used);
-                }
-
-                if (!string.IsNullOrEmpty(content) && content[0] == '\uFEFF')
-                    content = content.Substring(1);
-
-                return new ConsoleScriptFileDto(
-                    Name: Path.GetFileName(fullPath),
-                    Path: fullPath,
-                    Content: content,
-                    SizeBytes: sizeBytes,
-                    LastModifiedUtc: lastModifiedUtc,
-                    Truncated: truncated);
+                return ReadConsoleScriptInternal(fullPath);
             });
+        }
+
+        [McpServerTool, Description("Get the startup script (startup.cs or startup.disabled.cs) and enabled state.")]
+        public static Task<object> GetStartupScript(CancellationToken ct = default)
+        {
+            return MainThread.Run<object>(() =>
+            {
+                var scriptsFolder = ConsoleController.ScriptsFolder;
+                if (string.IsNullOrWhiteSpace(scriptsFolder))
+                    throw new InvalidOperationException("NotReady");
+
+                var scriptsRoot = Path.GetFullPath(scriptsFolder);
+                var activePath = Path.Combine(scriptsRoot, "startup.cs");
+                var disabledPath = Path.Combine(scriptsRoot, "startup.disabled.cs");
+
+                var enabled = File.Exists(activePath);
+                var chosenPath = enabled ? activePath : (File.Exists(disabledPath) ? disabledPath : activePath);
+
+                ConsoleScriptFileDto? fileDto = null;
+                if (File.Exists(chosenPath))
+                    fileDto = ReadConsoleScriptInternal(chosenPath);
+
+                return (object)new
+                {
+                    ok = true,
+                    enabled,
+                    path = chosenPath,
+                    content = fileDto?.Content
+                };
+            });
+        }
+
+        private static ConsoleScriptFileDto ReadConsoleScriptInternal(string fullPath)
+        {
+            var info = new FileInfo(fullPath);
+            var sizeBytes = info.Length;
+            var lastModifiedUtc = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
+
+            string content;
+            bool truncated;
+            using (var fs = File.OpenRead(fullPath))
+            {
+                var toRead = (int)Math.Min(sizeBytes, MaxConsoleScriptBytes + 1L);
+                var bytes = new byte[toRead];
+                var read = fs.Read(bytes, 0, toRead);
+                truncated = read > MaxConsoleScriptBytes;
+                var used = truncated ? MaxConsoleScriptBytes : read;
+                content = Encoding.UTF8.GetString(bytes, 0, used);
+            }
+
+            if (!string.IsNullOrEmpty(content) && content[0] == '\uFEFF')
+                content = content.Substring(1);
+
+            return new ConsoleScriptFileDto(
+                Name: Path.GetFileName(fullPath),
+                Path: fullPath,
+                Content: content,
+                SizeBytes: sizeBytes,
+                LastModifiedUtc: lastModifiedUtc,
+                Truncated: truncated);
         }
 
         private static string ResolveConsoleScriptPath(string path)

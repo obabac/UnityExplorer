@@ -151,6 +151,14 @@ try {
         $hookSignature = $null
         $selectionEvent = $null
         $blockIds = @()
+        $consoleScriptName = $null
+        $consoleScriptRunJson = $null
+        $consoleScriptWriteJson = $null
+        $consoleScriptDeleteJson = $null
+        $startupWriteJson = $null
+        $startupRunJson = $null
+        $startupOriginal = $null
+        $callMethodJson = $null
         try {
             $prevConfigJson = Get-JsonContent -Result (Invoke-McpRpc -Id "get-config-before-smoke" -Method "call_tool" -Params @{ name = "GetConfig"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds)
             if ($prevConfigJson -and $prevConfigJson.ok) {
@@ -160,7 +168,25 @@ try {
                 if ($prevConfigJson.hookAllowlistSignatures) { $resetParams.arguments.hookAllowlistSignatures = @($prevConfigJson.hookAllowlistSignatures) | Where-Object { $_ } }
             }
 
-            Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true; enableConsoleEval = $true; componentAllowlist = @("UnityEngine.CanvasGroup"); reflectionAllowlistMembers = @("UnityEngine.UI.Image.color"); hookAllowlistSignatures = @("UnityEngine.GameObject") } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+            Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true; enableConsoleEval = $true; componentAllowlist = @("UnityEngine.CanvasGroup"); reflectionAllowlistMembers = @("UnityEngine.UI.Image.color", "UnityEngine.Transform.GetInstanceID"); hookAllowlistSignatures = @("UnityEngine.GameObject") } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+
+            $consoleScriptName = "mono-smoke-$([guid]::NewGuid().ToString('N')).cs"
+            $startupOriginal = Get-JsonContent -Result (Invoke-McpRpc -Id "get-startup-before" -Method "call_tool" -Params @{ name = "GetStartupScript"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds)
+            $consoleScriptWrite = Invoke-McpRpc -Id "write-console-script" -Method "call_tool" -Params @{ name = "WriteConsoleScript"; arguments = @{ path = $consoleScriptName; content = "return 5*5;"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $consoleScriptWriteJson = Get-JsonContent -Result $consoleScriptWrite
+            $consoleScriptRun = Invoke-McpRpc -Id "run-console-script" -Method "call_tool" -Params @{ name = "RunConsoleScript"; arguments = @{ path = $consoleScriptName; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $consoleScriptRunJson = Get-JsonContent -Result $consoleScriptRun
+            $consoleScriptDelete = Invoke-McpRpc -Id "delete-console-script" -Method "call_tool" -Params @{ name = "DeleteConsoleScript"; arguments = @{ path = $consoleScriptName; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $consoleScriptDeleteJson = Get-JsonContent -Result $consoleScriptDelete
+
+            $startupWrite = Invoke-McpRpc -Id "write-startup" -Method "call_tool" -Params @{ name = "WriteStartupScript"; arguments = @{ content = "return \"mono-startup\";"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $startupWriteJson = Get-JsonContent -Result $startupWrite
+            $startupDisable = Invoke-McpRpc -Id "disable-startup" -Method "call_tool" -Params @{ name = "SetStartupScriptEnabled"; arguments = @{ enabled = $false; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $startupDisableJson = Get-JsonContent -Result $startupDisable
+            $startupRun = Invoke-McpRpc -Id "run-startup" -Method "call_tool" -Params @{ name = "RunStartupScript"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $startupRunJson = Get-JsonContent -Result $startupRun
+            $startupEnable = Invoke-McpRpc -Id "enable-startup" -Method "call_tool" -Params @{ name = "SetStartupScriptEnabled"; arguments = @{ enabled = $true; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $startupEnableJson = Get-JsonContent -Result $startupEnable
 
             $eval = Invoke-McpRpc -Id "console-eval" -Method "call_tool" -Params @{ name = "ConsoleEval"; arguments = @{ code = "1+1"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $consoleEvalJson = Get-JsonContent -Result $eval
@@ -205,6 +231,9 @@ try {
             $setMember = Invoke-McpRpc -Id "set-member" -Method "call_tool" -Params @{ name = "SetMember"; arguments = @{ objectId = $parentId; componentType = "UnityEngine.UI.Image"; member = "color"; jsonValue = $colorJson; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $setMemberJson = Get-JsonContent -Result $setMember
             if (-not $setMemberJson -or -not $setMemberJson.ok) { throw "SetMember returned ok=false" }
+
+            $callMethod = Invoke-McpRpc -Id "call-method" -Method "call_tool" -Params @{ name = "CallMethod"; arguments = @{ objectId = $parentId; componentType = "UnityEngine.Transform"; method = "GetInstanceID"; argsJson = "[]"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $callMethodJson = Get-JsonContent -Result $callMethod
 
             $hooksBeforeRes = Invoke-McpRpc -Id "read-hooks-before" -Method "read_resource" -Params @{ uri = "unity://hooks?limit=500" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $hooksBeforeDoc = ($hooksBeforeRes.result.contents[0].text | ConvertFrom-Json)
@@ -296,6 +325,7 @@ try {
                 addComponent   = $addComponentJson
                 removeComponent = $removeComponentJson
                 setMember      = $setMemberJson
+                callMethod     = $callMethodJson
                 hookSignature  = $hookSignature
                 hookAdd        = $hookAddJson
                 hookRemove     = $hookRemoveJson
@@ -304,6 +334,10 @@ try {
                 destroyUi      = $destroyUiJson
                 time           = $getTimeJson
                 selectionEvent = $selectionEvent
+                consoleScriptWrite = $consoleScriptWriteJson
+                consoleScriptRun = $consoleScriptRunJson
+                startupWrite   = $startupWriteJson
+                startupRun     = $startupRunJson
             }
         }
         finally {
@@ -311,6 +345,23 @@ try {
                 try {
                     $destroyUiJson = Get-JsonContent -Result (Invoke-McpRpc -Id "destroy-testui-final" -Method "call_tool" -Params @{ name = "DestroyTestUi"; arguments = @{ confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds)
                 } catch { Write-Warning "[mono-smoke] cleanup destroy failed: $_" }
+            }
+            if ($consoleScriptName) {
+                try { Invoke-McpRpc -Id "cleanup-console" -Method "call_tool" -Params @{ name = "DeleteConsoleScript"; arguments = @{ path = $consoleScriptName; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null } catch { }
+            }
+            if ($startupOriginal) {
+                try {
+                    if ($startupOriginal.content) {
+                        Invoke-McpRpc -Id "restore-startup" -Method "call_tool" -Params @{ name = "WriteStartupScript"; arguments = @{ content = $startupOriginal.content; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+                        if ($startupOriginal.enabled -eq $false) {
+                            Invoke-McpRpc -Id "restore-startup-disable" -Method "call_tool" -Params @{ name = "SetStartupScriptEnabled"; arguments = @{ enabled = $false; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+                        }
+                    }
+                    else {
+                        Invoke-McpRpc -Id "cleanup-startup-active" -Method "call_tool" -Params @{ name = "DeleteConsoleScript"; arguments = @{ path = "startup.cs"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+                        Invoke-McpRpc -Id "cleanup-startup-disabled" -Method "call_tool" -Params @{ name = "DeleteConsoleScript"; arguments = @{ path = "startup.disabled.cs"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+                    }
+                } catch { Write-Warning "[mono-smoke] failed to restore startup script: $_" }
             }
             try { Invoke-McpRpc -Id "set-config-reset" -Method "call_tool" -Params $resetParams -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null } catch { Write-Warning "[mono-smoke] failed to reset config: $_" }
         }
@@ -379,6 +430,7 @@ try {
         $hookAddOk = if ($writeResult) { $writeResult.hookAdd.ok } else { $false }
         $hookRemoveOk = if ($writeResult) { $writeResult.hookRemove.ok } else { $false }
         $setMemberOk = if ($writeResult) { $writeResult.setMember.ok } else { $false }
+        $callMethodOk = if ($writeResult) { $writeResult.callMethod.ok } else { $false }
         $reparentOk = if ($writeResult) { $writeResult.reparent.ok } else { $false }
         $destroyBlockOk = if ($writeResult) { $writeResult.destroyBlock.ok } else { $false }
         $destroyUiOk = if ($writeResult) { $writeResult.destroyUi.ok } else { $false }
@@ -387,7 +439,9 @@ try {
         $timeValue = if ($writeResult) { $writeResult.time.value } else { $null }
         $timeLocked = if ($writeResult) { $writeResult.time.locked } else { $null }
         $selectionSeen = if ($writeResult) { $writeResult.selectionEvent -ne $null } else { $false }
-        Write-Host "Write smoke: blocks=$blockCount spawnOk=$spawnOk consoleEvalOk=$consoleEvalOk addCompOk=$addCompOk removeCompOk=$removeCompOk hookAddOk=$hookAddOk hookRemoveOk=$hookRemoveOk hookSig=$hookSig setMemberOk=$setMemberOk reparentOk=$reparentOk destroyBlockOk=$destroyBlockOk destroyUiOk=$destroyUiOk timeValue=$timeValue locked=$timeLocked selectionEvent=$selectionSeen"
+        $consoleScriptResult = if ($writeResult) { $writeResult.consoleScriptRun } else { $null }
+        $startupResult = if ($writeResult) { $writeResult.startupRun } else { $null }
+        Write-Host "Write smoke: blocks=$blockCount spawnOk=$spawnOk consoleEvalOk=$consoleEvalOk addCompOk=$addCompOk removeCompOk=$removeCompOk hookAddOk=$hookAddOk hookRemoveOk=$hookRemoveOk hookSig=$hookSig setMemberOk=$setMemberOk callMethodOk=$callMethodOk reparentOk=$reparentOk destroyBlockOk=$destroyBlockOk destroyUiOk=$destroyUiOk timeValue=$timeValue locked=$timeLocked selectionEvent=$selectionSeen consoleScriptOk=$($consoleScriptResult.ok) startupResult=$($startupResult.result)"
     }
     Write-Host "Stream events captured: $($events.Count) (tool_result observed=$($toolResultEvent -ne $null))"
     Write-Host "[mono-smoke] Done"

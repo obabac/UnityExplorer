@@ -5,7 +5,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 ## Status
 
 - Targets: CoreCLR builds (`BIE_*_Cpp_CoreCLR`, `ML_Cpp_CoreCLR`, `STANDALONE_Cpp_CoreCLR`). Mono (`ML_Mono`, `net35`) hosts a lightweight MCP (initialize/list_tools/read_resource/call_tool for status/scenes/objects/components/search/selection/logs/camera/mouse-pick/GetVersion) with discovery and `stream_events` (log/selection/scene/tool_result notifications with `source` + optional `category`); Mono also exposes guarded writes when `allowWrites=true` (`requireConfirm` recommended). See `plans/mcp-interface-concept.md` for the exact tool list and gating (reflection/component/hook allowlists + `enableConsoleEval`).
-- Console scripts: `unity://console/scripts`, `unity://console/script?path=...`, `ReadConsoleScript` (RO), guarded `WriteConsoleScript`/`DeleteConsoleScript` (both hosts).
+- Console scripts: `unity://console/scripts`, `unity://console/script?path=...`, `ReadConsoleScript` (RO), guarded `WriteConsoleScript`/`DeleteConsoleScript`/`RunConsoleScript`, and startup controls (`GetStartupScript`/`WriteStartupScript`/`SetStartupScriptEnabled`/`RunStartupScript`) on both hosts.
 - Hooks advanced: `HookListAllowedTypes`, `HookListMethods`, `HookGetSource`, guarded `HookSetEnabled`/`HookSetSource` (both hosts).
 - Transport: lightweight streamable HTTP over a local TCP listener.
 - Default mode: Read‑only (guarded writes must be explicitly enabled).
@@ -221,9 +221,9 @@ Guarded / write-related tools (most require `allowWrites: true`; many also need 
 
 - Config: `SetConfig`, `GetConfig` (sanitized view).
 - Object state: `SetActive`, `SelectObject`, `Reparent`, `DestroyObject`.
-- Reflection/component writes: `SetMember`, `AddComponent`, `RemoveComponent` (respect allowlists). `CallMethod` is available on IL2CPP and planned for Mono.
+- Reflection/component writes: `SetMember`, `AddComponent`, `RemoveComponent`, `CallMethod` (respect allowlists on both hosts).
 - Hooks: `HookAdd`, `HookRemove` (hook allowlist enforced).
-- Console: `ConsoleEval` (requires `enableConsoleEval` + writes + confirm).
+- Console: `ConsoleEval` (requires `enableConsoleEval` + writes + confirm); console scripts (`WriteConsoleScript`/`DeleteConsoleScript`/`RunConsoleScript`) + startup controls (`GetStartupScript`/`WriteStartupScript`/`SetStartupScriptEnabled`/`RunStartupScript`) require writes; execution also requires `enableConsoleEval` and confirm when configured.
 - Time scale: `GetTimeScale` (read), `SetTimeScale` (guarded; optional lock/unlock).
 - UI test helpers: `SpawnTestUi` / `DestroyTestUi` (for `MousePick` UI validation).
 
@@ -253,7 +253,7 @@ Two allowlists are configured in `mcp.config.json` and editable via the Options 
   - `AddComponent` and `RemoveComponent` are restricted to these types (or indices).
 - Reflection allowlist: `reflectionAllowlistMembers`  
   - Array of `"Type.Member"` strings, e.g., `"UnityEngine.Light.intensity"`.  
-  - `SetMember` requires entries here; `CallMethod` (IL2CPP; Mono planned) uses the same allowlist.
+  - `SetMember` requires entries here; `CallMethod` (both hosts) uses the same allowlist.
 
 Empty allowlists disable the corresponding write features (for safety).
 

@@ -44,11 +44,55 @@ public class ConsoleScriptsContractTests
         root.TryGetProperty("result", out var result).Should().BeTrue();
         result.TryGetProperty("content", out var contentArr).Should().BeTrue();
         contentArr.ValueKind.Should().Be(JsonValueKind.Array);
-        contentArr.GetArrayLength().Should().BeGreaterThan(0);
+        if (contentArr.GetArrayLength() == 0)
+            return null;
 
         var first = contentArr[0];
         first.TryGetProperty("json", out var jsonEl).Should().BeTrue();
         return jsonEl.Clone();
+    }
+
+    private sealed record StartupState(bool Enabled, string Path, string? Content);
+
+    private static StartupState? ParseStartupState(JsonElement? json)
+    {
+        if (!json.HasValue) return null;
+        var root = json.Value;
+        if (root.TryGetProperty("enabled", out var enabledProp) && root.TryGetProperty("path", out var pathProp))
+        {
+            var enabled = enabledProp.GetBoolean();
+            var path = pathProp.GetString() ?? string.Empty;
+            string? content = null;
+            if (root.TryGetProperty("content", out var contentProp) && contentProp.ValueKind == JsonValueKind.String)
+                content = contentProp.GetString();
+            return new StartupState(enabled, path, content);
+        }
+        return null;
+    }
+
+    private static async Task<StartupState?> GetStartupStateAsync(HttpClient http, CancellationToken ct)
+    {
+        var stateJson = await CallToolAsync(http, "GetStartupScript", new { }, ct);
+        return ParseStartupState(stateJson);
+    }
+
+    private static async Task RestoreStartupStateAsync(HttpClient http, StartupState? state, CancellationToken ct)
+    {
+        if (state == null) return;
+
+        if (!string.IsNullOrEmpty(state.Content))
+        {
+            _ = await CallToolAsync(http, "WriteStartupScript", new { content = state.Content, confirm = true }, ct);
+            if (!state.Enabled)
+                _ = await CallToolAsync(http, "SetStartupScriptEnabled", new { enabled = false, confirm = true }, ct);
+            else
+                _ = await CallToolAsync(http, "SetStartupScriptEnabled", new { enabled = true, confirm = true }, ct);
+        }
+        else
+        {
+            try { _ = await CallToolAsync(http, "DeleteConsoleScript", new { path = "startup.cs", confirm = true }, ct); } catch { }
+            try { _ = await CallToolAsync(http, "DeleteConsoleScript", new { path = "startup.disabled.cs", confirm = true }, ct); } catch { }
+        }
     }
 
     [Fact]
@@ -125,6 +169,85 @@ public class ConsoleScriptsContractTests
                 _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)false }, cts.Token);
             }
             catch { }
+        }
+    }
+
+    [Fact]
+    public async Task ConsoleScripts_Run_And_Startup_Lifecycle_When_Flag_Enabled()
+    {
+        if (Environment.GetEnvironmentVariable(EnvFlag) != "1")
+            return;
+
+        var http = TryCreateClient(out var ok);
+        if (!ok || http == null) return;
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+
+        var name = $"mcp-run-{Guid.NewGuid():N}.cs";
+        var content = "return 7+5;";
+        var startupContent = "return \"startup-ok\";";
+        StartupState? originalState = null;
+
+        try
+        {
+            originalState = await GetStartupStateAsync(http, cts.Token);
+
+            _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)true, requireConfirm = (bool?)true, enableConsoleEval = (bool?)true }, cts.Token);
+
+            var write = await CallToolAsync(http, "WriteConsoleScript", new { path = name, content, confirm = true }, cts.Token);
+            write.Should().NotBeNull();
+            write!.Value.GetProperty("ok").ValueKind.Should().Be(JsonValueKind.True);
+
+            var run = await CallToolAsync(http, "RunConsoleScript", new { path = name, confirm = true }, cts.Token);
+            run.Should().NotBeNull();
+            run!.Value.GetProperty("ok").ValueKind.Should().Be(JsonValueKind.True);
+            var runResult = run.Value.GetProperty("result").GetString();
+            runResult.Should().NotBeNullOrWhiteSpace();
+
+            var del = await CallToolAsync(http, "DeleteConsoleScript", new { path = name, confirm = true }, cts.Token);
+            del.Should().NotBeNull();
+            del!.Value.GetProperty("ok").ValueKind.Should().Be(JsonValueKind.True);
+
+            var writeStartup = await CallToolAsync(http, "WriteStartupScript", new { content = startupContent, confirm = true }, cts.Token);
+            writeStartup.Should().NotBeNull();
+            writeStartup!.Value.GetProperty("ok").ValueKind.Should().Be(JsonValueKind.True);
+
+            var afterWrite = await GetStartupStateAsync(http, cts.Token);
+            afterWrite.Should().NotBeNull();
+            afterWrite!.Enabled.Should().BeTrue();
+            afterWrite.Content.Should().Be(startupContent);
+
+            var disable = await CallToolAsync(http, "SetStartupScriptEnabled", new { enabled = false, confirm = true }, cts.Token);
+            disable.Should().NotBeNull();
+            disable!.Value.GetProperty("ok").ValueKind.Should().Be(JsonValueKind.True);
+
+            var afterDisable = await GetStartupStateAsync(http, cts.Token);
+            afterDisable.Should().NotBeNull();
+            afterDisable!.Enabled.Should().BeFalse();
+            afterDisable.Content.Should().Be(startupContent);
+
+            var runStartup = await CallToolAsync(http, "RunStartupScript", new { confirm = true }, cts.Token);
+            runStartup.Should().NotBeNull();
+            runStartup!.Value.GetProperty("ok").ValueKind.Should().Be(JsonValueKind.True);
+            runStartup.Value.TryGetProperty("path", out var runPath).Should().BeTrue();
+            runPath.GetString().Should().NotBeNullOrWhiteSpace();
+            var startupResult = runStartup.Value.GetProperty("result").GetString();
+            startupResult.Should().Contain("startup-ok");
+
+            var enable = await CallToolAsync(http, "SetStartupScriptEnabled", new { enabled = true, confirm = true }, cts.Token);
+            enable.Should().NotBeNull();
+            enable!.Value.GetProperty("ok").ValueKind.Should().Be(JsonValueKind.True);
+
+            var afterEnable = await GetStartupStateAsync(http, cts.Token);
+            afterEnable.Should().NotBeNull();
+            afterEnable!.Enabled.Should().BeTrue();
+            afterEnable.Content.Should().Be(startupContent);
+        }
+        finally
+        {
+            try { _ = await CallToolAsync(http, "DeleteConsoleScript", new { path = name, confirm = true }, cts.Token); } catch { }
+            try { await RestoreStartupStateAsync(http, originalState, cts.Token); } catch { }
+            try { _ = await CallToolAsync(http, "SetConfig", new { allowWrites = (bool?)false, enableConsoleEval = (bool?)false }, cts.Token); } catch { }
         }
     }
 }
