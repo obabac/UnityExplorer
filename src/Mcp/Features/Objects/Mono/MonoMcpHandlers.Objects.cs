@@ -11,6 +11,7 @@ namespace UnityExplorer.Mcp
         {
             list.Add(new { name = "ListObjects", description = "List objects in a scene or all scenes.", inputSchema = Schema(new Dictionary<string, object> { { "sceneId", String() }, { "name", String() }, { "type", String() }, { "activeOnly", Bool() }, { "limit", Integer() }, { "offset", Integer() } }) });
             list.Add(new { name = "GetObject", description = "Get object details by id.", inputSchema = Schema(new Dictionary<string, object> { { "id", String() } }, new[] { "id" }) });
+            list.Add(new { name = "ListChildren", description = "List direct children for an object (paged).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "limit", Integer() }, { "offset", Integer() } }, new[] { "objectId" }) });
             list.Add(new { name = "SetActive", description = "Set GameObject active state (guarded by allowWrites/confirm).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "active", Bool() }, { "confirm", Bool(false) } }, new[] { "objectId", "active" }) });
             list.Add(new { name = "Reparent", description = "Reparent a GameObject under a new parent (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "newParentId", String() }, { "confirm", Bool(false) } }, new[] { "objectId", "newParentId" }) });
             list.Add(new { name = "DestroyObject", description = "Destroy a GameObject (guarded; SpawnTestUi blocks recommended).", inputSchema = Schema(new Dictionary<string, object> { { "objectId", String() }, { "confirm", Bool(false) } }, new[] { "objectId" }) });
@@ -28,6 +29,12 @@ namespace UnityExplorer.Mcp
                     {
                         var id = RequireString(args, "id", "Invalid params: 'id' is required.");
                         result = _tools.GetObject(id);
+                        return true;
+                    }
+                case "listchildren":
+                    {
+                        var oid = RequireString(args, "objectId", "Invalid params: 'objectId' is required.");
+                        result = _tools.ListChildren(oid, GetInt(args, "limit"), GetInt(args, "offset"));
                         return true;
                     }
                 case "setactive":

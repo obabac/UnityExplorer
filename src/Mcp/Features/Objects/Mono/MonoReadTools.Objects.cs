@@ -99,6 +99,46 @@ namespace UnityExplorer.Mcp
                 };
             });
         }
+
+        public Page<ObjectCardDto> ListChildren(string objectId, int? limit, int? offset)
+        {
+            if (string.IsNullOrEmpty(objectId) || objectId.Trim().Length == 0 || !objectId.StartsWith("obj:"))
+                throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Invalid id; expected 'obj:<instanceId>'");
+            if (!int.TryParse(objectId.Substring(4), out var iid))
+                throw new MonoMcpHandlers.McpError(-32602, 400, "InvalidArgument", "Invalid instance id");
+
+            int lim = Math.Max(1, limit ?? 100);
+            int off = Math.Max(0, offset ?? 0);
+
+            return MainThread.Run(() =>
+            {
+                var go = FindByInstanceId(iid);
+                if (go == null) throw new MonoMcpHandlers.McpError(-32004, 404, "NotFound", "NotFound");
+
+                var t = go.transform;
+                var total = t.childCount;
+                var list = new List<ObjectCardDto>(Math.Min(lim, total));
+
+                for (int i = off; i < total && list.Count < lim; i++)
+                {
+                    var child = t.GetChild(i).gameObject;
+                    int compCount = 0;
+                    try { var comps = child.GetComponents<Component>(); compCount = comps != null ? comps.Length : 0; } catch { }
+                    list.Add(new ObjectCardDto
+                    {
+                        Id = "obj:" + child.GetInstanceID(),
+                        Name = child.name,
+                        Path = BuildPath(child.transform),
+                        Tag = SafeTag(child),
+                        Layer = child.layer,
+                        Active = child.activeSelf,
+                        ComponentCount = compCount
+                    });
+                }
+
+                return new Page<ObjectCardDto>(total, list);
+            });
+        }
     }
 }
 #endif

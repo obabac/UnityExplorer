@@ -409,6 +409,82 @@ public class JsonRpcToolsTests
     }
 
     [Fact]
+    public async Task CallTool_ListChildren_Returns_Page_Shape()
+    {
+        if (!JsonRpcTestClient.TryCreate(out var http))
+            return;
+
+        using var client = http;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var seedPayload = new
+        {
+            jsonrpc = "2.0",
+            id = "call-tool-listobjects-for-children",
+            method = "call_tool",
+            @params = new
+            {
+                name = "ListObjects",
+                arguments = new { limit = 1, offset = 0 }
+            }
+        };
+
+        using var seedRes = await JsonRpcTestClient.PostMessageAsync(client, seedPayload, cts.Token);
+        seedRes.EnsureSuccessStatusCode();
+
+        var seedBody = await seedRes.Content.ReadAsStringAsync(cts.Token);
+        using var seedDoc = JsonDocument.Parse(seedBody);
+        var seedRoot = seedDoc.RootElement;
+
+        seedRoot.TryGetProperty("result", out var seedResult).Should().BeTrue();
+        seedResult.TryGetProperty("content", out var seedContentArr).Should().BeTrue();
+        seedContentArr.ValueKind.Should().Be(JsonValueKind.Array);
+        seedContentArr.GetArrayLength().Should().BeGreaterThan(0);
+
+        var seedContent = seedContentArr[0];
+        seedContent.TryGetProperty("json", out var seedJson).Should().BeTrue();
+        seedJson.TryGetProperty("Items", out var seedItems).Should().BeTrue();
+        seedItems.ValueKind.Should().Be(JsonValueKind.Array);
+        seedItems.GetArrayLength().Should().BeGreaterThan(0);
+
+        var firstItem = seedItems[0];
+        var objectId = firstItem.GetProperty("Id").GetString();
+        objectId.Should().NotBeNullOrWhiteSpace();
+
+        var payload = new
+        {
+            jsonrpc = "2.0",
+            id = "call-tool-listchildren",
+            method = "call_tool",
+            @params = new
+            {
+                name = "ListChildren",
+                arguments = new { objectId, limit = 5, offset = 0 }
+            }
+        };
+
+        using var res = await JsonRpcTestClient.PostMessageAsync(client, payload, cts.Token);
+        res.EnsureSuccessStatusCode();
+
+        var body = await res.Content.ReadAsStringAsync(cts.Token);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("result", out var result).Should().BeTrue();
+        result.TryGetProperty("content", out var contentArr).Should().BeTrue();
+        contentArr.ValueKind.Should().Be(JsonValueKind.Array);
+        contentArr.GetArrayLength().Should().BeGreaterThan(0);
+
+        var first = contentArr[0];
+        first.TryGetProperty("json", out var jsonEl).Should().BeTrue();
+        var page = jsonEl;
+        page.TryGetProperty("Total", out var total).Should().BeTrue();
+        (total.ValueKind == JsonValueKind.Number).Should().BeTrue();
+        page.TryGetProperty("Items", out var items).Should().BeTrue();
+        items.ValueKind.Should().Be(JsonValueKind.Array);
+    }
+
+    [Fact]
     public async Task CallTool_TailLogs_Returns_Items_Array_If_Server_Available()
     {
         if (!JsonRpcTestClient.TryCreate(out var http))

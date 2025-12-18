@@ -28,6 +28,7 @@
 - `unity://scene/{sceneId}/objects?limit&offset` — `Page<ObjectCardDto> { Total, Items: [{ Id, Name, Path, Tag, Layer, Active, ComponentCount }] }`; accepts pseudo-scene ids (`scn:ddol`, `scn:hide`) and returns a normal page (possibly empty).
 - `unity://object/{id}` — `ObjectCardDto` (same shape as list items; no transform payload today).
 - `unity://object/{id}/components?limit&offset` — `Page<ComponentCardDto> { Total, Items: [{ Type, Summary }] }`.
+- `unity://object/{id}/children?limit&offset` — `Page<ObjectCardDto>`; lists direct children only; empty pages are valid when there are no children.
 - `unity://search?query=&name=&type=&path=&activeOnly=&limit=&offset=` — `Page<ObjectCardDto>` using the same card shape as `ListObjects`.
 - `unity://selection` — `SelectionDto { ActiveId, Items[] }`; emits a `selection` stream event when selection changes (same payload as the resource).
 - `unity://camera/active` — `CameraInfoDto { IsFreecam, Name, Fov, Pos{X,Y,Z}, Rot{X,Y,Z} }`; falls back to `Camera.main`/first camera or `<none>` when missing.
@@ -43,6 +44,7 @@
 - `ListObjects(sceneId?, name?, type?, activeOnly?, limit?, offset?)` → `Page<ObjectCardDto>`.
 - `GetObject(id)` → `ObjectCardDto` by `obj:<instanceId>`.
 - `GetComponents(objectId, limit?, offset?)` → `Page<ComponentCardDto>`.
+- `ListChildren(objectId, limit?, offset?)` → `Page<ObjectCardDto>` of direct children only.
 - `GetVersion()` → `VersionInfoDto { ExplorerVersion, McpVersion, UnityVersion, Runtime }`.
 - `SearchObjects(query?, name?, type?, path?, activeOnly?, limit?, offset?)` → `Page<ObjectCardDto>`.
 - `GetCameraInfo()` → `CameraInfoDto`.

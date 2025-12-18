@@ -62,6 +62,7 @@ namespace UnityExplorer.Mcp
                 Resource("unity://scene/{sceneId}/objects", "Scene objects", "List objects under a scene (paged)."),
                 Resource("unity://object/{id}", "Object detail", "Object details by id."),
                 Resource("unity://object/{id}/components", "Object components", "Components for object id (paged)."),
+                Resource("unity://object/{id}/children", "Object children", "Direct children for object id (paged)."),
                 Resource("unity://search", "Search objects", "Search objects across scenes."),
                 Resource("unity://camera/active", "Active camera", "Active camera info."),
                 Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
@@ -268,15 +269,22 @@ namespace UnityExplorer.Mcp
                     TryInt(query, "offset"),
                     default);
             }
-            if (path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) && !path.EndsWith("/components", StringComparison.OrdinalIgnoreCase))
+            if (path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/children", StringComparison.OrdinalIgnoreCase))
             {
-                var id = path.Substring("object/".Length);
-                return await UnityReadTools.GetObject(id, default);
+                var id = path.Substring("object/".Length, path.Length - "object/".Length - "/children".Length);
+                return await UnityReadTools.ListChildren(id, TryInt(query, "limit"), TryInt(query, "offset"), default);
             }
-            if (path.EndsWith("/components", StringComparison.OrdinalIgnoreCase))
+            if (path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/components", StringComparison.OrdinalIgnoreCase))
             {
                 var id = path.Substring("object/".Length, path.Length - "object/".Length - "/components".Length);
                 return await UnityReadTools.GetComponents(id, TryInt(query, "limit"), TryInt(query, "offset"), default);
+            }
+            if (path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) &&
+                !path.EndsWith("/components", StringComparison.OrdinalIgnoreCase) &&
+                !path.EndsWith("/children", StringComparison.OrdinalIgnoreCase))
+            {
+                var id = path.Substring("object/".Length);
+                return await UnityReadTools.GetObject(id, default);
             }
             if (path.Equals("search", StringComparison.OrdinalIgnoreCase))
             {
