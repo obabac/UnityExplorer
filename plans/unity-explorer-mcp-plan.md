@@ -1,17 +1,18 @@
 # Unity Explorer MCP Integration Plan (Updated)
 
-- Updated: 2025-12-17  
+- Updated: 2025-12-18  
 - Owner: Unity Explorer MCP (p-unity-explorer-mcp)  
 - Goal: Expose Unity Explorer’s runtime capabilities through an in‑process MCP server with **streamable HTTP** transport, making game state and safe controls available as MCP resources, tools, and streams.
 
 This plan merges the original scope, the current implementation snapshot, and the TODO list into a single up‑to‑date document.
 
-### Latest iteration snapshot (2025-12-17)
+### Latest iteration snapshot (2025-12-18)
 - IL2CPP MCP host on the Test-VM (`http://192.168.178.210:51477` and `/mcp`) now survives malformed JSON-RPC: invalid requests return HTTP 400 with structured errors, and the host stays alive. MainThread dispatch falls back to UniverseLib main-thread invoke when no `SynchronizationContext` is captured.
 - Contract suite passes (57 passed, 1 skipped) on Space Shooter IL2CPP + Mono via `UE_MCP_DISCOVERY` (including gated ConsoleScripts/Hooks tests when enabled). Inspector CLI smoke and the repo smoke scripts succeed against both hosts.
 - win-dev control plane alias surface validated: `McpProxy8083` (mcp-control) exposes the harness tool names; seed the session after a restart with `initialize` that includes `Accept: application/json, text/event-stream` plus a `clientInfo` payload (e.g., `protocolVersion=2024-11-05`, `capabilities={}`) and the `win-dev-vm-ui/State-Tool` + `win-dev-vm-ui/Powershell-Tool` succeed. Logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`.
-- Console scripts parity: `unity://console/scripts` + `unity://console/script?path=...` resources and `ReadConsoleScript` + guarded `WriteConsoleScript`/`DeleteConsoleScript` on both hosts (BOM normalized; 256KB cap). Hooks parity (advanced): discovery + source read/write + enable/disable + HookAdd signature support.
+- Console scripts parity: `unity://console/scripts` + `unity://console/script?path=...` resources and `ReadConsoleScript` + guarded `WriteConsoleScript`/`DeleteConsoleScript` + `RunConsoleScript` + startup controls (`Get/Write/Set/RunStartupScript`) on both hosts (BOM normalized; 256KB cap). Hooks parity (advanced): discovery + source read/write + enable/disable + HookAdd signature support.
 - Streams parity: `stream_events` emits a deterministic `scenes` snapshot notification on stream open (both hosts); contract test added.
+- Mono `CallMethod` parity validated: tool available on both hosts with allowlist + confirm gating; smoke + contract tests updated.
 - Inspector validation is CLI-only: use `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <url>` (accepts bases with or without `/mcp`) or direct `npx @modelcontextprotocol/inspector --cli` one-liners; the Inspector UI helper is deprecated (see `README-mcp.md`).
 
 ---
@@ -36,9 +37,9 @@ Near-term (next ~10 iterations)
 0) DONE: Parallel-work scalability refactor: split `src/Mcp/Dto.cs` into per-feature DTO files and move Mono host dispatch out of `src/Mcp/McpSimpleHttp.cs` (reduce merge conflicts for parallel workers).
 0.2) DONE: Split MCP code into feature-based folders/files (reduce shared hotspots: `UnityReadTools`/`UnityWriteTools`, `MonoReadTools`/`MonoWriteTools`, `MonoMcpHandlers`).
 0.3) DONE: Split large MCP hotspots: `src/Mcp/McpSimpleHttp.cs` (transport) and `tests/dotnet/UnityExplorer.Mcp.ContractTests/JsonRpcContractTests.cs` (contract tests).
-1) Console scripts parity (partial): list + read/write/delete (guarded) implemented; run + startup controls still pending.
+1) DONE: Console scripts parity: list + read/write/delete + run + startup controls implemented and validated (guarded; 256KB cap).
 2) DONE: Hooks parity (advanced): discovery + source read/write + enable/disable + HookAdd signature support (guarded).
-3) Mono `CallMethod` parity: implement tool + gating + allowlist; update smoke + contract tests.
+3) DONE: Mono `CallMethod` parity implemented with allowlist gating; smoke + contract tests updated.
 4) Stream robustness: add IL2CPP stream write serialization (mirror Mono broadcast gate) and add a stress test.
 5) Object Explorer parity: pseudo-scenes (DontDestroyOnLoad/HideAndDontSave/Resources) + hierarchical tree browsing.
 6) Inspector parity (read): component member listing + safe member value reads (depth/size limits).

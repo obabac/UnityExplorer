@@ -1,6 +1,6 @@
 # Unity Explorer MCP – High‑Level TODOs (Streamable HTTP Era)
 
-Date: 2025‑12‑14  
+Date: 2025‑12‑18  
 Scope: Remaining work to get close to UnityExplorer feature parity over MCP, with a stable streamable‑http surface.
 
 ### Definition of Done (100%)
@@ -12,7 +12,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 - Feature parity: the major UnityExplorer panels are reachable via MCP (Object Explorer + Inspector read/write, Console scripts, Hooks, Freecam, Clipboard) with guarded writes and tests.
 
-Status (2025-12-17): Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, smoke, and contract tests (57 total: 56 passed, 1 skipped). Mono parity expanded: `unity://console/scripts` + `unity://hooks` resources, `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` covers `ConsoleEval` + `AddComponent`/`RemoveComponent` + `HookAdd`/`HookRemove`, and `stream_events` emits a deterministic `scenes` snapshot on open. Known gap: Mono still lacks `CallMethod` (IL2CPP has it).
+Status (2025-12-18): Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (63 total: 62 passed, 1 skipped placeholder). Console scripts run/startup tools and Mono `CallMethod` are present on both hosts; `stream_events` still emits the deterministic `scenes` snapshot on open.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -208,7 +208,7 @@ Goal: reduce merge conflicts further by splitting the remaining large shared MCP
   - [x] Add `SpawnTestUi` / `DestroyTestUi` guarded tools to Mono and cover them in `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` (config enable → spawn/destroy → reset).
   - [x] Add guarded `Reparent` / `DestroyObject` for Mono (limited to SpawnTestUi blocks) and surface SpawnTestUi block ids for write smoke reparent/destroy coverage.
   - [x] Expand Mono coverage toward CoreCLR parity (selection, console/scripts, hooks); Mono now exposes `unity://console/scripts` + `unity://hooks`, and `Run-McpMonoSmoke.ps1 -EnableWriteSmoke` covers `ConsoleEval` + `AddComponent`/`RemoveComponent` + `HookAdd`/`HookRemove`.
-  - [ ] Implement `CallMethod` on Mono (guarded; `reflectionAllowlistMembers` + `allowWrites` + confirm) and cover it in write smoke + a contract test.
+  - [x] Implement `CallMethod` on Mono (guarded; `reflectionAllowlistMembers` + `allowWrites` + confirm) and cover it in write smoke + a contract test.
   
   - [x] Fix Mono notification broadcast compile issue (net35 has no Tasks): remove discards on void `BroadcastNotificationAsync` or reintroduce a Task-compatible wrapper.
   - [x] Run Mono smoke + inspector CLI against a real Mono host and record results (Test‑VM base URL: `http://192.168.178.210:51478`). See `README-mcp.md` Mono Host Validation Checklist. (Ran `Run-McpMonoSmoke.ps1`, inspector tools/list + resources/read now green after redeploy.)
@@ -253,13 +253,13 @@ Priority right now: **12.7 Console scripts** + **12.8 Hooks (advanced)**.
   - [x] `ReadConsoleScript(path)`
   - [x] `WriteConsoleScript(path, content, confirm?)`
   - [x] `DeleteConsoleScript(path, confirm?)`
-- [ ] Implement tools (execution + startup):
-  - [ ] `RunConsoleScript(path, confirm?)` (requires `enableConsoleEval=true`)
-  - [ ] `GetStartupScript()` / `SetStartupScriptEnabled(enabled, confirm?)` / `WriteStartupScript(content, confirm?)` / `RunStartupScript(confirm?)`
+- [x] Implement tools (execution + startup):
+  - [x] `RunConsoleScript(path, confirm?)` (requires `enableConsoleEval=true`)
+  - [x] `GetStartupScript()` / `SetStartupScriptEnabled(enabled, confirm?)` / `WriteStartupScript(content, confirm?)` / `RunStartupScript(confirm?)`
 - [x] Safety (read/write/delete): block path traversal, require `.cs`, enforce max bytes, respect `allowWrites` + `requireConfirm`, normalize BOM.
 - [x] Contract tests (gated): schema + read/write/delete round-trip + cleanup (`UE_MCP_CONSOLE_SCRIPT_TEST_ENABLED=1`).
-- [ ] Smoke: cover one full script lifecycle (create → read → run → delete) on IL2CPP + Mono.
-- [x] Test-VM validation (read/write/delete): inspector CLI + smoke + contract tests on IL2CPP (`51477`) + Mono (`51478`).
+- [x] Smoke: cover one full script lifecycle (create → read → run → delete) on IL2CPP + Mono.
+- [x] Test-VM validation (read/write/delete/run/startup): inspector CLI + smoke + contract tests on IL2CPP (`51477`) + Mono (`51478`).
 
 ### 12.8 Hooks parity (advanced) (TOP)
 - [x] Align + document allowlist semantics: `hookAllowlistSignatures` contains type full names (both hosts).
