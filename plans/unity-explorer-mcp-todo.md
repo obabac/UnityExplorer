@@ -12,7 +12,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 - Feature parity: the major UnityExplorer panels are reachable via MCP (Object Explorer + Inspector read/write, Console scripts, Hooks, Freecam, Clipboard) with guarded writes and tests.
 
-Status (2025-12-18): Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (63 total: 62 passed, 1 skipped placeholder). Console scripts run/startup tools and Mono `CallMethod` are present on both hosts; `stream_events` still emits the deterministic `scenes` snapshot on open.
+Status (2025-12-18): Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (64 total: 63 passed, 1 skipped placeholder). Console scripts run/startup tools and Mono `CallMethod` are present on both hosts; `stream_events` still emits the deterministic `scenes` snapshot on open.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -272,9 +272,10 @@ Priority right now: **12.7 Console scripts** + **12.8 Hooks (advanced)**.
 - [x] Test-VM validation: inspector CLI + smoke + contract tests on IL2CPP + Mono.
 
 ## 13. Streams & Agent UX
-- [ ] Decide and document the minimal “agent-first” event set with stable payloads and examples (log/scenes/selection/tool_result/inspected_scene).
+- [x] Decide and document the minimal “agent-first” event set with stable payloads and examples (log/scenes/selection/tool_result) in `plans/mcp-interface-concept.md`.
 - [ ] Consider adding a `selection` snapshot on stream open (optional) and lock it with a contract test.
-- [ ] Add a backpressure strategy for `stream_events` (cap/drop policy) and a stress test.
+- [x] Add IL2CPP backpressure strategy for `stream_events` (cap/drop policy) and a stress test.
+- [ ] Mirror stream backpressure onto Mono (avoid blocking synchronous broadcast; align with IL2CPP cap/drop policy).
 
 ## 14. Reliability / Ops
 - [x] Harden Test-VM deploy for IL2CPP + Mono (`tools/Update-Mod-Remote.ps1` stages to remote home, then copies with remote PowerShell; avoids scp drive-letter issues; documented in `plans/space-shooter-test-plan.md`).
