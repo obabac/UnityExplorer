@@ -95,7 +95,7 @@ try {
         Write-Host "[smoke] guarded write smoke (console scripts + startup)"
         $scriptName = "mcp-smoke-$(New-Guid).cs"
         $scriptContent = "return 21+21;"
-        $startupContent = "return \"startup-smoke\";"
+        $startupContent = 'return "startup-smoke";'
         $resetConfig = @{ name = "SetConfig"; arguments = @{ allowWrites = $false; requireConfirm = $true; enableConsoleEval = $false } }
         try {
             $prevCfg = Get-JsonContent -Result (Invoke-McpRpc -Id "get-config-before-smoke" -Method "call_tool" -Params @{ name = "GetConfig"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds)

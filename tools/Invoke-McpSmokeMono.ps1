@@ -179,7 +179,7 @@ try {
             $consoleScriptDelete = Invoke-McpRpc -Id "delete-console-script" -Method "call_tool" -Params @{ name = "DeleteConsoleScript"; arguments = @{ path = $consoleScriptName; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $consoleScriptDeleteJson = Get-JsonContent -Result $consoleScriptDelete
 
-            $startupWrite = Invoke-McpRpc -Id "write-startup" -Method "call_tool" -Params @{ name = "WriteStartupScript"; arguments = @{ content = "return \"mono-startup\";"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $startupWrite = Invoke-McpRpc -Id "write-startup" -Method "call_tool" -Params @{ name = "WriteStartupScript"; arguments = @{ content = 'return "mono-startup";'; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $startupWriteJson = Get-JsonContent -Result $startupWrite
             $startupDisable = Invoke-McpRpc -Id "disable-startup" -Method "call_tool" -Params @{ name = "SetStartupScriptEnabled"; arguments = @{ enabled = $false; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $startupDisableJson = Get-JsonContent -Result $startupDisable
