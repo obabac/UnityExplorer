@@ -42,7 +42,7 @@ Near-term (next ~10 iterations)
 3) DONE: Mono `CallMethod` parity implemented with allowlist gating; smoke + contract tests updated.
 3.1) DONE: Harden Test‑VM deploy script (`tools/Update-Mod-Remote.ps1`) with remote staging + IL2CPP/Mono target selection.
 4) Stream robustness: add IL2CPP stream write serialization (mirror Mono broadcast gate) and add a stress test.
-5) Object Explorer parity: pseudo-scenes (DontDestroyOnLoad/HideAndDontSave/Resources) + hierarchical tree browsing.
+5) Object Explorer parity: pseudo-scenes (DontDestroyOnLoad/HideAndDontSave DONE; Resources/Assets pending) + hierarchical tree browsing.
 6) Inspector parity (read): component member listing + safe member value reads (depth/size limits).
 7) Inspector parity (write): expand `SetMember` value-type support + write audit logging.
 8) Search parity: singleton search + static class search surfaces.
