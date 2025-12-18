@@ -40,13 +40,14 @@ Near-term (next ~10 iterations)
 1) DONE: Console scripts parity: list + read/write/delete + run + startup controls implemented and validated (guarded; 256KB cap).
 2) DONE: Hooks parity (advanced): discovery + source read/write + enable/disable + HookAdd signature support (guarded).
 3) DONE: Mono `CallMethod` parity implemented with allowlist gating; smoke + contract tests updated.
+3.1) DONE: Harden Test‑VM deploy script (`tools/Update-Mod-Remote.ps1`) with remote staging + IL2CPP/Mono target selection.
 4) Stream robustness: add IL2CPP stream write serialization (mirror Mono broadcast gate) and add a stress test.
 5) Object Explorer parity: pseudo-scenes (DontDestroyOnLoad/HideAndDontSave/Resources) + hierarchical tree browsing.
 6) Inspector parity (read): component member listing + safe member value reads (depth/size limits).
 7) Inspector parity (write): expand `SetMember` value-type support + write audit logging.
 8) Search parity: singleton search + static class search surfaces.
 9) Freecam + Clipboard parity: expose state + guarded controls.
-10) Reliability/Ops: win-dev proxy watchdog + cross-title IL2CPP regression (or document blockers).
+10) Reliability/Ops: win-dev proxy watchdog + document cross-title IL2CPP regression blocker (no candidate; skipped).
 
 ## 1) Context & Assumptions
 
