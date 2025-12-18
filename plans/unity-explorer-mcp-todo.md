@@ -12,7 +12,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 - Feature parity: the major UnityExplorer panels are reachable via MCP (Object Explorer + Inspector read/write, Console scripts, Hooks, Freecam, Clipboard) with guarded writes and tests.
 
-Status (2025-12-18): Progress 92% (143/155). Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (67 total: 66 passed, 1 skipped placeholder). Console scripts run/startup tools and Mono `CallMethod` are present on both hosts; `stream_events` emits the deterministic `scenes` snapshot on open.
+Status (2025-12-18): Progress 93% (144/155). Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (69 total: 68 passed, 1 skipped placeholder). Console scripts run/startup tools and Mono `CallMethod` are present on both hosts; `stream_events` emits the deterministic `scenes` snapshot on open.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -225,7 +225,7 @@ Priority right now: **12.7 Console scripts** + **12.8 Hooks (advanced)**.
 - [x] Add pseudo-scene coverage (DontDestroyOnLoad / HideAndDontSave) in resources + tools.
 - [x] Add pseudo-scene coverage (Resources/Assets views) in resources + tools.
 - [x] Add hierarchical object tree browsing (not only shallow cards); include paging and stable ids.
-- [ ] Expose Scene Loader basics: list build scenes and add a guarded `LoadScene` tool.
+- [x] Expose Scene Loader basics: list build scenes and add a guarded `LoadScene` tool.
 
 ### 12.2 Inspector parity (read)
 - [x] Expose component member listing (fields/properties/methods) for an object + component type.
