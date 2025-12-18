@@ -524,4 +524,162 @@ public class JsonRpcToolsTests
         logs.TryGetProperty("Items", out var items).Should().BeTrue();
         items.ValueKind.Should().Be(JsonValueKind.Array);
     }
+
+    [Fact]
+    public async Task ListComponentMembers_And_ReadComponentMember_Work()
+    {
+        if (!JsonRpcTestClient.TryCreate(out var http))
+            return;
+
+        using var client = http;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var seedPayload = new
+        {
+            jsonrpc = "2.0",
+            id = "listobjects-for-members",
+            method = "call_tool",
+            @params = new
+            {
+                name = "ListObjects",
+                arguments = new { limit = 1, offset = 0 }
+            }
+        };
+
+        using var seedRes = await JsonRpcTestClient.PostMessageAsync(client, seedPayload, cts.Token);
+        seedRes.EnsureSuccessStatusCode();
+
+        var seedBody = await seedRes.Content.ReadAsStringAsync(cts.Token);
+        using var seedDoc = JsonDocument.Parse(seedBody);
+        var seedRoot = seedDoc.RootElement;
+        if (!seedRoot.TryGetProperty("result", out var seedResult)) return;
+        if (!seedResult.TryGetProperty("content", out var seedContentArr) || seedContentArr.GetArrayLength() == 0) return;
+        var seedContent = seedContentArr[0];
+        if (!seedContent.TryGetProperty("json", out var seedJson)) return;
+        if (!seedJson.TryGetProperty("Items", out var seedItems) || seedItems.GetArrayLength() == 0) return;
+
+        var objectId = seedItems[0].GetProperty("Id").GetString();
+        objectId.Should().NotBeNullOrWhiteSpace();
+
+        var compsPayload = new
+        {
+            jsonrpc = "2.0",
+            id = "getcomponents-for-members",
+            method = "call_tool",
+            @params = new
+            {
+                name = "GetComponents",
+                arguments = new { objectId }
+            }
+        };
+
+        using var compsRes = await JsonRpcTestClient.PostMessageAsync(client, compsPayload, cts.Token);
+        compsRes.EnsureSuccessStatusCode();
+        var compsBody = await compsRes.Content.ReadAsStringAsync(cts.Token);
+        using var compsDoc = JsonDocument.Parse(compsBody);
+        var compsRoot = compsDoc.RootElement;
+        compsRoot.TryGetProperty("result", out var compsResult).Should().BeTrue();
+        compsResult.TryGetProperty("content", out var compsContentArr).Should().BeTrue();
+        compsContentArr.ValueKind.Should().Be(JsonValueKind.Array);
+        if (compsContentArr.GetArrayLength() == 0)
+            return;
+
+        var compsJson = compsContentArr[0].GetProperty("json");
+        compsJson.TryGetProperty("Items", out var compsItems).Should().BeTrue();
+        compsItems.ValueKind.Should().Be(JsonValueKind.Array);
+        if (compsItems.GetArrayLength() == 0)
+            return;
+
+        string? componentType = null;
+        foreach (var item in compsItems.EnumerateArray())
+        {
+            var typeStr = item.GetProperty("Type").GetString();
+            if (string.IsNullOrWhiteSpace(typeStr)) continue;
+            if (componentType == null)
+                componentType = typeStr;
+            if (typeStr.IndexOf("transform", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                componentType = typeStr;
+                break;
+            }
+        }
+
+        componentType.Should().NotBeNullOrWhiteSpace();
+
+        var membersPayload = new
+        {
+            jsonrpc = "2.0",
+            id = "list-members",
+            method = "call_tool",
+            @params = new
+            {
+                name = "ListComponentMembers",
+                arguments = new { objectId, componentType }
+            }
+        };
+
+        using var membersRes = await JsonRpcTestClient.PostMessageAsync(client, membersPayload, cts.Token);
+        membersRes.EnsureSuccessStatusCode();
+        var membersBody = await membersRes.Content.ReadAsStringAsync(cts.Token);
+        using var membersDoc = JsonDocument.Parse(membersBody);
+        var membersRoot = membersDoc.RootElement;
+        membersRoot.TryGetProperty("result", out var membersResult).Should().BeTrue();
+        membersResult.TryGetProperty("content", out var membersContentArr).Should().BeTrue();
+        membersContentArr.ValueKind.Should().Be(JsonValueKind.Array);
+        if (membersContentArr.GetArrayLength() == 0)
+            return;
+
+        var membersJson = membersContentArr[0].GetProperty("json");
+        membersJson.TryGetProperty("Total", out var total).Should().BeTrue();
+        (total.ValueKind == JsonValueKind.Number).Should().BeTrue();
+        membersJson.TryGetProperty("Items", out var memberItems).Should().BeTrue();
+        memberItems.ValueKind.Should().Be(JsonValueKind.Array);
+        memberItems.GetArrayLength().Should().BeGreaterThan(0);
+
+        foreach (var m in memberItems.EnumerateArray())
+        {
+            m.TryGetProperty("Name", out _).Should().BeTrue();
+            m.TryGetProperty("Kind", out _).Should().BeTrue();
+            m.TryGetProperty("Type", out _).Should().BeTrue();
+        }
+
+        var memberName = memberItems
+            .EnumerateArray()
+            .Select(m => m.GetProperty("Name").GetString())
+            .FirstOrDefault(n => string.Equals(n, "position", StringComparison.OrdinalIgnoreCase))
+            ?? memberItems[0].GetProperty("Name").GetString();
+
+        memberName.Should().NotBeNullOrWhiteSpace();
+
+        var readPayload = new
+        {
+            jsonrpc = "2.0",
+            id = "read-member",
+            method = "call_tool",
+            @params = new
+            {
+                name = "ReadComponentMember",
+                arguments = new { objectId, componentType, name = memberName }
+            }
+        };
+
+        using var readRes = await JsonRpcTestClient.PostMessageAsync(client, readPayload, cts.Token);
+        readRes.EnsureSuccessStatusCode();
+        var readBody = await readRes.Content.ReadAsStringAsync(cts.Token);
+        using var readDoc = JsonDocument.Parse(readBody);
+        var readRoot = readDoc.RootElement;
+        readRoot.TryGetProperty("result", out var readResult).Should().BeTrue();
+        readResult.TryGetProperty("content", out var readContentArr).Should().BeTrue();
+        readContentArr.ValueKind.Should().Be(JsonValueKind.Array);
+        if (readContentArr.GetArrayLength() == 0)
+            return;
+
+        var readJson = readContentArr[0].GetProperty("json");
+        readJson.TryGetProperty("ok", out var ok).Should().BeTrue();
+        ok.ValueKind.Should().Be(JsonValueKind.True);
+        readJson.TryGetProperty("type", out var typeEl).Should().BeTrue();
+        typeEl.ValueKind.Should().Be(JsonValueKind.String);
+        readJson.TryGetProperty("valueText", out var valText).Should().BeTrue();
+        valText.ValueKind.Should().Be(JsonValueKind.String);
+    }
 }

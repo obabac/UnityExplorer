@@ -10,7 +10,19 @@ namespace UnityExplorer.Mcp
 {
     internal sealed partial class MonoReadTools
     {
-        private static (Scene Scene, IReadOnlyList<GameObject> Roots) GetDontDestroyOnLoadRoots()
+        private sealed class SceneRoots
+        {
+            public Scene Scene { get; }
+            public List<GameObject> Roots { get; }
+
+            public SceneRoots(Scene scene, List<GameObject> roots)
+            {
+                Scene = scene;
+                Roots = roots;
+            }
+        }
+
+        private static SceneRoots GetDontDestroyOnLoadRoots()
         {
             var probe = new GameObject("__mcp_ddol_probe");
             UnityEngine.Object.DontDestroyOnLoad(probe);
@@ -18,19 +30,19 @@ namespace UnityExplorer.Mcp
             UnityEngine.Object.DestroyImmediate(probe);
 
             if (!scene.IsValid())
-                return (scene, Array.Empty<GameObject>());
+                return new SceneRoots(scene, new List<GameObject>());
 
             try
             {
-                return (scene, scene.GetRootGameObjects().Where(go => go != null).ToArray());
+                return new SceneRoots(scene, scene.GetRootGameObjects().Where(go => go != null).ToList());
             }
             catch
             {
-                return (scene, Array.Empty<GameObject>());
+                return new SceneRoots(scene, new List<GameObject>());
             }
         }
 
-        private static IReadOnlyList<GameObject> GetHideAndDontSaveRoots()
+        private static List<GameObject> GetHideAndDontSaveRoots()
         {
             var list = new List<GameObject>();
             try

@@ -56,7 +56,7 @@ namespace UnityExplorer.Mcp
                 experimental = new { streamEvents = new { } }
 
             };
-            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, logs, camera, and mouse pick over streamable-http. Guarded writes (SetActive, SetMember, ConsoleEval, AddComponent, RemoveComponent, HookAdd, HookRemove, Reparent, DestroyObject, SelectObject, SetTimeScale, SpawnTestUi, DestroyTestUi) are available when allowWrites=true (requireConfirm recommended; use SpawnTestUi blocks as safe targets and keep the component/hook allowlists configured). stream_events provides log/scene/selection/tool_result notifications.";
+            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, logs, camera, mouse pick, and component inspector (list/read members) over streamable-http. Guarded writes (SetActive, SetMember, ConsoleEval, AddComponent, RemoveComponent, HookAdd, HookRemove, Reparent, DestroyObject, SelectObject, SetTimeScale, SpawnTestUi, DestroyTestUi) are available when allowWrites=true (requireConfirm recommended; use SpawnTestUi blocks as safe targets and keep the component/hook allowlists configured). stream_events provides log/scene/selection/tool_result notifications.";
             return new { protocolVersion, capabilities, serverInfo, instructions };
         }
 
@@ -94,6 +94,8 @@ namespace UnityExplorer.Mcp
                 Resource("unity://scene/{sceneId}/objects", "Scene objects", "List objects under a scene (paged)."),
                 Resource("unity://object/{id}", "Object detail", "Object details by id."),
                 Resource("unity://object/{id}/components", "Object components", "Components for object id (paged)."),
+                Resource("unity://object/{id}/component/members", "Component members", "List component members for a component (paged)."),
+                Resource("unity://object/{id}/component/member", "Component member", "Read a component member value (safe, bounded)."),
                 Resource("unity://object/{id}/children", "Object children", "Direct children for object id (paged)."),
                 Resource("unity://search", "Search objects", "Search objects across scenes."),
                 Resource("unity://camera/active", "Active camera", "Active camera info."),
@@ -160,9 +162,28 @@ namespace UnityExplorer.Mcp
                 var id = path.Substring("object/".Length, path.Length - "object/".Length - "/components".Length);
                 return _tools.GetComponents(id, TryInt(query, "limit"), TryInt(query, "offset"));
             }
+            if (path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/component/members", StringComparison.OrdinalIgnoreCase))
+            {
+                var id = path.Substring("object/".Length, path.Length - "object/".Length - "/component/members".Length);
+                var compType = TryString(query, "type") ?? TryString(query, "componentType");
+                if (IsNullOrWhiteSpace(compType))
+                    throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'type' is required.");
+                return _tools.ListComponentMembers(id, compType, TryBool(query, "includeMethods") ?? false, TryInt(query, "limit"), TryInt(query, "offset"));
+            }
+            if (path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/component/member", StringComparison.OrdinalIgnoreCase))
+            {
+                var id = path.Substring("object/".Length, path.Length - "object/".Length - "/component/member".Length);
+                var compType = TryString(query, "type") ?? TryString(query, "componentType");
+                var name = TryString(query, "name");
+                if (IsNullOrWhiteSpace(compType) || IsNullOrWhiteSpace(name))
+                    throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'type' and 'name' are required.");
+                return _tools.ReadComponentMember(id, compType, name);
+            }
             if (path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) &&
                 !path.EndsWith("/components", StringComparison.OrdinalIgnoreCase) &&
-                !path.EndsWith("/children", StringComparison.OrdinalIgnoreCase))
+                !path.EndsWith("/children", StringComparison.OrdinalIgnoreCase) &&
+                !path.EndsWith("/component/members", StringComparison.OrdinalIgnoreCase) &&
+                !path.EndsWith("/component/member", StringComparison.OrdinalIgnoreCase))
             {
                 var id = path.Substring("object/".Length);
                 return _tools.GetObject(id);

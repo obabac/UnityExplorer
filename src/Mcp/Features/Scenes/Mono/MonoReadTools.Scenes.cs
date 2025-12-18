@@ -22,8 +22,8 @@ namespace UnityExplorer.Mcp
                     scenes.Add(new SceneDto { Id = "scn:" + i, Name = s.name, Index = i, IsLoaded = s.isLoaded, RootCount = s.rootCount });
                 }
 
-                var (ddolScene, ddolRoots) = GetDontDestroyOnLoadRoots();
-                scenes.Add(new SceneDto { Id = "scn:ddol", Name = "DontDestroyOnLoad", Index = -1, IsLoaded = ddolScene.IsValid() && ddolScene.isLoaded, RootCount = ddolRoots.Count });
+                var ddol = GetDontDestroyOnLoadRoots();
+                scenes.Add(new SceneDto { Id = "scn:ddol", Name = "DontDestroyOnLoad", Index = -1, IsLoaded = ddol.Scene.IsValid() && ddol.Scene.isLoaded, RootCount = ddol.Roots.Count });
 
                 var hideRoots = GetHideAndDontSaveRoots();
                 scenes.Add(new SceneDto { Id = "scn:hide", Name = "HideAndDontSave", Index = -2, IsLoaded = false, RootCount = hideRoots.Count });

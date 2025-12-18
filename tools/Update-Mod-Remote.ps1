@@ -10,7 +10,7 @@
       IL2CPP: Local ./Release/UnityExplorer.MelonLoader.IL2CPP.CoreCLR/*
               Remote C:/codex-workspace/space-shooter-build/SpaceShooter_IL2CPP/
       Mono  : Local ./Release/UnityExplorer.MelonLoader.Mono/Mods/*
-              Remote C:/codex-workspace/space-shooter-build/SpaceShooter_Mono/
+              Remote C:/codex-workspace/space-shooter-build/SpaceShooter_Mono/Mods/
 
     Requirements:
     - `scp` and `ssh` available on PATH.
@@ -40,7 +40,7 @@ param(
 
     [string]$RemoteUserHost = "GPUVM@192.168.178.210",
     [string]$RemoteTarget = "C:/codex-workspace/space-shooter-build/SpaceShooter_IL2CPP/",
-    [string]$RemoteTargetMono = "C:/codex-workspace/space-shooter-build/SpaceShooter_Mono/",
+    [string]$RemoteTargetMono = "C:/codex-workspace/space-shooter-build/SpaceShooter_Mono/Mods/",
 
     [string]$StagingSubPath = "ue-mcp-stage",
     [switch]$StopGame

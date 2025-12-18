@@ -35,6 +35,14 @@ namespace UnityExplorer.Mcp
         public static Task<Page<ComponentCardDto>> ObjectComponents(string id, int? limit, int? offset, CancellationToken ct)
             => UnityReadTools.GetComponents(id, limit, offset, ct);
 
+        [McpServerResource, Description("List component members for a component (paged).")]
+        public static Task<Page<InspectorMemberDto>> ObjectComponentMembers(string id, string type, bool? includeMethods, int? limit, int? offset, CancellationToken ct)
+            => UnityReadTools.ListComponentMembers(id, type, includeMethods ?? false, limit, offset, ct);
+
+        [McpServerResource, Description("Read a component member value (safe, bounded).")]
+        public static Task<object> ObjectComponentMember(string id, string type, string name, CancellationToken ct)
+            => UnityReadTools.ReadComponentMember(id, type, name, ct);
+
         [McpServerResource, Description("Tail recent MCP log buffer.")]
         public static Task<LogTailDto> LogsTail(int? count, CancellationToken ct)
             => Task.FromResult(LogBuffer.Tail(count ?? 200));

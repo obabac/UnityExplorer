@@ -28,6 +28,8 @@
 - `unity://scene/{sceneId}/objects?limit&offset` — `Page<ObjectCardDto> { Total, Items: [{ Id, Name, Path, Tag, Layer, Active, ComponentCount }] }`; accepts pseudo-scene ids (`scn:ddol`, `scn:hide`) and returns a normal page (possibly empty).
 - `unity://object/{id}` — `ObjectCardDto` (same shape as list items; no transform payload today).
 - `unity://object/{id}/components?limit&offset` — `Page<ComponentCardDto> { Total, Items: [{ Type, Summary }] }`.
+- `unity://object/{id}/component/members?type=<fullType>&includeMethods=&limit=&offset=` — `Page<InspectorMemberDto> { Total, Items: [{ Name, Kind (field|property|method), Type, CanRead, CanWrite }] }`.
+- `unity://object/{id}/component/member?type=<fullType>&name=<memberName>` — `{ ok: true, type, valueText, valueJson? }`; `valueText` is truncated at 1024 chars and UnityEngine.Object values return `obj:<id>` strings (no raw objects); `valueJson` is populated for primitives/vectors/ids only.
 - `unity://object/{id}/children?limit&offset` — `Page<ObjectCardDto>`; lists direct children only; empty pages are valid when there are no children.
 - `unity://search?query=&name=&type=&path=&activeOnly=&limit=&offset=` — `Page<ObjectCardDto>` using the same card shape as `ListObjects`.
 - `unity://selection` — `SelectionDto { ActiveId, Items[] }`; emits a `selection` stream event when selection changes (same payload as the resource).
@@ -44,6 +46,8 @@
 - `ListObjects(sceneId?, name?, type?, activeOnly?, limit?, offset?)` → `Page<ObjectCardDto>`.
 - `GetObject(id)` → `ObjectCardDto` by `obj:<instanceId>`.
 - `GetComponents(objectId, limit?, offset?)` → `Page<ComponentCardDto>`.
+- `ListComponentMembers(objectId, componentType, includeMethods=false, limit?, offset?)` → `Page<InspectorMemberDto>`; includes fields/properties (methods when requested) with `{ Name, Kind, Type, CanRead, CanWrite }`.
+- `ReadComponentMember(objectId, componentType, name)` → `{ ok: true, type, valueText, valueJson? }`; `valueText` capped at 1024 chars; UnityEngine.Object values become `obj:<id>` strings; `valueJson` only for primitives/vectors/ids to avoid huge payloads.
 - `ListChildren(objectId, limit?, offset?)` → `Page<ObjectCardDto>` of direct children only.
 - `GetVersion()` → `VersionInfoDto { ExplorerVersion, McpVersion, UnityVersion, Runtime }`.
 - `SearchObjects(query?, name?, type?, path?, activeOnly?, limit?, offset?)` → `Page<ObjectCardDto>`.
