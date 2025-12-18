@@ -280,6 +280,6 @@ Priority right now: **12.7 Console scripts** + **12.8 Hooks (advanced)**.
 
 ## 14. Reliability / Ops
 - [x] Harden Test-VM deploy for IL2CPP + Mono (`tools/Update-Mod-Remote.ps1` stages to remote home, then copies with remote PowerShell; avoids scp drive-letter issues; documented in `plans/space-shooter-test-plan.md`).
-- [ ] Add a lightweight watchdog for the win-dev MCP proxies (8082/8083): healthcheck + restart commands + log paths.
+- [x] Add a lightweight watchdog for the win-dev MCP proxies (8082/8083): healthcheck + restart commands + log paths.
 - [x] Cross-title IL2CPP regression: BLOCKED (no second IL2CPP title candidate available right now); document the blocker and skip for DoD.
 - [ ] Add CI hooks for inspector CLI smoke runs where infra allows (optional).
