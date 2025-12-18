@@ -12,7 +12,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 - Feature parity: the major UnityExplorer panels are reachable via MCP (Object Explorer + Inspector read/write, Console scripts, Hooks, Freecam, Clipboard) with guarded writes and tests.
 
-Status (2025-12-18): Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (66 total: 65 passed, 1 skipped placeholder). Console scripts run/startup tools and Mono `CallMethod` are present on both hosts; `stream_events` still emits the deterministic `scenes` snapshot on open.
+Status (2025-12-18): Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (67 total: 66 passed, 1 skipped placeholder). Console scripts run/startup tools and Mono `CallMethod` are present on both hosts; `stream_events` still emits the deterministic `scenes` snapshot on open.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -228,8 +228,8 @@ Priority right now: **12.7 Console scripts** + **12.8 Hooks (advanced)**.
 - [ ] Expose Scene Loader basics: list build scenes and add a guarded `LoadScene` tool.
 
 ### 12.2 Inspector parity (read)
-- [ ] Expose component member listing (fields/properties/methods) for an object + component type.
-- [ ] Add safe “read member value” surface with depth/size limits and cycle protection.
+- [x] Expose component member listing (fields/properties/methods) for an object + component type.
+- [x] Add safe “read member value” surface with depth/size limits and cycle protection.
 - [ ] Add “reflection inspector” reads for non-GameObject objects where UnityExplorer supports it.
 
 ### 12.3 Inspector parity (write)

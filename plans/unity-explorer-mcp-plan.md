@@ -8,7 +8,7 @@ This plan merges the original scope, the current implementation snapshot, and th
 
 ### Latest iteration snapshot (2025-12-18)
 - IL2CPP MCP host on the Test-VM (`http://192.168.178.210:51477` and `/mcp`) now survives malformed JSON-RPC: invalid requests return HTTP 400 with structured errors, and the host stays alive. MainThread dispatch falls back to UniverseLib main-thread invoke when no `SynchronizationContext` is captured.
-- Contract suite passes (65 passed, 1 skipped) on Space Shooter IL2CPP + Mono via `UE_MCP_DISCOVERY` (including gated ConsoleScripts/Hooks tests when enabled). Inspector CLI smoke and the repo smoke scripts succeed against both hosts.
+- Contract suite passes (66 passed, 1 skipped) on Space Shooter IL2CPP + Mono via `UE_MCP_DISCOVERY` (including gated ConsoleScripts/Hooks tests when enabled). Inspector CLI smoke and the repo smoke scripts succeed against both hosts.
 - win-dev control plane alias surface validated: `McpProxy8083` (mcp-control) exposes the harness tool names; seed the session after a restart with `initialize` that includes `Accept: application/json, text/event-stream` plus a `clientInfo` payload (e.g., `protocolVersion=2024-11-05`, `capabilities={}`) and the `win-dev-vm-ui/State-Tool` + `win-dev-vm-ui/Powershell-Tool` succeed. Logs: `C:\codex-workspace\logs\mcp-proxy-808{2,3}.log`.
 - Console scripts parity: `unity://console/scripts` + `unity://console/script?path=...` resources and `ReadConsoleScript` + guarded `WriteConsoleScript`/`DeleteConsoleScript` + `RunConsoleScript` + startup controls (`Get/Write/Set/RunStartupScript`) on both hosts (BOM normalized; 256KB cap). Hooks parity (advanced): discovery + source read/write + enable/disable + HookAdd signature support.
 - Streams parity: `stream_events` emits a deterministic `scenes` snapshot notification on stream open (both hosts); contract test added.
@@ -43,7 +43,8 @@ Near-term (next ~10 iterations)
 3.1) DONE: Harden Test‑VM deploy script (`tools/Update-Mod-Remote.ps1`) with remote staging + IL2CPP/Mono target selection.
 4) Stream robustness: add IL2CPP stream write serialization (mirror Mono broadcast gate) and add a stress test.
 5) Object Explorer parity: pseudo-scenes (DontDestroyOnLoad/HideAndDontSave DONE; Resources/Assets pending) + hierarchical tree browsing DONE (ListChildren).
-6) Inspector parity (read): component member listing + safe member value reads (depth/size limits).
+6) DONE: Inspector parity (read): component member listing + safe member value reads (bounded).
+6.1) Inspector parity (read): reflection inspector reads for non-GameObject objects.
 7) Inspector parity (write): expand `SetMember` value-type support + write audit logging.
 8) Search parity: singleton search + static class search surfaces.
 9) Freecam + Clipboard parity: expose state + guarded controls.
