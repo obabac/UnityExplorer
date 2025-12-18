@@ -359,6 +359,117 @@ public class JsonRpcStreamsTests
     }
 
     [Fact]
+    public async Task StreamEvents_Serializes_Many_Tool_Results_With_Backpressure()
+    {
+        if (!JsonRpcTestClient.TryCreate(out var http))
+            return;
+
+        using var client = http;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        var streamPayload = new
+        {
+            jsonrpc = "2.0",
+            id = "stream-events-stress",
+            method = "stream_events",
+            @params = new { }
+        };
+
+        using var streamRequest = new HttpRequestMessage(HttpMethod.Post, "/message")
+        {
+            Content = JsonRpcTestClient.CreateContent(streamPayload)
+        };
+
+        using var streamResponse = await client.SendAsync(streamRequest, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        streamResponse.EnsureSuccessStatusCode();
+
+        await using var stream = await streamResponse.Content.ReadAsStreamAsync(cts.Token);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+
+        const int totalCalls = 20;
+
+        var callTasks = Enumerable.Range(0, totalCalls)
+            .Select(i =>
+            {
+                var payload = new
+                {
+                    jsonrpc = "2.0",
+                    id = $"stream-events-stress-{i}",
+                    method = "call_tool",
+                    @params = new
+                    {
+                        name = "GetStatus",
+                        arguments = new { }
+                    }
+                };
+
+                return JsonRpcTestClient.PostMessageAsync(client, payload, cts.Token);
+            })
+            .ToArray();
+
+        var readTask = Task.Run(async () =>
+        {
+            var seen = 0;
+            using var readCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+            readCts.CancelAfter(TimeSpan.FromSeconds(10));
+
+            while (!readCts.IsCancellationRequested && seen < totalCalls)
+            {
+                string? line;
+                try { line = await reader.ReadLineAsync(readCts.Token); }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                using var doc = JsonDocument.Parse(line);
+                var root = doc.RootElement;
+                root.TryGetProperty("jsonrpc", out var jsonrpc).Should().BeTrue();
+                jsonrpc.GetString().Should().Be("2.0");
+
+                if (!root.TryGetProperty("method", out var methodEl) || methodEl.GetString() != "notification")
+                    continue;
+
+                if (!root.TryGetProperty("params", out var @params))
+                    continue;
+
+                if (!@params.TryGetProperty("event", out var eventEl) || eventEl.GetString() != "tool_result")
+                    continue;
+
+                @params.TryGetProperty("payload", out var payload).Should().BeTrue();
+                payload.ValueKind.Should().Be(JsonValueKind.Object);
+                payload.TryGetProperty("name", out var nameEl).Should().BeTrue();
+                nameEl.GetString().Should().Be("GetStatus");
+                payload.TryGetProperty("ok", out var okEl).Should().BeTrue();
+                (okEl.ValueKind == JsonValueKind.True || okEl.ValueKind == JsonValueKind.False).Should().BeTrue();
+
+                var hasResult = payload.TryGetProperty("result", out _);
+                var hasError = payload.TryGetProperty("error", out _);
+                (hasResult || hasError).Should().BeTrue();
+
+                seen++;
+            }
+
+            return seen;
+        });
+
+        var responses = await Task.WhenAll(callTasks);
+        foreach (var res in responses)
+        {
+            using (res)
+            {
+                res.EnsureSuccessStatusCode();
+            }
+        }
+
+        var observed = await readTask;
+        observed.Should().Be(totalCalls, $"expected {totalCalls} tool_result notifications but received {observed}");
+    }
+
+    [Fact]
     public async Task StreamEvents_Emits_Selection_With_Payload_Matching_Selection_Resource()
     {
         if (!JsonRpcTestClient.TryCreate(out var http))

@@ -18,56 +18,148 @@ namespace UnityExplorer.Mcp
 {
     internal sealed partial class McpSimpleHttp : IDisposable
     {
-private async Task BroadcastHttpStreamAsync(string json, CancellationToken ct)
+        private sealed class StreamQueueState
         {
-            if (_httpStreams.IsEmpty) return;
-            var data = json + "\n";
-            var payload = Encoding.UTF8.GetBytes(data);
-            var prefix = Encoding.ASCII.GetBytes(payload.Length.ToString("X") + "\r\n");
-            var suffix = Encoding.ASCII.GetBytes("\r\n");
-            foreach (var kv in _httpStreams)
-            {
-                var s = kv.Value;
-                try
-                {
-                    await s.WriteAsync(prefix, 0, prefix.Length, ct).ConfigureAwait(false);
-                    await s.WriteAsync(payload, 0, payload.Length, ct).ConfigureAwait(false);
-                    await s.WriteAsync(suffix, 0, suffix.Length, ct).ConfigureAwait(false);
-                    await s.FlushAsync(ct).ConfigureAwait(false);
-                }
-                catch
-                {
-                    _httpStreams.TryRemove(kv.Key, out _);
-                }
-            }
+            public StreamQueueState(Stream stream) => Stream = stream;
+            public Stream Stream { get; }
+            public ConcurrentQueue<byte[]> Queue { get; } = new();
+            public int WriterActive;
+            public int Warned;
+            public int Dropped;
         }
 
-        private async Task BroadcastSseAsync(string json, CancellationToken ct)
+        private static byte[] BuildChunk(byte[] payload)
         {
-            if (_sseStreams.IsEmpty) return;
+            var prefix = Encoding.ASCII.GetBytes(payload.Length.ToString("X") + "\r\n");
+            var suffix = Encoding.ASCII.GetBytes("\r\n");
+            var buffer = new byte[prefix.Length + payload.Length + suffix.Length];
+            Buffer.BlockCopy(prefix, 0, buffer, 0, prefix.Length);
+            Buffer.BlockCopy(payload, 0, buffer, prefix.Length, payload.Length);
+            Buffer.BlockCopy(suffix, 0, buffer, prefix.Length + payload.Length, suffix.Length);
+            return buffer;
+        }
+
+        private void EnqueuePayload(int id, Stream stream, ConcurrentDictionary<int, Stream> streamStore, ConcurrentDictionary<int, StreamQueueState> stateStore, byte[] payload, string kind)
+        {
+            if (_cts.IsCancellationRequested)
+                return;
+
+            var state = stateStore.GetOrAdd(id, _ => new StreamQueueState(stream));
+            var queue = state.Queue;
+
+            var dropped = 0;
+            while (queue.Count >= StreamQueueLimit && queue.TryDequeue(out _))
+            {
+                dropped++;
+            }
+
+            if (dropped > 0)
+            {
+                Interlocked.Add(ref state.Dropped, dropped);
+                if (Interlocked.CompareExchange(ref state.Warned, 1, 0) == 0)
+                {
+                    try
+                    {
+                        ExplorerCore.LogWarning($"[MCP] {kind} stream {id} backpressure: dropped {dropped} pending message(s) (limit {StreamQueueLimit}).");
+                    }
+                    catch { }
+                }
+            }
+
+            queue.Enqueue(payload);
+            TryStartWriter(state, id, streamStore, stateStore, kind);
+        }
+
+        private void TryStartWriter(StreamQueueState state, int id, ConcurrentDictionary<int, Stream> streamStore, ConcurrentDictionary<int, StreamQueueState> stateStore, string kind)
+        {
+            if (Interlocked.CompareExchange(ref state.WriterActive, 1, 0) != 0)
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    while (!state.Queue.IsEmpty && !_cts.IsCancellationRequested)
+                    {
+                        if (!state.Queue.TryDequeue(out var data))
+                            continue;
+
+                        try
+                        {
+                            await state.Stream.WriteAsync(data, 0, data.Length, _cts.Token).ConfigureAwait(false);
+                            await state.Stream.FlushAsync(_cts.Token).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            RemoveStream(id, streamStore, stateStore);
+                            break;
+                        }
+                    }
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref state.WriterActive, 0);
+
+                    if (!state.Queue.IsEmpty)
+                    {
+                        TryStartWriter(state, id, streamStore, stateStore, kind);
+                    }
+                    else if (state.Dropped > 0)
+                    {
+                        Interlocked.Exchange(ref state.Warned, 0);
+                        Interlocked.Exchange(ref state.Dropped, 0);
+                    }
+                }
+            });
+        }
+
+        private void RemoveStream(int id, ConcurrentDictionary<int, Stream> streamStore, ConcurrentDictionary<int, StreamQueueState> stateStore)
+        {
+            if (streamStore.TryRemove(id, out var s))
+            {
+                try { s.Dispose(); } catch { }
+            }
+
+            stateStore.TryRemove(id, out _);
+        }
+
+        private Task BroadcastHttpStreamAsync(string json, CancellationToken ct)
+        {
+            if (_httpStreams.IsEmpty || ct.IsCancellationRequested)
+                return Task.CompletedTask;
+
+            var chunk = BuildChunk(Encoding.UTF8.GetBytes(json + "\n"));
+
+            foreach (var kv in _httpStreams)
+            {
+                EnqueuePayload(kv.Key, kv.Value, _httpStreams, _httpStreamStates, chunk, "http");
+            }
+
+            return Task.CompletedTask;
+        }
+
+        private Task BroadcastSseAsync(string json, CancellationToken ct)
+        {
+            if (_sseStreams.IsEmpty || ct.IsCancellationRequested)
+                return Task.CompletedTask;
+
             var payload = Encoding.UTF8.GetBytes($"data: {json}\n\n");
             foreach (var kv in _sseStreams)
             {
-                var s = kv.Value;
-                try
-                {
-                    await s.WriteAsync(payload, 0, payload.Length, ct).ConfigureAwait(false);
-                    await s.FlushAsync(ct).ConfigureAwait(false);
-                }
-                catch
-                {
-                    _sseStreams.TryRemove(kv.Key, out _);
-                }
+                EnqueuePayload(kv.Key, kv.Value, _sseStreams, _sseStreamStates, payload, "sse");
             }
+
+            return Task.CompletedTask;
         }
 
-        private async Task BroadcastAllStreamsAsync(string json, CancellationToken ct)
+        private Task BroadcastAllStreamsAsync(string json, CancellationToken ct)
         {
-            await BroadcastHttpStreamAsync(json, ct).ConfigureAwait(false);
-            await BroadcastSseAsync(json, ct).ConfigureAwait(false);
+            BroadcastHttpStreamAsync(json, ct);
+            BroadcastSseAsync(json, ct);
+            return Task.CompletedTask;
         }
 
-        private async Task WaitForStreamDisconnectAsync(Stream stream, int id, ConcurrentDictionary<int, Stream> store, CancellationToken ct)
+        private async Task WaitForStreamDisconnectAsync(Stream stream, int id, bool isSse, CancellationToken ct)
         {
             var buffer = ArrayPool<byte>.Shared.Rent(1);
             try
@@ -99,7 +191,10 @@ private async Task BroadcastHttpStreamAsync(string json, CancellationToken ct)
             finally
             {
                 ArrayPool<byte>.Shared.Return(buffer);
-                store.TryRemove(id, out _);
+                if (isSse)
+                    RemoveStream(id, _sseStreams, _sseStreamStates);
+                else
+                    RemoveStream(id, _httpStreams, _httpStreamStates);
             }
         }
 

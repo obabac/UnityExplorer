@@ -102,8 +102,9 @@ namespace UnityExplorer.Mcp
 
                     int sseId = Interlocked.Increment(ref _nextSseClientId);
                     _sseStreams[sseId] = stream;
+                    _sseStreamStates[sseId] = new StreamQueueState(stream);
 
-                    await WaitForStreamDisconnectAsync(stream, sseId, _sseStreams, ct).ConfigureAwait(false);
+                    await WaitForStreamDisconnectAsync(stream, sseId, isSse: true, ct).ConfigureAwait(false);
                     return;
                 }
 
@@ -393,6 +394,7 @@ namespace UnityExplorer.Mcp
 
                         int id = Interlocked.Increment(ref _nextClientId);
                         _httpStreams[id] = stream;
+                        _httpStreamStates[id] = new StreamQueueState(stream);
 
                         try
                         {
@@ -403,18 +405,12 @@ namespace UnityExplorer.Mcp
                                 method = "notification",
                                 @params = new { @event = "scenes", payload = scenes }
                             });
-                            var lineJson = notificationJson + "\n";
-                            var payload = Encoding.UTF8.GetBytes(lineJson);
-                            var prefix = Encoding.ASCII.GetBytes(payload.Length.ToString("X") + "\r\n");
-                            var suffix = Encoding.ASCII.GetBytes("\r\n");
-                            await stream.WriteAsync(prefix, 0, prefix.Length, ct).ConfigureAwait(false);
-                            await stream.WriteAsync(payload, 0, payload.Length, ct).ConfigureAwait(false);
-                            await stream.WriteAsync(suffix, 0, suffix.Length, ct).ConfigureAwait(false);
-                            await stream.FlushAsync(ct).ConfigureAwait(false);
+                            var chunk = BuildChunk(Encoding.UTF8.GetBytes(notificationJson + "\n"));
+                            EnqueuePayload(id, stream, _httpStreams, _httpStreamStates, chunk, "http");
                         }
                         catch { }
 
-                        await WaitForStreamDisconnectAsync(stream, id, _httpStreams, ct).ConfigureAwait(false);
+                        await WaitForStreamDisconnectAsync(stream, id, isSse: false, ct).ConfigureAwait(false);
                         return;
                     }
 

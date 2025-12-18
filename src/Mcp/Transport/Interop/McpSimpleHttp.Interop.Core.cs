@@ -18,6 +18,9 @@ namespace UnityExplorer.Mcp
         private readonly CancellationTokenSource _cts = new();
         private readonly ConcurrentDictionary<int, Stream> _httpStreams = new();
         private readonly ConcurrentDictionary<int, Stream> _sseStreams = new();
+        private readonly ConcurrentDictionary<int, StreamQueueState> _httpStreamStates = new();
+        private readonly ConcurrentDictionary<int, StreamQueueState> _sseStreamStates = new();
+        private const int StreamQueueLimit = 256;
         private readonly SemaphoreSlim _requestSlots = new(ConcurrencyLimit, ConcurrencyLimit);
         private int _nextClientId;
         private int _nextSseClientId;
