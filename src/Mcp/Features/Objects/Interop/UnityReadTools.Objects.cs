@@ -26,9 +26,13 @@ namespace UnityExplorer.Mcp
 
                 IEnumerable<GameObject> AllRoots()
                 {
-                    if (!string.IsNullOrEmpty(sceneId) && sceneId!.StartsWith("scn:"))
+                    if (!string.IsNullOrEmpty(sceneId))
                     {
-                        if (int.TryParse(sceneId.Substring(4), out var idx) && idx >= 0 && idx < SceneManager.sceneCount)
+                        if (sceneId == "scn:ddol")
+                            return GetDontDestroyOnLoadRoots().Roots;
+                        if (sceneId == "scn:hide")
+                            return GetHideAndDontSaveRoots();
+                        if (sceneId!.StartsWith("scn:") && int.TryParse(sceneId.Substring(4), out var idx) && idx >= 0 && idx < SceneManager.sceneCount)
                             return SceneManager.GetSceneAt(idx).GetRootGameObjects();
                         return Array.Empty<GameObject>();
                     }

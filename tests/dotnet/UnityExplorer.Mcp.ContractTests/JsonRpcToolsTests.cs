@@ -361,6 +361,54 @@ public class JsonRpcToolsTests
     }
 
     [Fact]
+    public async Task CallTool_ListObjects_PseudoScenes_Returns_Page_Shape()
+    {
+        if (!JsonRpcTestClient.TryCreate(out var http))
+            return;
+
+        using var client = http;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        async Task AssertPageAsync(string sceneId)
+        {
+            var payload = new
+            {
+                jsonrpc = "2.0",
+                id = $"call-tool-listobjects-{sceneId}",
+                method = "call_tool",
+                @params = new
+                {
+                    name = "ListObjects",
+                    arguments = new { sceneId, limit = 5, offset = 0 }
+                }
+            };
+
+            using var res = await JsonRpcTestClient.PostMessageAsync(client, payload, cts.Token);
+            res.EnsureSuccessStatusCode();
+
+            var body = await res.Content.ReadAsStringAsync(cts.Token);
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            root.TryGetProperty("result", out var result).Should().BeTrue();
+            result.TryGetProperty("content", out var contentArr).Should().BeTrue();
+            contentArr.ValueKind.Should().Be(JsonValueKind.Array);
+            contentArr.GetArrayLength().Should().BeGreaterThan(0);
+
+            var first = contentArr[0];
+            first.TryGetProperty("json", out var jsonEl).Should().BeTrue();
+            var page = jsonEl;
+            page.TryGetProperty("Total", out var total).Should().BeTrue();
+            (total.ValueKind == JsonValueKind.Number).Should().BeTrue();
+            page.TryGetProperty("Items", out var items).Should().BeTrue();
+            items.ValueKind.Should().Be(JsonValueKind.Array);
+        }
+
+        await AssertPageAsync("scn:ddol");
+        await AssertPageAsync("scn:hide");
+    }
+
+    [Fact]
     public async Task CallTool_TailLogs_Returns_Items_Array_If_Server_Available()
     {
         if (!JsonRpcTestClient.TryCreate(out var http))

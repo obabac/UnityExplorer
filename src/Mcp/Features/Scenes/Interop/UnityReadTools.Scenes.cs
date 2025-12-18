@@ -21,8 +21,7 @@ namespace UnityExplorer.Mcp
             return await MainThread.Run(() =>
             {
                 var scenes = new List<SceneDto>();
-                var total = SceneManager.sceneCount;
-                for (int i = 0; i < total; i++)
+                for (int i = 0; i < SceneManager.sceneCount; i++)
                 {
                     var s = SceneManager.GetSceneAt(i);
                     scenes.Add(new SceneDto(
@@ -33,8 +32,27 @@ namespace UnityExplorer.Mcp
                         RootCount: s.rootCount
                     ));
                 }
+
+                var (ddolScene, ddolRoots) = GetDontDestroyOnLoadRoots();
+                scenes.Add(new SceneDto(
+                    Id: "scn:ddol",
+                    Name: "DontDestroyOnLoad",
+                    Index: -1,
+                    IsLoaded: ddolScene.IsValid() && ddolScene.isLoaded,
+                    RootCount: ddolRoots.Count
+                ));
+
+                var hideRoots = GetHideAndDontSaveRoots();
+                scenes.Add(new SceneDto(
+                    Id: "scn:hide",
+                    Name: "HideAndDontSave",
+                    Index: -2,
+                    IsLoaded: false,
+                    RootCount: hideRoots.Count
+                ));
+
                 var items = scenes.Skip(off).Take(lim).ToArray();
-                return new Page<SceneDto>(total, items);
+                return new Page<SceneDto>(scenes.Count, items);
             });
         }
     }
