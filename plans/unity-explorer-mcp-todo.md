@@ -275,7 +275,7 @@ Priority right now: **12.7 Console scripts** + **12.8 Hooks (advanced)**.
 - [x] Decide and document the minimal “agent-first” event set with stable payloads and examples (log/scenes/selection/tool_result) in `plans/mcp-interface-concept.md`.
 - [ ] Consider adding a `selection` snapshot on stream open (optional) and lock it with a contract test.
 - [x] Add IL2CPP backpressure strategy for `stream_events` (cap/drop policy) and a stress test.
-- [ ] Mirror stream backpressure onto Mono (avoid blocking synchronous broadcast; align with IL2CPP cap/drop policy).
+- [x] Mirror stream backpressure onto Mono (avoid blocking synchronous broadcast; align with IL2CPP cap/drop policy).
 
 ## 14. Reliability / Ops
 - [x] Harden Test-VM deploy for IL2CPP + Mono (`tools/Update-Mod-Remote.ps1` stages to remote home, then copies with remote PowerShell; avoids scp drive-letter issues; documented in `plans/space-shooter-test-plan.md`).

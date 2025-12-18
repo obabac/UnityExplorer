@@ -123,7 +123,7 @@ Goal: let an agent discover safe hook targets (within allowlist), toggle hooks, 
   - `scenes_diff`: `{ added: [sceneId], removed: [sceneId] }` when scenes load/unload.
   - `tool_result`: `{ name, ok: true, result }` or `{ name, ok: false, error: { code, message, data } }` reflecting `call_tool` outcomes.
 - Minimal agent-first event set (stable): `scenes`, `selection`, `log`, `tool_result`.
-- Backpressure: IL2CPP stream writes use a per-stream bounded send queue (limit 256) dropping oldest pending items when full and logging a one-time warning; Mono uses serialized synchronous broadcasts today (TODO parity).
+- Backpressure: IL2CPP + Mono stream writes use per-stream bounded send queues (limit 256) dropping oldest pending items when full and logging a one-time warning.
 - JSON-RPC results and errors for other requests are also mirrored onto the stream for connected clients.
 
 ## Error Envelope & Rate Limits
