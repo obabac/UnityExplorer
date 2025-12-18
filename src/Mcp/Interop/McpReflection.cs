@@ -122,6 +122,11 @@ namespace UnityExplorer.Mcp
             {
                 enumValues = new[] { "world", "ui" };
             }
+            else if (string.Equals(mi.Name, "LoadScene", StringComparison.OrdinalIgnoreCase) &&
+                     string.Equals(p.Name, "mode", StringComparison.OrdinalIgnoreCase))
+            {
+                enumValues = new[] { "single", "additive" };
+            }
 
             object? defaultValue = null;
             if (p.HasDefaultValue)

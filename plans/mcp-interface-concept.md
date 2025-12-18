@@ -40,9 +40,12 @@
 
 ## Tools
 
+- DTOs: `BuildSceneDto { Index, Name, Path }` (Name derives from the file name in build settings; Path uses the SceneUtility path and may be empty on stripped builds). `ListBuildScenes` returns an empty page when Unity strips build scenes.
+
 ### Read tools (no allowWrites required)
 - `GetStatus()` → `StatusDto` (same as `unity://status`).
 - `ListScenes(limit?, offset?)` → `Page<SceneDto>`; includes pseudo-scenes `scn:ddol` / `scn:hide` with negative indexes when present.
+- `ListBuildScenes(limit?, offset?)` → `Page<BuildSceneDto>`; returns build-indexed scenes when available and an empty page when Unity strips scene metadata.
 - `ListObjects(sceneId?, name?, type?, activeOnly?, limit?, offset?)` → `Page<ObjectCardDto>`.
 - `GetObject(id)` → `ObjectCardDto` by `obj:<instanceId>`.
 - `GetComponents(objectId, limit?, offset?)` → `Page<ComponentCardDto>`.
@@ -68,6 +71,7 @@
 - Hierarchy: `Reparent(objectId, newParentId, confirm?)` and `DestroyObject(objectId, confirm?)` → `{ ok }`; Mono host restricts these to the `SpawnTestUi` hierarchy, CoreCLR currently allows any object.
 - Console: `ConsoleEval(code, confirm?)` → `{ ok, result }` (requires `enableConsoleEval=true` in config).
 - Console scripts: `WriteConsoleScript(path, content, confirm?)` / `DeleteConsoleScript(path, confirm?)` → `{ ok }` (paths validated to Scripts folder; max 256KB; BOM normalized).
+- Scenes: `LoadScene(name, mode="single"|"additive", confirm?)` → `{ ok, name, mode }` (guarded by `allowWrites`; when `requireConfirm=true` resend with `confirm=true`; mode applies `SceneManager.LoadScene`).
 - Time: `SetTimeScale(value, lock?, confirm?)` → `{ ok, value, locked }` (value clamped 0–4; `lock=true` uses the Explorer widget lock when available).
 - Test UI helpers: `SpawnTestUi(confirm?)` → `{ ok, rootId, blocks: [{ name, id }] }` (id strings are `obj:<instanceId>`); `DestroyTestUi(confirm?)` → `{ ok }`.
 - Tool errors: `{ ok: false, error: { kind, message, hint? } }` where `kind` mirrors the JSON-RPC error kinds below.
