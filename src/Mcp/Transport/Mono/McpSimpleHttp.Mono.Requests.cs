@@ -93,6 +93,7 @@ namespace UnityExplorer.Mcp
                     lock (_sseGate)
                     {
                         _sseStreams[sseId] = stream;
+                        _sseStates[sseId] = new StreamQueueState(stream);
                     }
 
                     WaitForStreamDisconnect(stream, sseId, true);
@@ -282,6 +283,7 @@ namespace UnityExplorer.Mcp
                 lock (_streamGate)
                 {
                     _streams[id] = stream;
+                    _streamStates[id] = new StreamQueueState(stream);
                 }
 
                 try
@@ -294,17 +296,8 @@ namespace UnityExplorer.Mcp
                         { "params", new JObject { { "event", "scenes" }, { "payload", scenes == null ? JValue.CreateNull() : JToken.FromObject(scenes) } } }
                     };
                     var json = notification.ToString(Formatting.None);
-                    var chunkData = json + "\n";
-                    var data = Encoding.UTF8.GetBytes(chunkData);
-                    var prefix = Encoding.ASCII.GetBytes(data.Length.ToString("X") + "\r\n");
-                    var suffix = Encoding.ASCII.GetBytes("\r\n");
-                    lock (_broadcastGate)
-                    {
-                        stream.Write(prefix, 0, prefix.Length);
-                        stream.Write(data, 0, data.Length);
-                        stream.Write(suffix, 0, suffix.Length);
-                        stream.Flush();
-                    }
+                    var chunk = BuildChunk(Encoding.UTF8.GetBytes(json + "\n"));
+                    EnqueuePayload(id, stream, _streams, _streamStates, _streamGate, chunk, "http");
                 }
                 catch { }
 

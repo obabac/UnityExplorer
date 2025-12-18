@@ -19,16 +19,18 @@ namespace UnityExplorer.Mcp
         private readonly MonoMcpHandlers _handlers = new MonoMcpHandlers();
         private readonly int _concurrencyLimit = 16;
         private readonly int _streamLimit = 16;
+        private const int StreamQueueLimit = 256;
         private const string CorsHeaders =
             "Access-Control-Allow-Origin: *\r\n" +
             "Access-Control-Allow-Headers: Content-Type, Authorization\r\n" +
             "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
             "Access-Control-Max-Age: 86400\r\n";
         private readonly Dictionary<int, Stream> _streams = new Dictionary<int, Stream>();
+        private readonly Dictionary<int, StreamQueueState> _streamStates = new Dictionary<int, StreamQueueState>();
         private readonly object _streamGate = new object();
         private readonly Dictionary<int, Stream> _sseStreams = new Dictionary<int, Stream>();
+        private readonly Dictionary<int, StreamQueueState> _sseStates = new Dictionary<int, StreamQueueState>();
         private readonly object _sseGate = new object();
-        private readonly object _broadcastGate = new object();
         private volatile bool _disposed;
         private int _active;
         private int _nextStreamId;
@@ -92,6 +94,7 @@ namespace UnityExplorer.Mcp
                         try { kv.Value.Dispose(); } catch { }
                     }
                     _streams.Clear();
+                    _streamStates.Clear();
                 }
             }
             catch { }
@@ -104,6 +107,7 @@ namespace UnityExplorer.Mcp
                         try { kv.Value.Dispose(); } catch { }
                     }
                     _sseStreams.Clear();
+                    _sseStates.Clear();
                 }
             }
             catch { }
