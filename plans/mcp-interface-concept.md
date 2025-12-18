@@ -24,7 +24,7 @@
 ## Resources (read-only)
 
 - `unity://status` — `StatusDto { Version, UnityVersion, Platform, Runtime, ExplorerVersion, Ready, ScenesLoaded, Selection: string[] }` (selection mirrors inspector targets, e.g., `obj:<instanceId>`).
-- `unity://scenes` — `Page<SceneDto> { Total, Items: [{ Id, Name, Index, IsLoaded, RootCount }] }`; may include pseudo-scenes `scn:ddol` (DontDestroyOnLoad, `Index=-1`) and `scn:hide` (HideAndDontSave, `Index=-2`).
+- `unity://scenes` — `Page<SceneDto> { Total, Items: [{ Id, Name, Index, IsLoaded, RootCount }] }`; may include pseudo-scenes `scn:ddol` (DontDestroyOnLoad, `Index=-1`) and `scn:hide` (HideAndDontSave, `Index=-2`, representing UnityExplorer’s asset/Resources scene: all root GameObjects whose `scene.IsValid()==false`).
 - `unity://scene/{sceneId}/objects?limit&offset` — `Page<ObjectCardDto> { Total, Items: [{ Id, Name, Path, Tag, Layer, Active, ComponentCount }] }`; accepts pseudo-scene ids (`scn:ddol`, `scn:hide`) and returns a normal page (possibly empty).
 - `unity://object/{id}` — `ObjectCardDto` (same shape as list items; no transform payload today).
 - `unity://object/{id}/components?limit&offset` — `Page<ComponentCardDto> { Total, Items: [{ Type, Summary }] }`.

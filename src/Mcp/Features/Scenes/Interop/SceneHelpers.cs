@@ -38,8 +38,11 @@ namespace UnityExplorer.Mcp
                 foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
                 {
                     if (go == null) continue;
-                    if ((go.hideFlags & HideFlags.HideAndDontSave) != HideFlags.HideAndDontSave) continue;
-                    if (go.transform != null && go.transform.parent != null) continue;
+                    if (go.scene.IsValid()) continue;
+
+                    var transform = go.transform;
+                    if (transform != null && transform.parent != null) continue;
+
                     list.Add(go);
                 }
             }
