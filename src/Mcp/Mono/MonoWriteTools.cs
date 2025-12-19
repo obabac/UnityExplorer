@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
@@ -9,6 +10,7 @@ using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityExplorer.CSConsole;
 using UnityExplorer.Hooks;
+using UniverseLib.Utility;
 
 #nullable enable
 
@@ -66,6 +68,7 @@ namespace UnityExplorer.Mcp
                     case "Method not found": return ToolError("NotFound", "Method not found");
                     case "Type not found": return ToolError("NotFound", "Type not found");
                     case "Hook not found": return ToolError("NotFound", "Hook not found");
+                    case "Ambiguous component type": return ToolError("InvalidArgument", "Ambiguous component type", "Use the exact component type (from GetComponents)");
                     default: return ToolError("InvalidArgument", inv.Message);
                 }
             }
@@ -101,6 +104,23 @@ namespace UnityExplorer.Mcp
                     return true;
                 }
             }
+
+            var requestedType = ReflectionUtility.GetTypeByName(typeFullName);
+            if (requestedType == null) return false;
+
+            var matches = comps
+                .Where(c => c != null && requestedType.IsAssignableFrom(c.GetType()))
+                .ToArray();
+
+            if (matches.Length == 1)
+            {
+                comp = matches[0];
+                return true;
+            }
+
+            if (matches.Length > 1)
+                throw new InvalidOperationException("Ambiguous component type");
+
             return false;
         }
 

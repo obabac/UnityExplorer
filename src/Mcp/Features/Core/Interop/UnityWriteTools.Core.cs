@@ -24,6 +24,7 @@ namespace UnityExplorer.Mcp
                     "Method not found" => ToolError("NotFound", "Method not found"),
                     "Type not found" => ToolError("NotFound", "Type not found"),
                     "Hook not found" => ToolError("NotFound", "Hook not found"),
+                    "Ambiguous component type" => ToolError("InvalidArgument", "Ambiguous component type", "Use the exact component type (from GetComponents)"),
                     _ => ToolError("InvalidArgument", inv.Message)
                 };
             }

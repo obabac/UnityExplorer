@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UniverseLib.Utility;
 
 namespace UnityExplorer.Mcp
 {
@@ -34,6 +35,23 @@ namespace UnityExplorer.Mcp
                 if (c != null && string.Equals(c.GetType().FullName, typeFullName, StringComparison.Ordinal))
                 { comp = c; return true; }
             }
+
+            var requestedType = ReflectionUtility.GetTypeByName(typeFullName);
+            if (requestedType == null) return false;
+
+            var matches = comps
+                .Where(c => c != null && requestedType.IsAssignableFrom(c.GetType()))
+                .ToArray();
+
+            if (matches.Length == 1)
+            {
+                comp = matches[0];
+                return true;
+            }
+
+            if (matches.Length > 1)
+                throw new InvalidOperationException("Ambiguous component type");
+
             return false;
         }
 
