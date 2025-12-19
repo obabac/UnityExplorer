@@ -1,5 +1,6 @@
 #if INTEROP
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -239,14 +240,107 @@ namespace UnityExplorer.Mcp
                 }
                 values[i] = val;
             }
-            var ret = mi.Invoke(null, values);
-            if (ret is Task t)
+
+            var isWriteTool = mi.DeclaringType == typeof(UnityWriteTools);
+            var argsSummary = isWriteTool ? BuildArgsSummary(args) : null;
+            try
             {
-                await t.ConfigureAwait(false);
-                var prop = t.GetType().GetProperty("Result");
-                return prop != null ? prop.GetValue(t) : null;
+                var ret = mi.Invoke(null, values);
+                if (ret is Task t)
+                {
+                    await t.ConfigureAwait(false);
+                    var prop = t.GetType().GetProperty("Result");
+                    var result = prop != null ? prop.GetValue(t) : null;
+                    if (isWriteTool) LogAudit(mi.Name, true, argsSummary);
+                    return result;
+                }
+                if (isWriteTool) LogAudit(mi.Name, true, argsSummary);
+                return ret;
             }
-            return ret;
+            catch (Exception ex)
+            {
+                if (isWriteTool) LogAudit(mi.Name, false, argsSummary, ex);
+                throw;
+            }
+        }
+
+        private static void LogAudit(string toolName, bool ok, string? argsSummary, Exception? ex = null)
+        {
+            var msg = $"tool={toolName} ok={(ok ? "true" : "false")}";
+            if (!string.IsNullOrEmpty(argsSummary))
+                msg += " args=" + argsSummary;
+
+            if (ex != null)
+            {
+                var err = ex;
+                if (ex is TargetInvocationException tie && tie.InnerException != null)
+                    err = tie.InnerException;
+
+                msg += " error=" + SanitizeError(err);
+            }
+
+            try { LogBuffer.Add("info", msg, "mcp", "audit"); } catch { }
+        }
+
+        private static string SanitizeError(Exception ex)
+        {
+            var name = ex.GetType().Name;
+            var msg = ex.Message?.Replace('\n', ' ').Replace('\r', ' ') ?? string.Empty;
+            return string.IsNullOrEmpty(msg) ? name : $"{name}:{msg}";
+        }
+
+        private static string? BuildArgsSummary(JsonElement args)
+        {
+            if (args.ValueKind != JsonValueKind.Object)
+                return args.ValueKind.ToString();
+
+            var parts = new System.Collections.Generic.List<string>();
+            foreach (var prop in args.EnumerateObject().OrderBy(p => p.Name, System.StringComparer.OrdinalIgnoreCase))
+            {
+                if (IsLengthOnlyField(prop.Name))
+                {
+                    parts.Add($"{prop.Name}Len={GetLength(prop.Value)}");
+                    continue;
+                }
+
+                parts.Add($"{prop.Name}={SummarizeValue(prop.Value)}");
+            }
+
+            return parts.Count == 0 ? "none" : string.Join(", ", parts);
+        }
+
+        private static bool IsLengthOnlyField(string name)
+        {
+            return name.Equals("code", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("content", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("source", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("text", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("jsonValue", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int GetLength(JsonElement value)
+        {
+            if (value.ValueKind == JsonValueKind.String)
+                return value.GetString()?.Length ?? 0;
+            if (value.ValueKind == JsonValueKind.Array)
+                return value.GetArrayLength();
+            var raw = value.GetRawText();
+            return raw?.Length ?? 0;
+        }
+
+        private static string SummarizeValue(JsonElement value)
+        {
+            return value.ValueKind switch
+            {
+                JsonValueKind.String => value.GetString() ?? string.Empty,
+                JsonValueKind.Number => value.ToString(),
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                JsonValueKind.Null => "null",
+                JsonValueKind.Array => $"array({value.GetArrayLength()})",
+                JsonValueKind.Object => "object",
+                _ => value.ToString()
+            };
         }
 
         public static async Task<object?> ReadResourceAsync(string uri)

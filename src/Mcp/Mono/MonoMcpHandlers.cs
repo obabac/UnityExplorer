@@ -33,6 +33,42 @@ namespace UnityExplorer.Mcp
             }
         }
 
+        private static readonly HashSet<string> WriteToolKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "addcomponent",
+            "callmethod",
+            "clearclipboard",
+            "consoleeval",
+            "deleteconsolescript",
+            "destroyobject",
+            "destroytestui",
+            "getconfig",
+            "gettimescale",
+            "hookadd",
+            "hookremove",
+            "hooksetenabled",
+            "hooksetsource",
+            "loadscene",
+            "removecomponent",
+            "reparent",
+            "runconsolescript",
+            "runstartupscript",
+            "selectobject",
+            "setactive",
+            "setclipboardobject",
+            "setclipboardtext",
+            "setconfig",
+            "setfreecamenabled",
+            "setfreecampose",
+            "setfreecamspeed",
+            "setmember",
+            "setstartupscriptenabled",
+            "settimescale",
+            "spawntestui",
+            "writeconsolescript",
+            "writestartupscript",
+        };
+
         private readonly MonoReadTools _tools = new MonoReadTools();
         private readonly MonoWriteTools _write;
 
@@ -118,29 +154,46 @@ namespace UnityExplorer.Mcp
         public object CallTool(string name, JObject? args)
         {
             var key = (name ?? string.Empty).ToLowerInvariant();
+            var toolName = IsNullOrWhiteSpace(name) ? key : name;
+            var isWriteTool = WriteToolKeys.Contains(key);
+            var argsSummary = isWriteTool ? BuildArgsSummary(args) : null;
             try { LogBuffer.Add("debug", "call_tool:" + key, "mcp"); } catch { }
 
-            if (TryCallTool_Config(key, args, out var result)) return result;
-            if (TryCallTool_Status(key, args, out result)) return result;
-            if (TryCallTool_Scenes(key, args, out result)) return result;
-            if (TryCallTool_Objects(key, args, out result)) return result;
-            if (TryCallTool_Components(key, args, out result)) return result;
-            if (TryCallTool_Version(key, args, out result)) return result;
-            if (TryCallTool_Search(key, args, out result)) return result;
-            if (TryCallTool_ReflectionInspector(key, args, out result)) return result;
-            if (TryCallTool_Camera(key, args, out result)) return result;
-            if (TryCallTool_Freecam(key, args, out result)) return result;
-            if (TryCallTool_MousePick(key, args, out result)) return result;
-            if (TryCallTool_Logs(key, args, out result)) return result;
-            if (TryCallTool_Selection(key, args, out result)) return result;
-            if (TryCallTool_Clipboard(key, args, out result)) return result;
-            if (TryCallTool_ConsoleScripts(key, args, out result)) return result;
-            if (TryCallTool_ConsoleEval(key, args, out result)) return result;
-            if (TryCallTool_Hooks(key, args, out result)) return result;
-            if (TryCallTool_TimeScale(key, args, out result)) return result;
-            if (TryCallTool_TestUi(key, args, out result)) return result;
+            object Return(object value)
+            {
+                if (isWriteTool) LogAudit(toolName, true, argsSummary);
+                return value;
+            }
 
-            throw new McpError(-32004, 404, "NotFound", "Tool not found: " + name);
+            try
+            {
+                if (TryCallTool_Config(key, args, out var result)) return Return(result);
+                if (TryCallTool_Status(key, args, out result)) return Return(result);
+                if (TryCallTool_Scenes(key, args, out result)) return Return(result);
+                if (TryCallTool_Objects(key, args, out result)) return Return(result);
+                if (TryCallTool_Components(key, args, out result)) return Return(result);
+                if (TryCallTool_Version(key, args, out result)) return Return(result);
+                if (TryCallTool_Search(key, args, out result)) return Return(result);
+                if (TryCallTool_ReflectionInspector(key, args, out result)) return Return(result);
+                if (TryCallTool_Camera(key, args, out result)) return Return(result);
+                if (TryCallTool_Freecam(key, args, out result)) return Return(result);
+                if (TryCallTool_MousePick(key, args, out result)) return Return(result);
+                if (TryCallTool_Logs(key, args, out result)) return Return(result);
+                if (TryCallTool_Selection(key, args, out result)) return Return(result);
+                if (TryCallTool_Clipboard(key, args, out result)) return Return(result);
+                if (TryCallTool_ConsoleScripts(key, args, out result)) return Return(result);
+                if (TryCallTool_ConsoleEval(key, args, out result)) return Return(result);
+                if (TryCallTool_Hooks(key, args, out result)) return Return(result);
+                if (TryCallTool_TimeScale(key, args, out result)) return Return(result);
+                if (TryCallTool_TestUi(key, args, out result)) return Return(result);
+
+                throw new McpError(-32004, 404, "NotFound", "Tool not found: " + name);
+            }
+            catch (Exception ex)
+            {
+                if (isWriteTool) LogAudit(toolName, false, argsSummary, ex);
+                throw;
+            }
         }
 
         public object ReadResource(string uri)
@@ -278,6 +331,87 @@ namespace UnityExplorer.Mcp
             }
 
             throw new McpError(-32004, 404, "NotFound", "resource not supported");
+        }
+
+        private static void LogAudit(string toolName, bool ok, string? argsSummary, Exception? ex = null)
+        {
+            var msg = $"tool={toolName} ok={(ok ? "true" : "false")}";
+            if (!string.IsNullOrEmpty(argsSummary))
+                msg += " args=" + argsSummary;
+
+            if (ex != null)
+            {
+                msg += " error=" + SanitizeError(ex);
+            }
+
+            try { LogBuffer.Add("info", msg, "mcp", "audit"); } catch { }
+        }
+
+        private static string SanitizeError(Exception ex)
+        {
+            if (ex is McpError me)
+            {
+                var baseMsg = me.Message?.Replace('\n', ' ').Replace('\r', ' ') ?? string.Empty;
+                var kind = string.IsNullOrEmpty(me.Kind) ? ex.GetType().Name : me.Kind;
+                return string.IsNullOrEmpty(baseMsg) ? kind : $"{kind}:{baseMsg}";
+            }
+
+            var name = ex.GetType().Name;
+            var msg = ex.Message?.Replace('\n', ' ').Replace('\r', ' ') ?? string.Empty;
+            return string.IsNullOrEmpty(msg) ? name : $"{name}:{msg}";
+        }
+
+        private static string? BuildArgsSummary(JObject? args)
+        {
+            if (args == null)
+                return "none";
+
+            var parts = new List<string>();
+            foreach (var prop in args.Properties().OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                if (IsLengthOnlyField(prop.Name))
+                {
+                    parts.Add($"{prop.Name}Len={GetLength(prop.Value)}");
+                    continue;
+                }
+
+                parts.Add($"{prop.Name}={SummarizeValue(prop.Value)}");
+            }
+
+            return parts.Count == 0 ? "none" : string.Join(", ", parts.ToArray());
+        }
+
+        private static bool IsLengthOnlyField(string name)
+        {
+            return name.Equals("code", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("content", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("source", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("text", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("jsonValue", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int GetLength(JToken token)
+        {
+            if (token.Type == JTokenType.String)
+                return token.Value<string>()?.Length ?? 0;
+            if (token is JArray arr)
+                return arr.Count;
+            var s = token.ToString(Newtonsoft.Json.Formatting.None);
+            return s?.Length ?? 0;
+        }
+
+        private static string SummarizeValue(JToken token)
+        {
+            return token.Type switch
+            {
+                JTokenType.String => token.Value<string>() ?? string.Empty,
+                JTokenType.Integer or JTokenType.Float => token.ToString(),
+                JTokenType.Boolean => token.Value<bool>() ? "true" : "false",
+                JTokenType.Null or JTokenType.Undefined => "null",
+                JTokenType.Array => $"array({((JArray)token).Count})",
+                JTokenType.Object => "object",
+                _ => token.ToString(Newtonsoft.Json.Formatting.None)
+            };
         }
 
         internal static Dictionary<string, string> ParseQuery(string query)
