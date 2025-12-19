@@ -12,7 +12,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 - Feature parity: the major UnityExplorer panels are reachable via MCP (Object Explorer + Inspector read/write, Console scripts, Hooks, Freecam, Clipboard) with guarded writes and tests.
 
-Status (2025-12-18): Progress 93% (144/155). Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (69 total: 68 passed, 1 skipped placeholder). Console scripts run/startup tools and Mono `CallMethod` are present on both hosts; `stream_events` emits the deterministic `scenes` snapshot on open.
+Status (2025-12-18): Progress 94% (145/155). Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (69 total: 68 passed, 1 skipped placeholder). Console scripts run/startup tools and Mono `CallMethod` are present on both hosts; `stream_events` emits deterministic `scenes` and `selection` snapshots on open.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -274,7 +274,7 @@ Priority right now: **12.7 Console scripts** + **12.8 Hooks (advanced)**.
 
 ## 13. Streams & Agent UX
 - [x] Decide and document the minimal “agent-first” event set with stable payloads and examples (log/scenes/selection/tool_result) in `plans/mcp-interface-concept.md`.
-- [ ] Consider adding a `selection` snapshot on stream open (optional) and lock it with a contract test.
+- [x] Add a `selection` snapshot on stream open and lock it with a contract test.
 - [x] Add IL2CPP backpressure strategy for `stream_events` (cap/drop policy) and a stress test.
 - [x] Mirror stream backpressure onto Mono (avoid blocking synchronous broadcast; align with IL2CPP cap/drop policy).
 

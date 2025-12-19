@@ -301,6 +301,21 @@ namespace UnityExplorer.Mcp
                 }
                 catch { }
 
+                try
+                {
+                    var selection = _handlers.ReadResource("unity://selection");
+                    var notification = new JObject
+                    {
+                        { "jsonrpc", "2.0" },
+                        { "method", "notification" },
+                        { "params", new JObject { { "event", "selection" }, { "payload", selection == null ? JValue.CreateNull() : JToken.FromObject(selection) } } }
+                    };
+                    var json = notification.ToString(Formatting.None);
+                    var chunk = BuildChunk(Encoding.UTF8.GetBytes(json + "\n"));
+                    EnqueuePayload(id, stream, _streams, _streamStates, _streamGate, chunk, "http");
+                }
+                catch { }
+
                 WaitForStreamDisconnect(stream, id);
                 return;
             }

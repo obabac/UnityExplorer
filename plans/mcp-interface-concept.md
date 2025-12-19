@@ -125,7 +125,7 @@ Goal: let an agent discover safe hook targets (within allowlist), toggle hooks, 
 
 ## Streams & Notifications
 
-- `stream_events` emits chunked JSON notifications until the client disconnects; on open it emits a deterministic `scenes` snapshot notification.
+- `stream_events` emits chunked JSON notifications until the client disconnects; on open it emits deterministic snapshots for `scenes` and `selection`.
 - `GET /` with `Accept: text/event-stream` delivers the same JSON-RPC payloads as SSE frames (`data: <json>\n\n`) for clients that prefer the inspector-style receive channel.
   - `log`: `{ level, message, source, category?, t }` (mirrors `logs/tail`).
   - `selection`: `SelectionDto { ActiveId, Items[] }` (same as `unity://selection`).

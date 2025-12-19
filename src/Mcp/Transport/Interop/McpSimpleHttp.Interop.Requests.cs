@@ -410,6 +410,20 @@ namespace UnityExplorer.Mcp
                         }
                         catch { }
 
+                        try
+                        {
+                            var selection = await UnityReadTools.GetSelection(ct).ConfigureAwait(false);
+                            var selectionJson = JsonSerializer.Serialize(new
+                            {
+                                jsonrpc = "2.0",
+                                method = "notification",
+                                @params = new { @event = "selection", payload = selection }
+                            });
+                            var selectionChunk = BuildChunk(Encoding.UTF8.GetBytes(selectionJson + "\n"));
+                            EnqueuePayload(id, stream, _httpStreams, _httpStreamStates, selectionChunk, "http");
+                        }
+                        catch { }
+
                         await WaitForStreamDisconnectAsync(stream, id, isSse: false, ct).ConfigureAwait(false);
                         return;
                     }

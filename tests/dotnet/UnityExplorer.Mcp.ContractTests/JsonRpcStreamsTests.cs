@@ -106,6 +106,70 @@ public class JsonRpcStreamsTests
     }
 
     [Fact]
+    public async Task StreamEvents_Emits_Selection_Snapshot_On_Open()
+    {
+        if (!JsonRpcTestClient.TryCreate(out var http))
+            return;
+
+        using var client = http;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var payload = new
+        {
+            jsonrpc = "2.0",
+            id = "stream-events-open-selection",
+            method = "stream_events",
+            @params = new { }
+        };
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/message")
+        {
+            Content = JsonRpcTestClient.CreateContent(payload)
+        };
+
+        using var res = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        res.EnsureSuccessStatusCode();
+
+        await using var stream = await res.Content.ReadAsStreamAsync(cts.Token);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        waitCts.CancelAfter(TimeSpan.FromSeconds(5));
+
+        while (!waitCts.IsCancellationRequested)
+        {
+            string? line;
+            try { line = await reader.ReadLineAsync(waitCts.Token); }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            using var doc = JsonDocument.Parse(line);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("method", out var methodEl) || methodEl.GetString() != "notification")
+                continue;
+
+            if (!root.TryGetProperty("params", out var @params))
+                continue;
+
+            if (!@params.TryGetProperty("event", out var eventEl) || eventEl.GetString() != "selection")
+                continue;
+
+            @params.TryGetProperty("payload", out var payloadEl).Should().BeTrue();
+            payloadEl.TryGetProperty("ActiveId", out _).Should().BeTrue();
+            payloadEl.TryGetProperty("Items", out var itemsEl).Should().BeTrue();
+            itemsEl.ValueKind.Should().Be(JsonValueKind.Array);
+            return;
+        }
+
+        Assert.Fail("Expected a 'selection' notification on stream_events immediately after opening the stream.");
+    }
+
+    [Fact]
     public async Task Sse_Root_Stream_Emits_ToolResult_When_Tool_Called()
     {
         if (!JsonRpcTestClient.TryCreate(out var http))
