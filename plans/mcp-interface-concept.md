@@ -1,6 +1,6 @@
 # Unity Explorer MCP Interface — Source of Truth
 
-- Updated: 2025-12-17
+- Updated: 2025-12-19
 - Hosts: CoreCLR IL2CPP + Mono in-process MCP servers (INTEROP builds)
 - Transport: streamable HTTP via `McpSimpleHttp` (no ASP.NET); JSON-RPC 2.0 on `POST /message` (alias `POST /mcp`); convenience `GET /read?uri=unity://...`; discovery file `%TEMP%/unity-explorer-mcp.json` advertises `{ pid, baseUrl, port, modeHints: ["streamable-http"], startedAt }`.
 - Default policy: read-only. All mutating tools require `allowWrites=true`; many also require `requireConfirm=true`.
@@ -33,6 +33,7 @@
 - `unity://object/{id}/children?limit&offset` — `Page<ObjectCardDto>`; lists direct children only; empty pages are valid when there are no children.
 - `unity://search?query=&name=&type=&path=&activeOnly=&limit=&offset=` — `Page<ObjectCardDto>` using the same card shape as `ListObjects`.
 - `unity://selection` — `SelectionDto { ActiveId, Items[] }`; emits a `selection` stream event when selection changes (same payload as the resource).
+- `unity://clipboard` — `ClipboardDto { HasValue, Type, Preview, ObjectId? }`; Preview uses `ToStringWithType` and truncates to 256 chars; `ObjectId` is present when the clipboard holds a live `UnityEngine.Object` (`obj:<instanceId>`).
 - `unity://camera/active` — `CameraInfoDto { IsFreecam, Name, Fov, Pos{X,Y,Z}, Rot{X,Y,Z} }`; falls back to `Camera.main`/first camera or `<none>` when missing.
 - `unity://logs/tail?count=` — `LogTailDto { Items: [{ T, Level, Message, Source, Category? }] }`; `[MCP] error ...` lines are written here when requests fail.
 - `unity://console/scripts` — `Page<ConsoleScriptDto> { Total, Items: [{ Name, Path }] }`.
@@ -59,12 +60,14 @@
 - `TailLogs(count=200)` → `LogTailDto`.
 - `ReadConsoleScript(path)` → `ConsoleScriptFileDto { Name, Path, Content, SizeBytes, LastModifiedUtc, Truncated }` (max 256KB; strips leading BOM).
 - `GetSelection()` → `SelectionDto { ActiveId, Items[] }`.
+- `GetClipboard()` → `ClipboardDto` (same shape as `unity://clipboard`).
 - `GetTimeScale()` → `{ ok: true, value: float, locked: bool }`.
 
 ### Guarded writes (require `allowWrites=true`; `requireConfirm=true` forces `confirm=true` where supported)
 - Config: `SetConfig(allowWrites?, requireConfirm?, enableConsoleEval?, componentAllowlist?, reflectionAllowlistMembers?, hookAllowlistSignatures?, restart=false)` → `{ ok }`; `GetConfig()` → `{ ok, enabled, bindAddress, port, allowWrites, requireConfirm, exportRoot, logLevel, componentAllowlist, reflectionAllowlistMembers, enableConsoleEval, hookAllowlistSignatures }` (sanitized).
   - Note: despite the name, `hookAllowlistSignatures` currently contains **type full names** allowed for `HookAdd` (example: `["UnityEngine.GameObject"]`).
 - Object state: `SetActive(objectId, active, confirm?)` → `{ ok }`; `SelectObject(objectId)` → `{ ok }` and triggers a `selection` notification (still gated by `allowWrites`).
+- Clipboard: `SetClipboardText(text, confirm?)` / `SetClipboardObject(objectId, confirm?)` / `ClearClipboard(confirm?)` → `{ ok }` (guarded by `allowWrites`; confirmation enforced when `requireConfirm=true`; `SetClipboardObject` expects `obj:<instanceId>`).
 - Reflection writes: `SetMember(objectId, componentType, member, jsonValue, confirm?)` → `{ ok }` (enforces `reflectionAllowlistMembers` entries `<Type>.<Member>`). `CallMethod(objectId, componentType, method, argsJson="[]", confirm?)` → `{ ok, result }` is available on both IL2CPP and Mono; allowlist enforced via `reflectionAllowlistMembers`.
 - Component writes: `AddComponent(objectId, type, confirm?)` / `RemoveComponent(objectId, typeOrIndex, confirm?)` → `{ ok }`; `componentAllowlist` must include the type when removing by type or adding.
 - Hooks: `HookAdd(type, methodOrSignature, confirm?)` / `HookRemove(signature, confirm?)` / `HookSetEnabled(signature, enabled, confirm?)` / `HookSetSource(signature, source, confirm?)` → `{ ok }`; allowlist via `hookAllowlistSignatures` (type full names). `HookSetSource` requires `enableConsoleEval=true`. `HookAdd` accepts either a method name (may be ambiguous) or a full `MethodInfo.FullDescription()` signature string for deterministic overload selection.
@@ -75,6 +78,14 @@
 - Time: `SetTimeScale(value, lock?, confirm?)` → `{ ok, value, locked }` (value clamped 0–4; `lock=true` uses the Explorer widget lock when available).
 - Test UI helpers: `SpawnTestUi(confirm?)` → `{ ok, rootId, blocks: [{ name, id }] }` (id strings are `obj:<instanceId>`); `DestroyTestUi(confirm?)` → `{ ok }`.
 - Tool errors: `{ ok: false, error: { kind, message, hint? } }` where `kind` mirrors the JSON-RPC error kinds below.
+
+### Clipboard
+
+- DTO: `ClipboardDto { HasValue: bool, Type: string?, Preview: string?, ObjectId?: string }`.
+- Preview uses `ToStringWithType` output capped at 256 characters to avoid large payloads; no object graphs are serialized.
+- `ObjectId` is populated when the clipboard holds a live `UnityEngine.Object` and uses `obj:<instanceId>`; otherwise it is null.
+- Resource: `unity://clipboard` (same payload as `GetClipboard`).
+- Tools: `GetClipboard()` (read-only) and guarded writes `SetClipboardText(text, confirm?)`, `SetClipboardObject(objectId, confirm?)`, `ClearClipboard(confirm?)` (require `allowWrites=true`; `requireConfirm=true` enforces `confirm=true`).
 
 ## Console scripts + Hooks parity (current)
 

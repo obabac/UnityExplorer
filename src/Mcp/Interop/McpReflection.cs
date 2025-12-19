@@ -68,6 +68,7 @@ namespace UnityExplorer.Mcp
                 Resource("unity://search", "Search objects", "Search objects across scenes."),
                 Resource("unity://camera/active", "Active camera", "Active camera info."),
                 Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
+                Resource("unity://clipboard", "Clipboard", "Current UnityExplorer clipboard."),
                 Resource("unity://logs/tail", "Log tail", "Tail recent MCP log buffer."),
                 Resource("unity://console/scripts", "Console scripts", "List C# console scripts (from the Scripts folder)."),
                 Resource("unity://console/script?path={path}", "Console script", "Read a single C# console script by path (validated; .cs only)."),
@@ -328,6 +329,8 @@ namespace UnityExplorer.Mcp
                 return await UnityReadTools.GetCameraInfo(default);
             if (path.Equals("selection", StringComparison.OrdinalIgnoreCase))
                 return await UnityReadTools.GetSelection(default);
+            if (path.Equals("clipboard", StringComparison.OrdinalIgnoreCase))
+                return await UnityReadTools.GetClipboard(default);
             if (path.Equals("logs/tail", StringComparison.OrdinalIgnoreCase))
                 return await UnityReadTools.TailLogs(TryInt(query, "count") ?? 200, default);
             if (path.Equals("console/scripts", StringComparison.OrdinalIgnoreCase))

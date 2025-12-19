@@ -63,6 +63,10 @@ namespace UnityExplorer.Mcp
         public static Task<SelectionDto> Selection(CancellationToken ct)
             => UnityReadTools.GetSelection(ct);
 
+        [McpServerResource, Description("Current UnityExplorer clipboard.")]
+        public static Task<ClipboardDto> Clipboard(CancellationToken ct)
+            => UnityReadTools.GetClipboard(ct);
+
         [McpServerResource, Description("List C# console scripts (from the Scripts folder).")]
         public static Task<Page<ConsoleScriptDto>> ConsoleScripts(int? limit, int? offset, CancellationToken ct)
         {

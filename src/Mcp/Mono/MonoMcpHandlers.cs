@@ -56,7 +56,7 @@ namespace UnityExplorer.Mcp
                 experimental = new { streamEvents = new { } }
 
             };
-            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, logs, camera, mouse pick, and component inspector (list/read members) over streamable-http. Guarded writes (SetActive, SetMember, ConsoleEval, AddComponent, RemoveComponent, HookAdd, HookRemove, Reparent, DestroyObject, SelectObject, SetTimeScale, SpawnTestUi, DestroyTestUi) are available when allowWrites=true (requireConfirm recommended; use SpawnTestUi blocks as safe targets and keep the component/hook allowlists configured). stream_events provides log/scene/selection/tool_result notifications.";
+            var instructions = "Unity Explorer MCP (Mono) exposes status, scenes, objects, selection, clipboard, logs, camera, mouse pick, and component inspector (list/read members) over streamable-http. Guarded writes (SetActive, SetMember, ConsoleEval, AddComponent, RemoveComponent, HookAdd, HookRemove, Reparent, DestroyObject, SelectObject, SetClipboardText/Object/ClearClipboard, SetTimeScale, SpawnTestUi, DestroyTestUi) are available when allowWrites=true (requireConfirm recommended; use SpawnTestUi blocks as safe targets and keep the component/hook allowlists configured). stream_events provides log/scene/selection/tool_result notifications.";
             return new { protocolVersion, capabilities, serverInfo, instructions };
         }
 
@@ -74,6 +74,7 @@ namespace UnityExplorer.Mcp
             AddTools_MousePick(list);
             AddTools_Logs(list);
             AddTools_Selection(list);
+            AddTools_Clipboard(list);
             AddTools_ConsoleScripts(list);
             AddTools_ConsoleEval(list);
             AddTools_Hooks(list);
@@ -100,6 +101,7 @@ namespace UnityExplorer.Mcp
                 Resource("unity://search", "Search objects", "Search objects across scenes."),
                 Resource("unity://camera/active", "Active camera", "Active camera info."),
                 Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
+                Resource("unity://clipboard", "Clipboard", "Current UnityExplorer clipboard."),
                 Resource("unity://logs/tail", "Log tail", "Tail recent MCP log buffer."),
                 Resource("unity://console/scripts", "Console scripts", "List C# console scripts (from the Scripts folder)."),
                 Resource("unity://console/script?path={path}", "Console script", "Read a single C# console script by path (validated; .cs only)."),
@@ -123,6 +125,7 @@ namespace UnityExplorer.Mcp
             if (TryCallTool_MousePick(key, args, out result)) return result;
             if (TryCallTool_Logs(key, args, out result)) return result;
             if (TryCallTool_Selection(key, args, out result)) return result;
+            if (TryCallTool_Clipboard(key, args, out result)) return result;
             if (TryCallTool_ConsoleScripts(key, args, out result)) return result;
             if (TryCallTool_ConsoleEval(key, args, out result)) return result;
             if (TryCallTool_Hooks(key, args, out result)) return result;
@@ -194,6 +197,7 @@ namespace UnityExplorer.Mcp
             }
             if (path.Equals("camera/active", StringComparison.OrdinalIgnoreCase)) return _tools.GetCameraInfo();
             if (path.Equals("selection", StringComparison.OrdinalIgnoreCase)) return _tools.GetSelection();
+            if (path.Equals("clipboard", StringComparison.OrdinalIgnoreCase)) return _tools.GetClipboard();
             if (path.Equals("logs/tail", StringComparison.OrdinalIgnoreCase)) return _tools.TailLogs(TryInt(query, "count") ?? 200);
             if (path.Equals("console/scripts", StringComparison.OrdinalIgnoreCase))
             {

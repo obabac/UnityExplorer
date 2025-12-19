@@ -1,6 +1,6 @@
 # Unity Explorer MCP – High‑Level TODOs (Streamable HTTP Era)
 
-Date: 2025‑12‑18  
+Date: 2025‑12‑19  
 Scope: Remaining work to get close to UnityExplorer feature parity over MCP, with a stable streamable‑http surface.
 
 ### Definition of Done (100%)
@@ -12,7 +12,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 - Feature parity: the major UnityExplorer panels are reachable via MCP (Object Explorer + Inspector read/write, Console scripts, Hooks, Freecam, Clipboard) with guarded writes and tests.
 
-Status (2025-12-18): Progress 94% (145/155). Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (69 total: 68 passed, 1 skipped placeholder). Console scripts run/startup tools and Mono `CallMethod` are present on both hosts; `stream_events` emits deterministic `scenes` and `selection` snapshots on open.
+Status (2025-12-19): Progress 95% (147/155). Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (70 total: 69 passed, 1 skipped placeholder). Console scripts run/startup tools and Mono `CallMethod` are present on both hosts; `stream_events` emits deterministic `scenes` and `selection` snapshots on open.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -245,8 +245,8 @@ Priority right now: **12.7 Console scripts** + **12.8 Hooks (advanced)**.
 - [ ] Add guarded tools to enable/disable freecam and set pose/speed.
 
 ### 12.6 Clipboard parity
-- [ ] Expose clipboard read (type + preview) as a resource.
-- [ ] Add guarded tools to set/clear clipboard.
+- [x] Expose clipboard read (type + preview) as a resource.
+- [x] Add guarded tools to set/clear clipboard.
 
 ### 12.7 Console scripts parity (TOP)
 - [x] Spec: console scripts contract in `plans/mcp-interface-concept.md` (Console scripts section).
