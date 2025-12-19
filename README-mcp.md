@@ -34,6 +34,14 @@ pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478/mcp -
 
 The helper accepts BaseUrl values with or without `/mcp` and normalizes to the JSON-RPC path. Optional CI: `.github/workflows/mcp-inspector-cli.yml` is a manual (`workflow_dispatch`) workflow that runs this script against provided `baseUrlIl2cpp`/`baseUrlMono` inputs (no-op when inputs are empty; host must be reachable from the runner).
 
+## All gates
+
+Run the full IL2CPP + Mono gate stack (inspector CLI + smoke + contract tests). Fails fast on any failure.
+
+```powershell
+pwsh ./tools/Run-McpAllGates.ps1 -BaseUrlIl2cpp http://192.168.178.210:51477 -BaseUrlMono http://192.168.178.210:51478 [-EnableWriteSmoke] [-AuthToken <token>]
+```
+
 ## Inspector CLI (direct one-liners)
 
 We do not use the Inspector UI for validation; use the CLI.

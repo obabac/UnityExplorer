@@ -55,6 +55,7 @@ This section summarizes what still needs to be in place so that Unity Explorer M
 
 ### Pitfalls / reminders for agents
 - Keep `plans/mcp-interface-concept.md`, DTO code, and contract tests in sync; update all three together when shapes change.
+- Never commit `.codex` runtime artifacts (`.codex/config.toml`, `.codex/history.jsonl`, `.codex/exec-logs/`, `.codex/auth.json`, `.codex/version.json`); they contain secrets and will block git push.
 - Inspector validation is a gate: run `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl <url>` early on both hosts for any wire/schema change.
 - Test-VM validation is a gate: for any behavior change, validate on the Test-VM in the same iteration (not after).
 - Smoke scripts must pass a PowerShell parse sanity check (run them against http://127.0.0.1:1 to catch ParserError early).
