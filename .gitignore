@@ -365,6 +365,7 @@ MigrationBackup/
 .worktrees/
 .codex/*sessions
 .codex/exec-logs/*
+.codex/skills/
 .codex/history.jsonl
 .codex/config.toml
 .codex/version.json
