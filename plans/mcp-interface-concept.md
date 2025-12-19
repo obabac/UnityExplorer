@@ -71,6 +71,14 @@
 - `GetClipboard()` → `ClipboardDto` (same shape as `unity://clipboard`).
 - `GetTimeScale()` → `{ ok: true, value: float, locked: bool }`.
 
+### Reflection Inspector (read-only)
+- Identifiers: `singletonId` values come from `SearchSingletons` and use the format `singleton:{declaringTypeFullName}` (declaring type owning the static instance).
+- Value shape: `ReadStaticMember` and `ReadSingletonMember` return `{ ok: true, type, valueText, valueJson? }` with the same rules as `ReadComponentMember` (valueText capped at 1024 chars; `UnityEngine.Object` → `obj:<id>`; primitives/vectors/ids fill `valueJson`, otherwise null).
+- Tools:
+  - `ReadStaticMember(typeFullName, name)` → value summary for static fields/properties.
+  - `ListSingletonMembers(singletonId, includeMethods=false, limit?, offset?)` → `Page<InspectorMemberDto>` of instance fields/properties (methods when requested).
+  - `ReadSingletonMember(singletonId, name)` → value summary for instance fields/properties.
+
 ### Static Class Search
 - DTO: `StaticClassDto { Id, Type, Assembly, MemberCount }` where `Id = type:{Type.FullName}` and `MemberCount` counts static fields + properties.
 - Tools: `SearchStaticClasses(query, limit?, offset?)` → `Page<StaticClassDto>`; `ListStaticMembers(typeFullName, includeMethods=false, limit?, offset?)` → `Page<InspectorMemberDto>` (fields/properties; methods when requested).
