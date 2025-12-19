@@ -4,6 +4,7 @@ using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -36,9 +37,124 @@ namespace UnityExplorer.Mcp
             return false;
         }
 
+        private static bool TryGetNumber(JsonElement element, out float value)
+        {
+            value = 0f;
+            if (element.ValueKind != JsonValueKind.Number) return false;
+            if (element.TryGetDouble(out var d))
+            {
+                value = (float)d;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool TryGetPropertyNumber(JsonElement element, string name, out float value)
+        {
+            value = 0f;
+            if (element.ValueKind != JsonValueKind.Object) return false;
+            foreach (var prop in element.EnumerateObject())
+            {
+                if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
+                    return TryGetNumber(prop.Value, out value);
+            }
+            return false;
+        }
+
+        private static bool TryParseVector(JsonElement root, int length, out float[] values)
+        {
+            values = Array.Empty<float>();
+            if (root.ValueKind == JsonValueKind.Array && root.GetArrayLength() == length)
+            {
+                var arr = new float[length];
+                var idx = 0;
+                foreach (var el in root.EnumerateArray())
+                {
+                    if (!TryGetNumber(el, out var v)) return false;
+                    arr[idx++] = v;
+                }
+                values = arr;
+                return true;
+            }
+
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                var names = length switch
+                {
+                    2 => new[] { "x", "y" },
+                    3 => new[] { "x", "y", "z" },
+                    4 => new[] { "x", "y", "z", "w" },
+                    _ => Array.Empty<string>()
+                };
+                if (names.Length != length) return false;
+
+                var arr = new float[length];
+                for (int i = 0; i < length; i++)
+                {
+                    if (!TryGetPropertyNumber(root, names[i], out var v)) return false;
+                    arr[i] = v;
+                }
+                values = arr;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static object? TryDeserializeUnityValue(JsonElement root, Type type)
+        {
+            if (type.IsEnum)
+            {
+                if (root.ValueKind == JsonValueKind.String)
+                {
+                    var name = root.GetString();
+                    if (!string.IsNullOrWhiteSpace(name) && Enum.TryParse(type, name, ignoreCase: true, out var enumVal))
+                        return enumVal;
+                }
+                else if (root.ValueKind == JsonValueKind.Number && root.TryGetInt64(out var enumInt))
+                {
+                    return Enum.ToObject(type, enumInt);
+                }
+            }
+
+            if (type == typeof(Vector2) && TryParseVector(root, 2, out var v2))
+                return new Vector2(v2[0], v2[1]);
+
+            if (type == typeof(Vector3) && TryParseVector(root, 3, out var v3))
+                return new Vector3(v3[0], v3[1], v3[2]);
+
+            if (type == typeof(Vector4) && TryParseVector(root, 4, out var v4))
+                return new Vector4(v4[0], v4[1], v4[2], v4[3]);
+
+            if (type == typeof(Quaternion) && TryParseVector(root, 4, out var q))
+                return new Quaternion(q[0], q[1], q[2], q[3]);
+
+            if (type == typeof(Color) && root.ValueKind == JsonValueKind.Object)
+            {
+                if (TryGetPropertyNumber(root, "r", out var r) &&
+                    TryGetPropertyNumber(root, "g", out var g) &&
+                    TryGetPropertyNumber(root, "b", out var b))
+                {
+                    var a = TryGetPropertyNumber(root, "a", out var aVal) ? aVal : 1f;
+                    return new Color(r, g, b, a);
+                }
+            }
+
+            return null;
+        }
+
         private static object? DeserializeTo(string json, Type type)
         {
-            try { return System.Text.Json.JsonSerializer.Deserialize(json, type); }
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                var special = TryDeserializeUnityValue(root, type);
+                if (special != null) return special;
+            }
+            catch { }
+
+            try { return JsonSerializer.Deserialize(json, type, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
             catch { }
             try { return Convert.ChangeType(json, type); } catch { }
             return null;

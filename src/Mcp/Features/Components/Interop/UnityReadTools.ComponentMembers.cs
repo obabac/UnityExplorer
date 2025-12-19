@@ -96,6 +96,12 @@ namespace UnityExplorer.Mcp
                 return (text, new { x = q.x, y = q.y, z = q.z, w = q.w });
             }
 
+            if (value is UnityEngine.Color c)
+            {
+                var text = $"({c.r}, {c.g}, {c.b}, {c.a})";
+                return (text, new { r = c.r, g = c.g, b = c.b, a = c.a });
+            }
+
             if (value is UnityEngine.Object uo)
             {
                 var id = $"obj:{uo.GetInstanceID()}";

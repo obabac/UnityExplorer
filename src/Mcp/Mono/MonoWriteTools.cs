@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityExplorer.CSConsole;
 using UnityExplorer.Hooks;
@@ -121,8 +122,114 @@ namespace UnityExplorer.Mcp
             return methodOrSignature.Contains("::") && methodOrSignature.Contains("(") && methodOrSignature.Contains(")");
         }
 
+        private static bool TryGetFloat(JToken token, out float value)
+        {
+            value = 0f;
+            if (token == null) return false;
+            if (token.Type == JTokenType.Integer || token.Type == JTokenType.Float)
+            {
+                value = token.Value<float>();
+                return true;
+            }
+            return false;
+        }
+
+        private static bool TryGetPropertyFloat(JObject obj, string name, out float value)
+        {
+            value = 0f;
+            var prop = obj.Property(name, StringComparison.OrdinalIgnoreCase);
+            if (prop == null) return false;
+            return TryGetFloat(prop.Value, out value);
+        }
+
+        private static bool TryParseVector(JToken token, int length, out float[] values)
+        {
+            values = new float[0];
+            if (token is JArray arr && arr.Count == length)
+            {
+                var tmp = new float[length];
+                for (int i = 0; i < length; i++)
+                {
+                    if (!TryGetFloat(arr[i], out var v)) return false;
+                    tmp[i] = v;
+                }
+                values = tmp;
+                return true;
+            }
+
+            if (token is JObject obj)
+            {
+                var names = length switch
+                {
+                    2 => new[] { "x", "y" },
+                    3 => new[] { "x", "y", "z" },
+                    4 => new[] { "x", "y", "z", "w" },
+                    _ => new string[0]
+                };
+                if (names.Length != length) return false;
+
+                var tmp = new float[length];
+                for (int i = 0; i < length; i++)
+                {
+                    if (!TryGetPropertyFloat(obj, names[i], out var v)) return false;
+                    tmp[i] = v;
+                }
+                values = tmp;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static object? DeserializeUnityValue(string json, Type type)
+        {
+            try
+            {
+                var token = JToken.Parse(json);
+                if (type.IsEnum)
+                {
+                    if (token.Type == JTokenType.String)
+                    {
+                        var name = token.Value<string>();
+                        if (!string.IsNullOrEmpty(name) && name.Trim().Length > 0)
+                        {
+                            try { return Enum.Parse(type, name, true); } catch { }
+                        }
+                    }
+                    else if (token.Type == JTokenType.Integer)
+                    {
+                        return Enum.ToObject(type, token.Value<long>());
+                    }
+                }
+
+                if (type == typeof(Vector2) && TryParseVector(token, 2, out var v2))
+                    return new Vector2(v2[0], v2[1]);
+                if (type == typeof(Vector3) && TryParseVector(token, 3, out var v3))
+                    return new Vector3(v3[0], v3[1], v3[2]);
+                if (type == typeof(Vector4) && TryParseVector(token, 4, out var v4))
+                    return new Vector4(v4[0], v4[1], v4[2], v4[3]);
+                if (type == typeof(Quaternion) && TryParseVector(token, 4, out var q))
+                    return new Quaternion(q[0], q[1], q[2], q[3]);
+                if (type == typeof(Color) && token is JObject obj)
+                {
+                    if (TryGetPropertyFloat(obj, "r", out var r) &&
+                        TryGetPropertyFloat(obj, "g", out var g) &&
+                        TryGetPropertyFloat(obj, "b", out var b))
+                    {
+                        var a = TryGetPropertyFloat(obj, "a", out var aVal) ? aVal : 1f;
+                        return new Color(r, g, b, a);
+                    }
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
         private static object DeserializeTo(string json, Type type)
         {
+            var special = DeserializeUnityValue(json, type);
+            if (special != null) return special;
             try { return JsonConvert.DeserializeObject(json, type); } catch { }
             try { return Convert.ChangeType(json, type); } catch { }
             return null;
