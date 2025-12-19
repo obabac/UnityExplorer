@@ -290,6 +290,22 @@ These tests must stay green whenever MCP code is changed; use `pwsh ./tools/Run-
 
 ---
 
+## Release Checklist
+
+Single source of truth for release gating. Run from repo root unless noted.
+
+- Clean working tree: `git status` should be clean; stash/commit local WIP first.
+- Deploy to Test-VM (Space Shooter):
+  - IL2CPP: `pwsh ./build-ml-coreclr.ps1` (builds and copies to `SpaceShooter_IL2CPP`).
+  - Mono: `dotnet build src/UnityExplorer.csproj -c ML_Mono`; `pwsh ./tools/Update-Mod-Remote.ps1 -Target Mono -StopGame`.
+  - Restart the games on the VM after deploy: `Start-Process "C:\codex-workspace\space-shooter-build\SpaceShooter_IL2CPP\SpaceShooter.exe"` and `Start-Process "C:\codex-workspace\space-shooter-build\SpaceShooter_Mono\SpaceShooter.exe"` (use Win-VM PowerShell).
+- Gates (Linux dev box, against Test-VM hosts):
+  - Inspector CLI: `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477` and `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478`.
+  - Smokes (with guarded writes enabled): `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477 -LogCount 20 -EnableWriteSmoke` and `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 10 -EnableWriteSmoke`.
+  - Contract tests (run once per host with matching discovery): `UE_MCP_DISCOVERY=/tmp/unity-explorer-mcp.json pwsh ./tools/Run-McpContractTests.ps1` (IL2CPP discovery), then repeat with the Mono discovery file from the VM.
+- Optional CI: `.github/workflows/mcp-inspector-cli.yml` supports `workflow_dispatch` to re-run Inspector CLI smoke against provided base URLs.
+- Tagging (documented only): suggested tag `ue-mcp-0.1.0` via `git tag -a ue-mcp-0.1.0 -m "UnityExplorer MCP 0.1.0"` then `git push origin ue-mcp-0.1.0`.
+
 ## 6) Roadmap / Remaining Work
 
 Fine‑grained TODOs live in `plans/unity-explorer-mcp-todo.md`. High‑level themes:

@@ -9,6 +9,7 @@ This build hosts a Model Context Protocol (MCP) server inside the Unity Explorer
 - Hooks advanced: `HookListAllowedTypes`, `HookListMethods`, `HookGetSource`, guarded `HookSetEnabled`/`HookSetSource` (both hosts).
 - Transport: lightweight streamable HTTP over a local TCP listener.
 - Default mode: Read‑only (guarded writes must be explicitly enabled).
+- Release checklist + gates live in `plans/unity-explorer-mcp-plan.md#release-checklist` (source of truth).
 
 ## Getting Started
 

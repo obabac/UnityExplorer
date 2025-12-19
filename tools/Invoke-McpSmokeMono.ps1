@@ -168,7 +168,7 @@ try {
                 if ($prevConfigJson.hookAllowlistSignatures) { $resetParams.arguments.hookAllowlistSignatures = @($prevConfigJson.hookAllowlistSignatures) | Where-Object { $_ } }
             }
 
-            Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true; enableConsoleEval = $true; componentAllowlist = @("UnityEngine.CanvasGroup"); reflectionAllowlistMembers = @("UnityEngine.UI.Image.color", "UnityEngine.Transform.GetInstanceID"); hookAllowlistSignatures = @("UnityEngine.GameObject") } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+            Invoke-McpRpc -Id "set-config-enable" -Method "call_tool" -Params @{ name = "SetConfig"; arguments = @{ allowWrites = $true; requireConfirm = $true; enableConsoleEval = $true; componentAllowlist = @("UnityEngine.CanvasGroup"); reflectionAllowlistMembers = @("UnityEngine.UI.Image.color", "UnityEngine.UI.Image.GetInstanceID"); hookAllowlistSignatures = @("UnityEngine.GameObject") } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
 
             $consoleScriptName = "mono-smoke-$([guid]::NewGuid().ToString('N')).cs"
             $startupOriginal = Get-JsonContent -Result (Invoke-McpRpc -Id "get-startup-before" -Method "call_tool" -Params @{ name = "GetStartupScript"; arguments = @{} } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds)
@@ -232,8 +232,16 @@ try {
             $setMemberJson = Get-JsonContent -Result $setMember
             if (-not $setMemberJson -or -not $setMemberJson.ok) { throw "SetMember returned ok=false" }
 
-            $callMethod = Invoke-McpRpc -Id "call-method" -Method "call_tool" -Params @{ name = "CallMethod"; arguments = @{ objectId = $parentId; componentType = "UnityEngine.Transform"; method = "GetInstanceID"; argsJson = "[]"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
+            $callMethod = Invoke-McpRpc -Id "call-method" -Method "call_tool" -Params @{ name = "CallMethod"; arguments = @{ objectId = $parentId; componentType = "UnityEngine.UI.Image"; method = "GetInstanceID"; argsJson = "[]"; confirm = $true } } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $callMethodJson = Get-JsonContent -Result $callMethod
+            if (-not $callMethodJson) { throw "CallMethod returned no payload" }
+            if (-not $callMethodJson.ok) {
+                $errKind = $callMethodJson.error.kind
+                $errMsg = $callMethodJson.error.message
+                $detail = ""
+                if ($errKind -or $errMsg) { $detail = " (kind=$errKind message=$errMsg)" }
+                throw "CallMethod returned ok=false$detail"
+            }
 
             $hooksBeforeRes = Invoke-McpRpc -Id "read-hooks-before" -Method "read_resource" -Params @{ uri = "unity://hooks?limit=500" } -MessageUrl $messageUrl -TimeoutSeconds $TimeoutSeconds
             $hooksBeforeDoc = ($hooksBeforeRes.result.contents[0].text | ConvertFrom-Json)
