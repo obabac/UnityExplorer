@@ -1,0 +1,51 @@
+name: MCP Inspector CLI Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseUrlIl2cpp:
+        description: "Base URL for IL2CPP MCP host (e.g., http://host:51477/mcp)"
+        required: false
+        default: ""
+      baseUrlMono:
+        description: "Base URL for Mono MCP host (e.g., http://host:51478/mcp)"
+        required: false
+        default: ""
+      authToken:
+        description: "Optional bearer token (Authorization header)"
+        required: false
+        default: ""
+
+jobs:
+  inspector-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Skip when no base URLs are provided
+        if: ${{ inputs.baseUrlIl2cpp == '' && inputs.baseUrlMono == '' }}
+        run: echo "No baseUrl inputs provided; skipping inspector CLI smoke run."
+
+      - name: Run inspector CLI (IL2CPP)
+        if: ${{ inputs.baseUrlIl2cpp != '' }}
+        shell: pwsh
+        run: |
+          $params = @('-NoProfile', './tools/Run-McpInspectorCli.ps1', '-BaseUrl', '${{ inputs.baseUrlIl2cpp }}')
+          if ('${{ inputs.authToken }}' -ne '') { $params += @('-AuthToken', '${{ inputs.authToken }}') }
+          pwsh @params
+
+      - name: Run inspector CLI (Mono)
+        if: ${{ inputs.baseUrlMono != '' }}
+        shell: pwsh
+        run: |
+          $params = @('-NoProfile', './tools/Run-McpInspectorCli.ps1', '-BaseUrl', '${{ inputs.baseUrlMono }}')
+          if ('${{ inputs.authToken }}' -ne '') { $params += @('-AuthToken', '${{ inputs.authToken }}') }
+          pwsh @params

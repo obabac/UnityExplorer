@@ -12,7 +12,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 - Feature parity: the major UnityExplorer panels are reachable via MCP (Object Explorer + Inspector read/write, Console scripts, Hooks, Freecam, Clipboard) with guarded writes and tests.
 
-Status (2025-12-19): Progress 99% (154/155). Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (88 total: 87 passed, 1 skipped placeholder). Reflection inspector read tools (static member + singleton member reads) are present; search surfaces + Freecam + Clipboard are present; `stream_events` emits deterministic `scenes` and `selection` snapshots on open.
+Status (2025-12-19): Progress 100% (155/155). Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (89 total: 88 passed, 1 skipped placeholder). Reflection inspector read tools (static member + singleton member reads) are present; search surfaces + Freecam + Clipboard are present; `stream_events` emits deterministic `scenes` and `selection` snapshots on open.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
@@ -175,6 +175,7 @@ Goal: reduce merge conflicts further by splitting the remaining large shared MCP
 - [x] Add logging hooks for MCP errors into the MelonLoader log (short prefix, e.g. `[MCP]`), with a test that triggers at least one intentional error and reads it back via `logs/tail`.
 - [x] Add a small “version” resource or tool (e.g., `unity://status` already has version, but expose a dedicated `GetVersion` tool and test it).
 - [x] Add a CI note/script to run the MCP contract tests as part of the normal UnityExplorer build pipeline (see `tools/Run-McpContractTests.ps1`).
+- [x] Add CI hooks for inspector CLI smoke runs where infra allows (optional).
 
 ## 10. Space Shooter IL2CPP – End‑to‑End Validation
 
