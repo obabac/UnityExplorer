@@ -12,7 +12,7 @@ Scope: Remaining work to get close to UnityExplorer feature parity over MCP, wit
 - Docs in sync: `plans/mcp-interface-concept.md`, `README-mcp.md`, DTO code, and tests all agree on shapes and errors.
 - Feature parity: the major UnityExplorer panels are reachable via MCP (Object Explorer + Inspector read/write, Console scripts, Hooks, Freecam, Clipboard) with guarded writes and tests.
 
-Status (2025-12-19): Progress 99% (153/155). Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (87 total: 86 passed, 1 skipped placeholder). Reflection inspector read tools (static member + singleton member reads) are present; search surfaces + Freecam + Clipboard are present; `stream_events` emits deterministic `scenes` and `selection` snapshots on open.
+Status (2025-12-19): Progress 99% (153/155). Test‑VM hosts are green on both ports (IL2CPP `51477`, Mono `51478`) via inspector CLI, write-enabled smoke, and contract tests (88 total: 87 passed, 1 skipped placeholder). Reflection inspector read tools (static member + singleton member reads) are present; search surfaces + Freecam + Clipboard are present; `stream_events` emits deterministic `scenes` and `selection` snapshots on open.
 
 ## Decisions (2025-12-13)
 - [x] PRIORITY: fix the UnityExplorer dropdown Il2Cpp cast crash and remove the Test‑VM‑only `Mods\UeMcpHeadless.dll` workaround (guard added; mod disabled on Test-VM).
