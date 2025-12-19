@@ -101,6 +101,8 @@ namespace UnityExplorer.Mcp
                 Resource("unity://object/{id}/children", "Object children", "Direct children for object id (paged)."),
                 Resource("unity://search", "Search objects", "Search objects across scenes."),
                 Resource("unity://search/singletons", "Search singletons", "Search singleton instances by declaring type."),
+                Resource("unity://search/static-classes", "Search static classes", "Search static classes by full name."),
+                Resource("unity://type/{typeFullName}/static-members", "Static members", "List static members for a static class."),
                 Resource("unity://camera/active", "Active camera", "Active camera info."),
                 Resource("unity://freecam", "Freecam", "Freecam state (enabled, pose, speed)."),
                 Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
@@ -205,6 +207,19 @@ namespace UnityExplorer.Mcp
                 if (IsNullOrWhiteSpace(q))
                     throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'query' is required.");
                 return _tools.SearchSingletons(q!, TryInt(query, "limit"), TryInt(query, "offset"));
+            }
+            if (path.Equals("search/static-classes", StringComparison.OrdinalIgnoreCase))
+            {
+                var q = TryString(query, "query");
+                if (IsNullOrWhiteSpace(q))
+                    throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'query' is required.");
+                return _tools.SearchStaticClasses(q!, TryInt(query, "limit"), TryInt(query, "offset"));
+            }
+            if (path.StartsWith("type/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/static-members", StringComparison.OrdinalIgnoreCase))
+            {
+                var typeFullName = path.Substring("type/".Length, path.Length - "type/".Length - "/static-members".Length);
+                typeFullName = Uri.UnescapeDataString(typeFullName);
+                return _tools.ListStaticMembers(typeFullName, TryBool(query, "includeMethods") ?? false, TryInt(query, "limit"), TryInt(query, "offset"));
             }
             if (path.Equals("camera/active", StringComparison.OrdinalIgnoreCase)) return _tools.GetCameraInfo();
             if (path.Equals("freecam", StringComparison.OrdinalIgnoreCase)) return _tools.GetFreecam();

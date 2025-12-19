@@ -33,6 +33,8 @@
 - `unity://object/{id}/children?limit&offset` — `Page<ObjectCardDto>`; lists direct children only; empty pages are valid when there are no children.
 - `unity://search?query=&name=&type=&path=&activeOnly=&limit=&offset=` — `Page<ObjectCardDto>` using the same card shape as `ListObjects`.
 - `unity://search/singletons?query=&limit=&offset=` — `Page<SingletonDto> { Total, Items: [{ Id, DeclaringType, InstanceType, Preview, ObjectId? }] }`; `Id` is stable and formatted as `singleton:{declaringTypeFullName}` (the declaring type that owns the static instance). `Preview` uses `ToStringWithType` output capped at 256 chars. `ObjectId` is present when the singleton instance is a `UnityEngine.GameObject` (`obj:<instanceId>`); other types omit it.
+- `unity://search/static-classes?query=&limit=&offset=` — `Page<StaticClassDto> { Total, Items: [{ Id, Type, Assembly, MemberCount }] }`; `Id` is stable (`type:{Type.FullName}`).
+- `unity://type/{typeFullName}/static-members?includeMethods=&limit=&offset=` — `Page<InspectorMemberDto>` of static fields/properties (methods included when `includeMethods=true`).
 - `unity://selection` — `SelectionDto { ActiveId, Items[] }`; emits a `selection` stream event when selection changes (same payload as the resource).
 - `unity://clipboard` — `ClipboardDto { HasValue, Type, Preview, ObjectId? }`; Preview uses `ToStringWithType` and truncates to 256 chars; `ObjectId` is present when the clipboard holds a live `UnityEngine.Object` (`obj:<instanceId>`).
 - `unity://camera/active` — `CameraInfoDto { IsFreecam, Name, Fov, Pos{X,Y,Z}, Rot{X,Y,Z} }`; falls back to `Camera.main`/first camera or `<none>` when missing.
@@ -58,6 +60,8 @@
 - `GetVersion()` → `VersionInfoDto { ExplorerVersion, McpVersion, UnityVersion, Runtime }`.
 - `SearchObjects(query?, name?, type?, path?, activeOnly?, limit?, offset?)` → `Page<ObjectCardDto>`.
 - `SearchSingletons(query, limit?, offset?)` → `Page<SingletonDto>`; `query` filters by declaring type full name; results are keyed by `singleton:{declaringTypeFullName}` and include a bounded Preview plus optional `ObjectId` when the instance is a GameObject.
+- `SearchStaticClasses(query, limit?, offset?)` → `Page<StaticClassDto>`; ids are `type:{Type.FullName}` and `MemberCount` counts static fields and properties.
+- `ListStaticMembers(typeFullName, includeMethods=false, limit?, offset?)` → `Page<InspectorMemberDto>` for static fields/properties (methods when requested) using the same member shape as component inspection.
 - `GetCameraInfo()` → `CameraInfoDto`.
 - `GetFreecam()` → `FreecamDto` (same shape as `unity://freecam`).
 - `MousePick(mode="world"|"ui", x?, y?, normalized=false)` → `PickResultDto { Mode, Hit, Id?, Items? }`; world mode omits `Items` (null); UI mode uses EventSystem ordering (top-most first) and `Id` mirrors the first resolvable hit (hits are filtered to GameObjects that `GetObject` can resolve; if none, Items is empty/Id null) on both IL2CPP and Mono.
@@ -66,6 +70,11 @@
 - `GetSelection()` → `SelectionDto { ActiveId, Items[] }`.
 - `GetClipboard()` → `ClipboardDto` (same shape as `unity://clipboard`).
 - `GetTimeScale()` → `{ ok: true, value: float, locked: bool }`.
+
+### Static Class Search
+- DTO: `StaticClassDto { Id, Type, Assembly, MemberCount }` where `Id = type:{Type.FullName}` and `MemberCount` counts static fields + properties.
+- Tools: `SearchStaticClasses(query, limit?, offset?)` → `Page<StaticClassDto>`; `ListStaticMembers(typeFullName, includeMethods=false, limit?, offset?)` → `Page<InspectorMemberDto>` (fields/properties; methods when requested).
+- Resources: `unity://search/static-classes?query=&limit=&offset=` and `unity://type/{typeFullName}/static-members?includeMethods=&limit=&offset=`.
 
 ### Guarded writes (require `allowWrites=true`; `requireConfirm=true` forces `confirm=true` where supported)
 - Config: `SetConfig(allowWrites?, requireConfirm?, enableConsoleEval?, componentAllowlist?, reflectionAllowlistMembers?, hookAllowlistSignatures?, restart=false)` → `{ ok }`; `GetConfig()` → `{ ok, enabled, bindAddress, port, allowWrites, requireConfirm, exportRoot, logLevel, componentAllowlist, reflectionAllowlistMembers, enableConsoleEval, hookAllowlistSignatures }` (sanitized).
