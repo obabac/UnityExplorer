@@ -302,7 +302,7 @@ Single source of truth for release gating. Run from repo root unless noted.
 - Gates (Linux dev box, against Test-VM hosts):
   - Inspector CLI: `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51477` and `pwsh ./tools/Run-McpInspectorCli.ps1 -BaseUrl http://192.168.178.210:51478`.
   - Smokes (with guarded writes enabled): `pwsh ./tools/Invoke-McpSmoke.ps1 -BaseUrl http://192.168.178.210:51477 -LogCount 20 -EnableWriteSmoke` and `pwsh ./tools/Run-McpMonoSmoke.ps1 -BaseUrl http://192.168.178.210:51478 -LogCount 10 -StreamLines 10 -EnableWriteSmoke`.
-  - Contract tests (run once per host with matching discovery): `UE_MCP_DISCOVERY=/tmp/unity-explorer-mcp.json pwsh ./tools/Run-McpContractTests.ps1` (IL2CPP discovery), then repeat with the Mono discovery file from the VM.
+  - Contract tests (run once per host with matching discovery): `UE_MCP_DISCOVERY=ue-mcp-il2cpp-discovery.json pwsh ./tools/Run-McpContractTests.ps1` and `UE_MCP_DISCOVERY=ue-mcp-mono-discovery.json pwsh ./tools/Run-McpContractTests.ps1`.
 - Optional CI: `.github/workflows/mcp-inspector-cli.yml` supports `workflow_dispatch` to re-run Inspector CLI smoke against provided base URLs.
 - Tagging (documented only): suggested tag `ue-mcp-0.1.0` via `git tag -a ue-mcp-0.1.0 -m "UnityExplorer MCP 0.1.0"` then `git push origin ue-mcp-0.1.0`.
 
