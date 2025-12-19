@@ -100,6 +100,7 @@ namespace UnityExplorer.Mcp
                 Resource("unity://object/{id}/component/member", "Component member", "Read a component member value (safe, bounded)."),
                 Resource("unity://object/{id}/children", "Object children", "Direct children for object id (paged)."),
                 Resource("unity://search", "Search objects", "Search objects across scenes."),
+                Resource("unity://search/singletons", "Search singletons", "Search singleton instances by declaring type."),
                 Resource("unity://camera/active", "Active camera", "Active camera info."),
                 Resource("unity://freecam", "Freecam", "Freecam state (enabled, pose, speed)."),
                 Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
@@ -197,6 +198,13 @@ namespace UnityExplorer.Mcp
             if (path.Equals("search", StringComparison.OrdinalIgnoreCase))
             {
                 return _tools.SearchObjects(TryString(query, "query"), TryString(query, "name"), TryString(query, "type"), TryString(query, "path"), TryBool(query, "activeOnly"), TryInt(query, "limit"), TryInt(query, "offset"));
+            }
+            if (path.Equals("search/singletons", StringComparison.OrdinalIgnoreCase))
+            {
+                var q = TryString(query, "query");
+                if (IsNullOrWhiteSpace(q))
+                    throw new McpError(-32602, 400, "InvalidArgument", "Invalid params: 'query' is required.");
+                return _tools.SearchSingletons(q!, TryInt(query, "limit"), TryInt(query, "offset"));
             }
             if (path.Equals("camera/active", StringComparison.OrdinalIgnoreCase)) return _tools.GetCameraInfo();
             if (path.Equals("freecam", StringComparison.OrdinalIgnoreCase)) return _tools.GetFreecam();

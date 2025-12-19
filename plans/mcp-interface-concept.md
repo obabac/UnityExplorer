@@ -32,6 +32,7 @@
 - `unity://object/{id}/component/member?type=<fullType>&name=<memberName>` — `{ ok: true, type, valueText, valueJson? }`; `valueText` is truncated at 1024 chars and UnityEngine.Object values return `obj:<id>` strings (no raw objects); `valueJson` is populated for primitives/vectors/ids only.
 - `unity://object/{id}/children?limit&offset` — `Page<ObjectCardDto>`; lists direct children only; empty pages are valid when there are no children.
 - `unity://search?query=&name=&type=&path=&activeOnly=&limit=&offset=` — `Page<ObjectCardDto>` using the same card shape as `ListObjects`.
+- `unity://search/singletons?query=&limit=&offset=` — `Page<SingletonDto> { Total, Items: [{ Id, DeclaringType, InstanceType, Preview, ObjectId? }] }`; `Id` is stable and formatted as `singleton:{declaringTypeFullName}` (the declaring type that owns the static instance). `Preview` uses `ToStringWithType` output capped at 256 chars. `ObjectId` is present when the singleton instance is a `UnityEngine.GameObject` (`obj:<instanceId>`); other types omit it.
 - `unity://selection` — `SelectionDto { ActiveId, Items[] }`; emits a `selection` stream event when selection changes (same payload as the resource).
 - `unity://clipboard` — `ClipboardDto { HasValue, Type, Preview, ObjectId? }`; Preview uses `ToStringWithType` and truncates to 256 chars; `ObjectId` is present when the clipboard holds a live `UnityEngine.Object` (`obj:<instanceId>`).
 - `unity://camera/active` — `CameraInfoDto { IsFreecam, Name, Fov, Pos{X,Y,Z}, Rot{X,Y,Z} }`; falls back to `Camera.main`/first camera or `<none>` when missing.
@@ -56,6 +57,7 @@
 - `ListChildren(objectId, limit?, offset?)` → `Page<ObjectCardDto>` of direct children only.
 - `GetVersion()` → `VersionInfoDto { ExplorerVersion, McpVersion, UnityVersion, Runtime }`.
 - `SearchObjects(query?, name?, type?, path?, activeOnly?, limit?, offset?)` → `Page<ObjectCardDto>`.
+- `SearchSingletons(query, limit?, offset?)` → `Page<SingletonDto>`; `query` filters by declaring type full name; results are keyed by `singleton:{declaringTypeFullName}` and include a bounded Preview plus optional `ObjectId` when the instance is a GameObject.
 - `GetCameraInfo()` → `CameraInfoDto`.
 - `GetFreecam()` → `FreecamDto` (same shape as `unity://freecam`).
 - `MousePick(mode="world"|"ui", x?, y?, normalized=false)` → `PickResultDto { Mode, Hit, Id?, Items? }`; world mode omits `Items` (null); UI mode uses EventSystem ordering (top-most first) and `Id` mirrors the first resolvable hit (hits are filtered to GameObjects that `GetObject` can resolve; if none, Items is empty/Id null) on both IL2CPP and Mono.

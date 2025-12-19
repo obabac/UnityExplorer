@@ -66,6 +66,7 @@ namespace UnityExplorer.Mcp
                 Resource("unity://object/{id}/component/member", "Component member", "Read a component member value (safe, bounded)."),
                 Resource("unity://object/{id}/children", "Object children", "Direct children for object id (paged)."),
                 Resource("unity://search", "Search objects", "Search objects across scenes."),
+                Resource("unity://search/singletons", "Search singletons", "Search singleton instances by declaring type."),
                 Resource("unity://camera/active", "Active camera", "Active camera info."),
                 Resource("unity://freecam", "Freecam", "Freecam state (enabled, pose, speed)."),
                 Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
@@ -322,6 +323,17 @@ namespace UnityExplorer.Mcp
                     TryString(query, "type"),
                     TryString(query, "path"),
                     TryBool(query, "activeOnly"),
+                    TryInt(query, "limit"),
+                    TryInt(query, "offset"),
+                    default);
+            }
+            if (path.Equals("search/singletons", StringComparison.OrdinalIgnoreCase))
+            {
+                var q = TryString(query, "query");
+                if (string.IsNullOrWhiteSpace(q))
+                    throw new ArgumentException("Invalid params: 'query' is required.", nameof(query));
+                return await UnityReadTools.SearchSingletons(
+                    q!,
                     TryInt(query, "limit"),
                     TryInt(query, "offset"),
                     default);
