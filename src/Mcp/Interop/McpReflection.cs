@@ -67,6 +67,7 @@ namespace UnityExplorer.Mcp
                 Resource("unity://object/{id}/children", "Object children", "Direct children for object id (paged)."),
                 Resource("unity://search", "Search objects", "Search objects across scenes."),
                 Resource("unity://camera/active", "Active camera", "Active camera info."),
+                Resource("unity://freecam", "Freecam", "Freecam state (enabled, pose, speed)."),
                 Resource("unity://selection", "Selection", "Current selection / inspected tabs."),
                 Resource("unity://clipboard", "Clipboard", "Current UnityExplorer clipboard."),
                 Resource("unity://logs/tail", "Log tail", "Tail recent MCP log buffer."),
@@ -327,6 +328,8 @@ namespace UnityExplorer.Mcp
             }
             if (path.Equals("camera/active", StringComparison.OrdinalIgnoreCase))
                 return await UnityReadTools.GetCameraInfo(default);
+            if (path.Equals("freecam", StringComparison.OrdinalIgnoreCase))
+                return await UnityReadTools.GetFreecam(default);
             if (path.Equals("selection", StringComparison.OrdinalIgnoreCase))
                 return await UnityReadTools.GetSelection(default);
             if (path.Equals("clipboard", StringComparison.OrdinalIgnoreCase))

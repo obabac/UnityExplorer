@@ -35,6 +35,7 @@
 - `unity://selection` — `SelectionDto { ActiveId, Items[] }`; emits a `selection` stream event when selection changes (same payload as the resource).
 - `unity://clipboard` — `ClipboardDto { HasValue, Type, Preview, ObjectId? }`; Preview uses `ToStringWithType` and truncates to 256 chars; `ObjectId` is present when the clipboard holds a live `UnityEngine.Object` (`obj:<instanceId>`).
 - `unity://camera/active` — `CameraInfoDto { IsFreecam, Name, Fov, Pos{X,Y,Z}, Rot{X,Y,Z} }`; falls back to `Camera.main`/first camera or `<none>` when missing.
+- `unity://freecam` — `FreecamDto { Enabled, UsingGameCamera, Speed, Pos{X,Y,Z}, Rot{X,Y,Z} }`; prefers the active freecam camera transform, else the cached pose or `Camera.main`.
 - `unity://logs/tail?count=` — `LogTailDto { Items: [{ T, Level, Message, Source, Category? }] }`; `[MCP] error ...` lines are written here when requests fail.
 - `unity://console/scripts` — `Page<ConsoleScriptDto> { Total, Items: [{ Name, Path }] }`.
 - `unity://hooks` — `Page<HookDto> { Total, Items: [{ Signature, Enabled }] }` (Harmony signatures such as `System.Void UnityEngine.GameObject::SetActive(System.Boolean)`).
@@ -56,6 +57,7 @@
 - `GetVersion()` → `VersionInfoDto { ExplorerVersion, McpVersion, UnityVersion, Runtime }`.
 - `SearchObjects(query?, name?, type?, path?, activeOnly?, limit?, offset?)` → `Page<ObjectCardDto>`.
 - `GetCameraInfo()` → `CameraInfoDto`.
+- `GetFreecam()` → `FreecamDto` (same shape as `unity://freecam`).
 - `MousePick(mode="world"|"ui", x?, y?, normalized=false)` → `PickResultDto { Mode, Hit, Id?, Items? }`; world mode omits `Items` (null); UI mode uses EventSystem ordering (top-most first) and `Id` mirrors the first resolvable hit (hits are filtered to GameObjects that `GetObject` can resolve; if none, Items is empty/Id null) on both IL2CPP and Mono.
 - `TailLogs(count=200)` → `LogTailDto`.
 - `ReadConsoleScript(path)` → `ConsoleScriptFileDto { Name, Path, Content, SizeBytes, LastModifiedUtc, Truncated }` (max 256KB; strips leading BOM).
@@ -76,6 +78,7 @@
 - Console scripts: `WriteConsoleScript(path, content, confirm?)` / `DeleteConsoleScript(path, confirm?)` → `{ ok }` (paths validated to Scripts folder; max 256KB; BOM normalized).
 - Scenes: `LoadScene(name, mode="single"|"additive", confirm?)` → `{ ok, name, mode }` (guarded by `allowWrites`; when `requireConfirm=true` resend with `confirm=true`; mode applies `SceneManager.LoadScene`).
 - Time: `SetTimeScale(value, lock?, confirm?)` → `{ ok, value, locked }` (value clamped 0–4; `lock=true` uses the Explorer widget lock when available).
+- Freecam: `SetFreecamEnabled(enabled, confirm?)` → `{ ok }`; `SetFreecamSpeed(speed, confirm?)` → `{ ok, speed }` (speed clamped to a safe range); `SetFreecamPose(pos, rot, confirm?)` → `{ ok }` (updates live camera when active and cached pose otherwise). All guard with `allowWrites` + `requireConfirm`.
 - Test UI helpers: `SpawnTestUi(confirm?)` → `{ ok, rootId, blocks: [{ name, id }] }` (id strings are `obj:<instanceId>`); `DestroyTestUi(confirm?)` → `{ ok }`.
 - Tool errors: `{ ok: false, error: { kind, message, hint? } }` where `kind` mirrors the JSON-RPC error kinds below.
 
@@ -86,6 +89,13 @@
 - `ObjectId` is populated when the clipboard holds a live `UnityEngine.Object` and uses `obj:<instanceId>`; otherwise it is null.
 - Resource: `unity://clipboard` (same payload as `GetClipboard`).
 - Tools: `GetClipboard()` (read-only) and guarded writes `SetClipboardText(text, confirm?)`, `SetClipboardObject(objectId, confirm?)`, `ClearClipboard(confirm?)` (require `allowWrites=true`; `requireConfirm=true` enforces `confirm=true`).
+
+### Freecam
+
+- DTO: `FreecamDto { Enabled: bool, UsingGameCamera: bool, Speed: float, Pos: Vector3Dto, Rot: Vector3Dto }` (`Rot` is Euler degrees).
+- Resource: `unity://freecam` (prefers the live freecam camera when active, otherwise the cached pose or `Camera.main`).
+- Read tool: `GetFreecam()` → `FreecamDto` (same payload as the resource).
+- Guarded tools (respect `allowWrites` + `requireConfirm`): `SetFreecamEnabled(enabled, confirm?)` → `{ ok }`; `SetFreecamSpeed(speed, confirm?)` → `{ ok, speed }` (speed clamped to a safe range); `SetFreecamPose(pos, rot, confirm?)` → `{ ok }` (updates active freecam transform and cached pose so it persists between toggles).
 
 ## Console scripts + Hooks parity (current)
 
