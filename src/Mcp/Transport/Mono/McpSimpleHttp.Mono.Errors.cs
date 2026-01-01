@@ -12,6 +12,15 @@ namespace UnityExplorer.Mcp
 {
     internal sealed partial class McpSimpleHttp : IDisposable
     {
+        private const int MaxErrorDetailLogChars = 4096;
+
+        private static string Truncate(string? value, int maxChars)
+        {
+            if (string.IsNullOrEmpty(value)) return value ?? string.Empty;
+            if (value.Length <= maxChars) return value;
+            return value.Substring(0, maxChars) + "...";
+        }
+
         private JObject BuildResultPayload(JToken? idToken, object result)
         {
             return new JObject
@@ -51,6 +60,9 @@ namespace UnityExplorer.Mcp
         private void WriteJsonError(Stream stream, JToken? idToken, int code, string message, string kind, string? hint, string? detail, int statusCode)
         {
             var logMessage = $"[MCP] error {code}: {message}";
+            if (!string.IsNullOrEmpty(kind)) logMessage += $" ({kind})";
+            if (!string.IsNullOrEmpty(hint)) logMessage += $"\nHint: {hint}";
+            if (!string.IsNullOrEmpty(detail)) logMessage += $"\n{Truncate(detail, MaxErrorDetailLogChars)}";
             try
             {
                 MainThread.Run(() =>

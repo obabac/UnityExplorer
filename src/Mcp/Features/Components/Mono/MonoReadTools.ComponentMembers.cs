@@ -12,16 +12,20 @@ namespace UnityExplorer.Mcp
     internal sealed partial class MonoReadTools
     {
         private const int MaxMemberValueLength = 1024;
+        private const int MaxEnumerablePreviewItems = 10;
+        private const int MaxValueSummaryDepth = 2;
 
         private sealed class MemberValueSummary
         {
             public string Text { get; }
             public object? Json { get; }
+            public string? RefId { get; }
 
-            public MemberValueSummary(string text, object? json)
+            public MemberValueSummary(string text, object? json, string? refId = null)
             {
                 Text = text;
                 Json = json;
+                RefId = refId;
             }
         }
 
@@ -49,13 +53,13 @@ namespace UnityExplorer.Mcp
             return value.Substring(0, MaxMemberValueLength) + "...";
         }
 
-        private MemberValueSummary SummarizeValue(object? value)
+        private MemberValueSummary SummarizeValue(object? value, int depth = 0)
         {
             if (value == null) return new MemberValueSummary("<null>", null);
 
-            if (value is string s)
+            if (value is string str)
             {
-                var t = Truncate(s);
+                var t = Truncate(str);
                 return new MemberValueSummary(t, t);
             }
 
@@ -63,8 +67,8 @@ namespace UnityExplorer.Mcp
 
             if (value is Enum e)
             {
-                var str = e.ToString();
-                return new MemberValueSummary(Truncate(str), str);
+                var enumText = e.ToString();
+                return new MemberValueSummary(Truncate(enumText), enumText);
             }
 
             switch (value)
@@ -117,20 +121,60 @@ namespace UnityExplorer.Mcp
                 return new MemberValueSummary(id, id);
             }
 
-            if (value is IEnumerable enumerable && value is not string)
+            if (depth >= MaxValueSummaryDepth)
             {
-                int count = 0;
-                foreach (var _ in enumerable)
-                {
-                    count++;
-                    if (count > 32) break;
-                }
-                var text = $"Enumerable<{SafeTypeName(value.GetType())}> (count~{count})";
-                return new MemberValueSummary(text, null);
+                var refId = McpObjectRefs.Capture(value);
+                return new MemberValueSummary(SafeTypeName(value.GetType()), null, refId);
             }
 
-            var strValue = Truncate(value.ToString() ?? "<null>");
-            return new MemberValueSummary(strValue, null);
+            if (value is IDictionary dict)
+            {
+                var refId = McpObjectRefs.Capture(value);
+                var preview = new List<object>();
+                var take = 0;
+                foreach (DictionaryEntry entry in dict)
+                {
+                    if (take++ >= MaxEnumerablePreviewItems) break;
+                    var k = SummarizeValue(entry.Key, depth + 1);
+                    var v = SummarizeValue(entry.Value, depth + 1);
+                    preview.Add(new
+                    {
+                        key = new { text = k.Text, json = k.Json, refId = k.RefId },
+                        value = new { text = v.Text, json = v.Json, refId = v.RefId }
+                    });
+                }
+                var text = $"Dictionary<{SafeTypeName(value.GetType())}> (count={dict.Count}, preview={preview.Count})";
+                return new MemberValueSummary(Truncate(text), new { kind = "dictionary", count = dict.Count, preview }, refId);
+            }
+
+            if (value is IEnumerable enumerable && value is not string)
+            {
+                var refId = McpObjectRefs.Capture(value);
+                int? count = null;
+                try
+                {
+                    if (value is ICollection coll) count = coll.Count;
+                }
+                catch { }
+
+                var preview = new List<object>();
+                var take = 0;
+                foreach (var item in enumerable)
+                {
+                    if (take++ >= MaxEnumerablePreviewItems) break;
+                    var itemSummary = SummarizeValue(item, depth + 1);
+                    preview.Add(new { text = itemSummary.Text, json = itemSummary.Json, refId = itemSummary.RefId });
+                }
+
+                var text = count.HasValue
+                    ? $"Enumerable<{SafeTypeName(value.GetType())}> (count={count.Value}, preview={preview.Count})"
+                    : $"Enumerable<{SafeTypeName(value.GetType())}> (preview={preview.Count})";
+
+                return new MemberValueSummary(Truncate(text), new { kind = "enumerable", count, preview }, refId);
+            }
+
+            var objRefId = McpObjectRefs.Capture(value);
+            return new MemberValueSummary(SafeTypeName(value.GetType()), null, objRefId);
         }
 
         private static string FormatMethodType(MethodInfo mi)
@@ -217,7 +261,7 @@ namespace UnityExplorer.Mcp
                 {
                     var val = fi.GetValue(comp);
                     var summary = SummarizeValue(val);
-                    return new { ok = true, type = SafeTypeName(fi.FieldType), valueText = summary.Text, valueJson = summary.Json };
+                    return new { ok = true, type = SafeTypeName(fi.FieldType), valueText = summary.Text, valueJson = summary.Json, refId = summary.RefId };
                 }
 
                 var pi = t.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -228,7 +272,7 @@ namespace UnityExplorer.Mcp
                         throw new MonoMcpHandlers.McpError(-32004, 404, "NotFound", "Member not readable");
                     var val = getter.Invoke(comp, new object[0]);
                     var summary = SummarizeValue(val);
-                    return new { ok = true, type = SafeTypeName(pi.PropertyType), valueText = summary.Text, valueJson = summary.Json };
+                    return new { ok = true, type = SafeTypeName(pi.PropertyType), valueText = summary.Text, valueJson = summary.Json, refId = summary.RefId };
                 }
 
                 throw new MonoMcpHandlers.McpError(-32004, 404, "NotFound", "Member not found");

@@ -34,7 +34,7 @@ namespace UnityExplorer.Mcp
                 {
                     var val = fi.GetValue(null);
                     var summary = SummarizeValue(val);
-                    return new { ok = true, type = SafeTypeName(fi.FieldType), valueText = summary.text, valueJson = summary.json };
+                    return new { ok = true, type = SafeTypeName(fi.FieldType), valueText = summary.Text, valueJson = summary.Json, refId = summary.RefId };
                 }
 
                 var pi = type.GetProperty(name, flags);
@@ -45,7 +45,7 @@ namespace UnityExplorer.Mcp
                         throw new InvalidOperationException("NotFound");
                     var val = getter.Invoke(null, Array.Empty<object>());
                     var summary = SummarizeValue(val);
-                    return new { ok = true, type = SafeTypeName(pi.PropertyType), valueText = summary.text, valueJson = summary.json };
+                    return new { ok = true, type = SafeTypeName(pi.PropertyType), valueText = summary.Text, valueJson = summary.Json, refId = summary.RefId };
                 }
 
                 throw new InvalidOperationException("NotFound");
@@ -129,7 +129,7 @@ namespace UnityExplorer.Mcp
                 {
                     var val = fi.GetValue(instance);
                     var summary = SummarizeValue(val);
-                    return new { ok = true, type = SafeTypeName(fi.FieldType), valueText = summary.text, valueJson = summary.json };
+                    return new { ok = true, type = SafeTypeName(fi.FieldType), valueText = summary.Text, valueJson = summary.Json, refId = summary.RefId };
                 }
 
                 var pi = t.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -140,7 +140,7 @@ namespace UnityExplorer.Mcp
                         throw new InvalidOperationException("NotFound");
                     var val = getter.Invoke(instance, Array.Empty<object>());
                     var summary = SummarizeValue(val);
-                    return new { ok = true, type = SafeTypeName(pi.PropertyType), valueText = summary.text, valueJson = summary.json };
+                    return new { ok = true, type = SafeTypeName(pi.PropertyType), valueText = summary.Text, valueJson = summary.Json, refId = summary.RefId };
                 }
 
                 throw new InvalidOperationException("NotFound");

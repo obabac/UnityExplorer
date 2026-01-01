@@ -11,6 +11,15 @@ namespace UnityExplorer.Mcp
 {
     internal sealed partial class McpSimpleHttp : IDisposable
     {
+        private const int MaxErrorDetailChars = 4096;
+
+        private static string? Truncate(string? value, int maxChars)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+            if (value.Length <= maxChars) return value;
+            return value.Substring(0, maxChars) + "...";
+        }
+
         private static ErrorShape MapExceptionToError(Exception ex)
         {
             if (ex is ArgumentException arg)
@@ -31,7 +40,7 @@ namespace UnityExplorer.Mcp
             if (ex is NotSupportedException notSup)
                 return new ErrorShape(ErrorNotFound, 404, "NotFound", notSup.Message, null, null);
 
-            return new ErrorShape(ErrorInternal, 500, "Internal", "Internal error", null, ex.Message);
+            return new ErrorShape(ErrorInternal, 500, "Internal", "Internal error", null, Truncate(ex.ToString(), MaxErrorDetailChars));
         }
 
         private static string ReasonPhrase(int statusCode)

@@ -8,6 +8,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+#if CPP
+using Il2CppInterop.Runtime;
+#endif
 
 namespace UnityExplorer.Mcp
 {
@@ -18,11 +21,15 @@ namespace UnityExplorer.Mcp
         {
             int lim = Math.Max(1, limit ?? 100);
             int off = Math.Max(0, offset ?? 0);
+            var typeResolved = ResolveComponentType(type);
+#if CPP
+            var typeResolvedIl2Cpp = typeResolved != null ? Il2CppType.From(typeResolved) : null;
+#endif
 
             return await MainThread.Run(() =>
             {
                 var results = new List<ObjectCardDto>(lim);
-                int total = 0;
+                int matched = 0;
 
                 IEnumerable<GameObject> AllRoots()
                 {
@@ -46,11 +53,25 @@ namespace UnityExplorer.Mcp
                 {
                     foreach (var (go, path) in UnityQuery.Traverse(root))
                     {
-                        if (activeOnly == true && !go.activeInHierarchy) { total++; continue; }
-                        if (!string.IsNullOrEmpty(name) && !go.name.Contains(name!, StringComparison.OrdinalIgnoreCase)) { total++; continue; }
-                        if (!string.IsNullOrEmpty(type) && go.GetComponent(type!) == null) { total++; continue; }
+                        if (activeOnly == true && !go.activeInHierarchy) continue;
+                        if (!string.IsNullOrEmpty(name) && !go.name.Contains(name!, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (!string.IsNullOrEmpty(type))
+                        {
+                            if (typeResolved != null)
+                            {
+#if CPP
+                                if (typeResolvedIl2Cpp == null || go.GetComponent(typeResolvedIl2Cpp) == null) continue;
+#else
+                                if (go.GetComponent(typeResolved) == null) continue;
+#endif
+                            }
+                            else
+                            {
+                                if (go.GetComponent(type!) == null) continue;
+                            }
+                        }
 
-                        if (total >= off && results.Count < lim)
+                        if (matched >= off && results.Count < lim)
                         {
                             int compCount = 0;
                             try { var comps = go.GetComponents<UnityEngine.Component>(); compCount = comps != null ? comps.Length : 0; } catch { }
@@ -64,13 +85,13 @@ namespace UnityExplorer.Mcp
                                 ComponentCount: compCount
                             ));
                         }
-                        total++;
+                        matched++;
                         if (results.Count >= lim) break;
                     }
                     if (results.Count >= lim) break;
                 }
 
-                return new Page<ObjectCardDto>(total, results);
+                return new Page<ObjectCardDto>(matched, results);
             });
         }
 

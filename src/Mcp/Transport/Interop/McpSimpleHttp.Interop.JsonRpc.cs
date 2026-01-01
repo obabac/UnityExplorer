@@ -37,6 +37,9 @@ private async Task SendJsonRpcResultAsync(JsonElement requestRoot, object result
                 try { idVal = JsonSerializer.Deserialize<object>(idEl.GetRawText()); } catch { idVal = null; }
             }
             var logMessage = $"[MCP] error {code}: {message}";
+            if (!string.IsNullOrEmpty(kind)) logMessage += $" ({kind})";
+            if (!string.IsNullOrEmpty(hint)) logMessage += $"\nHint: {hint}";
+            if (!string.IsNullOrEmpty(detail)) logMessage += $"\n{Truncate(detail, MaxErrorDetailChars)}";
             try
             {
                 await MainThread.Run(() =>
@@ -58,6 +61,9 @@ private async Task SendJsonRpcResultAsync(JsonElement requestRoot, object result
         private async Task SendJsonRpcErrorAsync(int code, string message, string kind, string? hint, string? detail, CancellationToken ct)
         {
             var logMessage = $"[MCP] error {code}: {message}";
+            if (!string.IsNullOrEmpty(kind)) logMessage += $" ({kind})";
+            if (!string.IsNullOrEmpty(hint)) logMessage += $"\nHint: {hint}";
+            if (!string.IsNullOrEmpty(detail)) logMessage += $"\n{Truncate(detail, MaxErrorDetailChars)}";
             try
             {
                 await MainThread.Run(() =>

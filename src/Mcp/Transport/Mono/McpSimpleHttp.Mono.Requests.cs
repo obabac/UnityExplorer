@@ -207,7 +207,7 @@ namespace UnityExplorer.Mcp
                 }
                 catch (Exception ex)
                 {
-                    WriteJsonError(stream, idToken, -32603, "Internal error", "Internal", null, ex.Message, 500);
+                    WriteJsonError(stream, idToken, -32603, "Internal error", "Internal", null, ex.ToString(), 500);
                     try
                     {
                         var data = BuildErrorData("Internal", null, ex.Message);

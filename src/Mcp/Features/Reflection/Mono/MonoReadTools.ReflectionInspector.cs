@@ -30,7 +30,7 @@ namespace UnityExplorer.Mcp
                 {
                     var val = fi.GetValue(null);
                     var summary = SummarizeValue(val);
-                    return new { ok = true, type = SafeTypeName(fi.FieldType), valueText = summary.Text, valueJson = summary.Json };
+                    return new { ok = true, type = SafeTypeName(fi.FieldType), valueText = summary.Text, valueJson = summary.Json, refId = summary.RefId };
                 }
 
                 var pi = type.GetProperty(name, flags);
@@ -41,7 +41,7 @@ namespace UnityExplorer.Mcp
                         throw new MonoMcpHandlers.McpError(-32004, 404, "NotFound", "Member not readable");
                     var val = getter.Invoke(null, new object[0]);
                     var summary = SummarizeValue(val);
-                    return new { ok = true, type = SafeTypeName(pi.PropertyType), valueText = summary.Text, valueJson = summary.Json };
+                    return new { ok = true, type = SafeTypeName(pi.PropertyType), valueText = summary.Text, valueJson = summary.Json, refId = summary.RefId };
                 }
 
                 throw new MonoMcpHandlers.McpError(-32004, 404, "NotFound", "Member not found");
@@ -121,7 +121,7 @@ namespace UnityExplorer.Mcp
                 {
                     var val = fi.GetValue(instance);
                     var summary = SummarizeValue(val);
-                    return new { ok = true, type = SafeTypeName(fi.FieldType), valueText = summary.Text, valueJson = summary.Json };
+                    return new { ok = true, type = SafeTypeName(fi.FieldType), valueText = summary.Text, valueJson = summary.Json, refId = summary.RefId };
                 }
 
                 var pi = t.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -132,7 +132,7 @@ namespace UnityExplorer.Mcp
                         throw new MonoMcpHandlers.McpError(-32004, 404, "NotFound", "Member not readable");
                     var val = getter.Invoke(instance, new object[0]);
                     var summary = SummarizeValue(val);
-                    return new { ok = true, type = SafeTypeName(pi.PropertyType), valueText = summary.Text, valueJson = summary.Json };
+                    return new { ok = true, type = SafeTypeName(pi.PropertyType), valueText = summary.Text, valueJson = summary.Json, refId = summary.RefId };
                 }
 
                 throw new MonoMcpHandlers.McpError(-32004, 404, "NotFound", "Member not found");

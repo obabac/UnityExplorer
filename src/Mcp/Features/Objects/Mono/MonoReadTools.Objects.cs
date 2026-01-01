@@ -14,10 +14,11 @@ namespace UnityExplorer.Mcp
         {
             int lim = Math.Max(1, limit ?? 100);
             int off = Math.Max(0, offset ?? 0);
+            var typeResolved = ResolveComponentType(type);
             return MainThread.Run(() =>
             {
                 var results = new List<ObjectCardDto>(lim);
-                int total = 0;
+                int matched = 0;
 
                 IEnumerable<GameObject> AllRoots()
                 {
@@ -43,11 +44,21 @@ namespace UnityExplorer.Mcp
                     {
                         var go = entry.GameObject;
                         var path = entry.Path;
-                        if (activeOnly == true && !go.activeInHierarchy) { total++; continue; }
-                        if (!string.IsNullOrEmpty(name) && (go.name == null || go.name.IndexOf(name!, StringComparison.OrdinalIgnoreCase) < 0)) { total++; continue; }
-                        if (!string.IsNullOrEmpty(type) && go.GetComponent(type!) == null) { total++; continue; }
+                        if (activeOnly == true && !go.activeInHierarchy) continue;
+                        if (!string.IsNullOrEmpty(name) && (go.name == null || go.name.IndexOf(name!, StringComparison.OrdinalIgnoreCase) < 0)) continue;
+                        if (!string.IsNullOrEmpty(type))
+                        {
+                            if (typeResolved != null)
+                            {
+                                if (go.GetComponent(typeResolved) == null) continue;
+                            }
+                            else
+                            {
+                                if (go.GetComponent(type!) == null) continue;
+                            }
+                        }
 
-                        if (total >= off && results.Count < lim)
+                        if (matched >= off && results.Count < lim)
                         {
                             int compCount = 0;
                             try { var comps = go.GetComponents<Component>(); compCount = comps != null ? comps.Length : 0; } catch { }
@@ -62,13 +73,13 @@ namespace UnityExplorer.Mcp
                                 ComponentCount = compCount
                             });
                         }
-                        total++;
+                        matched++;
                         if (results.Count >= lim) break;
                     }
                     if (results.Count >= lim) break;
                 }
 
-                return new Page<ObjectCardDto>(total, results);
+                return new Page<ObjectCardDto>(matched, results);
             });
         }
 

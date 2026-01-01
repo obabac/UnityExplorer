@@ -106,7 +106,9 @@ namespace UnityExplorer.Mcp
             AddTools_Components(list);
             AddTools_Version(list);
             AddTools_Search(list);
+            AddTools_MemberSearch(list);
             AddTools_ReflectionInspector(list);
+            AddTools_Refs(list);
             AddTools_Camera(list);
             AddTools_Freecam(list);
             AddTools_MousePick(list);
@@ -174,7 +176,9 @@ namespace UnityExplorer.Mcp
                 if (TryCallTool_Components(key, args, out result)) return Return(result);
                 if (TryCallTool_Version(key, args, out result)) return Return(result);
                 if (TryCallTool_Search(key, args, out result)) return Return(result);
+                if (TryCallTool_MemberSearch(key, args, out result)) return Return(result);
                 if (TryCallTool_ReflectionInspector(key, args, out result)) return Return(result);
+                if (TryCallTool_Refs(key, args, out result)) return Return(result);
                 if (TryCallTool_Camera(key, args, out result)) return Return(result);
                 if (TryCallTool_Freecam(key, args, out result)) return Return(result);
                 if (TryCallTool_MousePick(key, args, out result)) return Return(result);

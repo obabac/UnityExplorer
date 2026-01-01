@@ -28,6 +28,7 @@ namespace UnityExplorer.Mcp
                 var results = new List<SingletonDto>(lim);
                 var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 int total = 0;
+                int errors = 0;
                 var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.FlattenHierarchy;
                 var tmpList = new List<object>();
 
@@ -40,7 +41,15 @@ namespace UnityExplorer.Mcp
                             continue;
 
                         tmpList.Clear();
-                        ReflectionUtility.FindSingleton(SearchProvider.instanceNames, type, flags, tmpList);
+                        try
+                        {
+                            ReflectionUtility.FindSingleton(SearchProvider.instanceNames, type, flags, tmpList);
+                        }
+                        catch
+                        {
+                            errors++;
+                            continue;
+                        }
                         if (tmpList.Count == 0)
                             continue;
 
@@ -83,13 +92,27 @@ namespace UnityExplorer.Mcp
                         break;
                 }
 
+                if (errors > 0)
+                {
+                    try { ExplorerCore.LogWarning($"[MCP] SearchSingletons: {errors} errors during scan for '{q}'."); }
+                    catch { }
+                }
+
                 return new Page<SingletonDto>(total, results);
             });
         }
 
         private static string SafeSingletonPreview(object? value)
         {
-            var text = value == null ? "<null>" : (ToStringUtility.ToStringWithType(value, typeof(object), false) ?? value.ToString() ?? "<null>");
+            string text;
+            try
+            {
+                text = value == null ? "<null>" : (ToStringUtility.ToStringWithType(value, typeof(object), false) ?? value.ToString() ?? "<null>");
+            }
+            catch (Exception ex)
+            {
+                text = $"<error: {ex.GetType().Name}>";
+            }
             if (text.Length > SingletonPreviewLimit)
                 return text.Substring(0, SingletonPreviewLimit) + "...";
             return text;
